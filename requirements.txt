@@ -3,3 +3,4 @@ gunicorn
 werkzeug
 Pillow
 python-dotenv
+requests
