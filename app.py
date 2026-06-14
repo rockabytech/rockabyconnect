@@ -6,7 +6,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from functools import wraps
 
-app = Flask_app.py
+app = Flask(__name__)
 app.secret_key = 'rockabyconnect-secret-key-change-in-production'
 app.permanent_session_lifetime = timedelta(days=30)
 
