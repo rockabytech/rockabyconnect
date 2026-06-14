@@ -14,14 +14,17 @@ app = Flask(__name__)
 app.secret_key = 'rockabyconnect-secret-key-change-in-production-2025'
 app.permanent_session_lifetime = timedelta(days=30)
 
+# Admin password for separate admin panel
 ADMIN_PASSWORD = 'Trythorous2909@1707#!'
 
+# File upload settings
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
+# Skill suggestions for freelancers
 SKILL_SUGGESTIONS = [
     'Plumbing', 'Electrical', 'Carpentry', 'Painting', 'Cleaning',
     'Tutoring', 'Graphic Design', 'Web Development', 'Tailoring',
@@ -33,6 +36,14 @@ SKILL_SUGGESTIONS = [
 FREELANCER_STATUSES = ['Available', 'Occupied', 'On Leave']
 VENDOR_STATUSES = ['Open', 'Closed', 'Away']
 
+# Boost plans (for SMS payment verification)
+BOOST_PLANS = {
+    '7': {'days': 7, 'price': 5000, 'name': '7 Days'},
+    '30': {'days': 30, 'price': 15000, 'name': '30 Days'},
+    '90': {'days': 90, 'price': 40000, 'name': 'Quarterly (90 Days)'}
+}
+
+# Database path
 DB_PATH = os.path.join(os.getcwd(), 'rockabyconnect.db')
 
 # ============================================================
@@ -52,6 +63,7 @@ def close_db(exception):
         db.close()
 
 def init_db():
+    """Initialize all database tables"""
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
@@ -64,7 +76,7 @@ def init_db():
         password_hash TEXT NOT NULL
     )''')
     
-    # Providers table
+    # Providers (freelancers) table
     c.execute('''CREATE TABLE IF NOT EXISTS providers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER UNIQUE NOT NULL,
@@ -145,16 +157,19 @@ def init_db():
         FOREIGN KEY(reviewer_id) REFERENCES users(id)
     )''')
     
-    # Boost requests table
+    # Boost requests table (for SMS payment verification)
     c.execute('''CREATE TABLE IF NOT EXISTS boost_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
-        transaction_id TEXT NOT NULL,
-        plan TEXT NOT NULL,
+        boost_type TEXT NOT NULL,
+        plan_days INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        phone_number TEXT NOT NULL,
+        transaction_id TEXT,
+        raw_sms TEXT,
         status TEXT DEFAULT 'pending',
-        request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        boost_type TEXT DEFAULT 'profile',
-        item_id INTEGER,
+        verified_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
     
@@ -167,59 +182,6 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
-    
-    # Plans table
-    c.execute('''CREATE TABLE IF NOT EXISTS plans (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        duration_minutes INTEGER NOT NULL,
-        price_ugx INTEGER NOT NULL,
-        is_active INTEGER DEFAULT 1,
-        is_public INTEGER DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    # Vouchers table
-    c.execute('''CREATE TABLE IF NOT EXISTS vouchers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT UNIQUE NOT NULL,
-        plan_id INTEGER,
-        payment_method TEXT DEFAULT 'sms',
-        phone_number TEXT,
-        used INTEGER DEFAULT 0,
-        used_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(plan_id) REFERENCES plans(id)
-    )''')
-    
-    # Voucher requests table
-    c.execute('''CREATE TABLE IF NOT EXISTS voucher_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        phone_number TEXT NOT NULL,
-        plan_id INTEGER,
-        raw_sms TEXT NOT NULL,
-        transaction_id TEXT,
-        amount INTEGER,
-        recipient TEXT,
-        payment_date TEXT,
-        status TEXT DEFAULT 'pending',
-        voucher_code TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(plan_id) REFERENCES plans(id)
-    )''')
-    
-    # Check if plans exist
-    c.execute("SELECT COUNT(*) FROM plans")
-    if c.fetchone()[0] == 0:
-        default_plans = [
-            ('1 Hour', 60, 500),
-            ('3 Hours', 180, 1000),
-            ('24 Hours', 1440, 2000),
-            ('Weekly', 10080, 8000),
-            ('Monthly', 43200, 25000)
-        ]
-        for name, mins, price in default_plans:
-            c.execute("INSERT INTO plans (name, duration_minutes, price_ugx, is_public) VALUES (?,?,?,1)", (name, mins, price))
     
     # Insert default admin user
     c.execute("SELECT COUNT(*) FROM users WHERE phone='256751318876'")
@@ -278,11 +240,6 @@ def is_featured_now(featured_flag, expiry_date):
         return True
     return date.today() <= date.fromisoformat(expiry_date)
 
-def generate_voucher_code():
-    return 'CONNECT-' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + '-' + \
-           ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + '-' + \
-           ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-
 def add_notification(user_id, type, message):
     try:
         db = get_db()
@@ -299,7 +256,15 @@ def get_open_jobs_count():
     db = get_db()
     return db.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'").fetchone()[0]
 
+def get_pending_boosts_count():
+    db = get_db()
+    return db.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'").fetchone()[0]
+
+# ============================================================
+# SMS PARSING FUNCTIONS (from RockabyWiFi)
+# ============================================================
 def parse_mtn_sms(sms):
+    """Extract payment details from MTN SMS"""
     tid = re.search(r'ID:\s*(\d+)', sms)
     amount = re.search(r'UGX\s*([\d,]+)', sms)
     recipient_name = re.search(r'to\s+(.+?),', sms)
@@ -314,6 +279,7 @@ def parse_mtn_sms(sms):
     }
 
 def parse_airtel_sms(sms):
+    """Extract payment details from Airtel SMS"""
     tid = re.search(r'TID\s*(\d+)', sms)
     amount = re.search(r'UGX\s*([\d,]+)', sms)
     recipient_match = re.search(r'to\s+(.+?)\s+on\s+(\d+)', sms, re.IGNORECASE)
@@ -437,13 +403,7 @@ BASE_HTML = """
         .badge-occupied { background: #ffc107; color: #333; }
         .badge-leave { background: #6c757d; }
         .badge-open { background: #17a2b8; }
-        .voucher-code {
-            font-size: 1.5rem; font-weight: 700; background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white; padding: 12px 18px; border-radius: 10px; display: inline-block; font-family: monospace;
-        }
-        .copy-btn { background: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; margin-left: 10px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        .badge-featured { background: var(--primary); color: #333; }
         label { display: block; margin-top: 18px; font-weight: 600; }
         input, textarea, select {
             width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border);
@@ -458,6 +418,9 @@ BASE_HTML = """
         .alert { padding: 14px 20px; border-radius: 12px; margin-bottom: 20px; }
         .alert-success { background: rgba(40,167,69,0.15); border: 1px solid rgba(40,167,69,0.3); color: #28a745; }
         .alert-error { background: rgba(220,53,69,0.15); border: 1px solid rgba(220,53,69,0.3); color: #dc3545; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: var(--bg); font-weight: 600; }
         @media (max-width: 768px) {
             .nav-links { display: none; width: 100%; flex-direction: column; }
             .nav-links.open { display: flex; }
@@ -484,7 +447,6 @@ BASE_HTML = """
             <a href="/list">Find Skills</a>
             <a href="/jobs">Jobs</a>
             <a href="/vendors">Vendors</a>
-            <a href="/plans">Internet Plans</a>
             {% if session.user_id %}
                 <a href="/logout">Logout</a>
             {% else %}
@@ -528,7 +490,6 @@ def home():
         <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
             <a href="/offer-skill" class="btn"><i class="fas fa-user-plus"></i> Offer Your Skill</a>
             <a href="/post-job" class="btn btn-outline"><i class="fas fa-briefcase"></i> Post a Job</a>
-            <a href="/plans" class="btn btn-outline"><i class="fas fa-wifi"></i> Buy Internet</a>
         </div>
         <div class="category-chips">
             <span>Popular:</span>
@@ -652,15 +613,16 @@ def dashboard():
     profile_section = ""
     if provider:
         status_class = provider['status'].lower().replace(' ', '-')
+        featured_badge = '<span class="badge badge-featured">⭐ FEATURED</span>' if is_featured_now(provider['featured'], provider['featured_expiry']) else ''
         profile_section = f'''
         <div class="card">
-            <div class="card-header"><i class="fas fa-user-cog"></i> My Freelancer Profile</div>
+            <div class="card-header"><i class="fas fa-user-cog"></i> My Freelancer Profile {featured_badge}</div>
             <p><strong>Skills:</strong> {provider['skills'] or 'Not set'}</p>
             <p><strong>Location:</strong> {provider['district'] or 'Not set'}</p>
             <p><strong>Status:</strong> <span class="badge badge-{status_class}">{provider['status']}</span></p>
             <div style="display: flex; gap: 10px; margin-top: 15px;">
                 <a href="/edit-profile" class="btn btn-small">Edit Profile</a>
-                <a href="/boost" class="btn btn-small" style="background: var(--primary-dark);">Boost Profile</a>
+                <a href="/boost-profile" class="btn btn-small" style="background: var(--primary-dark);"><i class="fas fa-rocket"></i> Boost Profile</a>
             </div>
         </div>
         '''
@@ -675,15 +637,16 @@ def dashboard():
     vendor_section = ""
     if vendor:
         vstatus_class = vendor['status'].lower()
+        featured_badge = '<span class="badge badge-featured">⭐ FEATURED</span>' if is_featured_now(vendor['featured'], vendor['featured_expiry']) else ''
         vendor_section = f'''
         <div class="card">
-            <div class="card-header"><i class="fas fa-store"></i> My Vendor Profile</div>
+            <div class="card-header"><i class="fas fa-store"></i> My Vendor Profile {featured_badge}</div>
             <p><strong>Business:</strong> {vendor['business_name']}</p>
             <p><strong>Location:</strong> {vendor['district'] or 'Not set'}</p>
             <p><strong>Status:</strong> <span class="badge badge-{vstatus_class}">{vendor['status']}</span></p>
             <div style="display: flex; gap: 10px; margin-top: 15px;">
                 <a href="/edit-vendor-profile" class="btn btn-small">Edit Vendor</a>
-                <a href="/boost-vendor" class="btn btn-small" style="background: var(--primary-dark);">Boost Vendor</a>
+                <a href="/boost-vendor" class="btn btn-small" style="background: var(--primary-dark);"><i class="fas fa-rocket"></i> Boost Vendor</a>
             </div>
         </div>
         '''
@@ -702,7 +665,7 @@ def dashboard():
             jobs_html += f'''
             <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border);">
                 <span>{job['title']} <span class="badge badge-{badge_class}">{job['status']}</span></span>
-                <div><a href="/edit-job/{job['id']}" class="btn btn-small btn-outline">Edit</a> <a href="/boost-job/{job['id']}" class="btn btn-small">Boost</a></div>
+                <div><a href="/edit-job/{job['id']}" class="btn btn-small btn-outline">Edit</a> <a href="/boost-job/{job['id']}" class="btn btn-small">Boost Job</a></div>
             </div>
             '''
     else:
@@ -932,7 +895,7 @@ def list_vendors():
     vendors = db.execute("""
         SELECT v.id, v.business_name, v.district, v.village, v.landmark, v.bio, v.vendor_image, v.status, v.featured, v.featured_expiry, u.phone
         FROM vendors v JOIN users u ON v.user_id = u.id
-        ORDER BY v.featured DESC, v.id DESC
+        ORDER BY CASE WHEN v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= date('now')) THEN 0 ELSE 1 END, v.id DESC
     """).fetchall()
     
     cards = ""
@@ -940,11 +903,12 @@ def list_vendors():
         status_class = v['status'].lower()
         img_url = f"/static/uploads/{v['vendor_image']}" if v['vendor_image'] else ""
         loc_display = f"{v['district']}{', ' + v['village'] if v['village'] else ''}"
+        featured_badge = '<span class="badge badge-featured">⭐ FEATURED</span>' if is_featured_now(v['featured'], v['featured_expiry']) else ''
         cards += f'''
         <div class="vendor-card">
             <img src="{img_url or 'https://placehold.co/100x100?text=🏪'}" class="vendor-img">
             <div class="vendor-info">
-                <h3><a href="/vendor/{v['id']}">{v['business_name']}</a> <span class="badge badge-{status_class}">{v['status']}</span></h3>
+                <h3><a href="/vendor/{v['id']}">{v['business_name']}</a> <span class="badge badge-{status_class}">{v['status']}</span> {featured_badge}</h3>
                 <p>{loc_display}</p>
                 <p>{v['bio'][:100] if v['bio'] else ''}</p>
                 <a href="/vendor/{v['id']}" class="btn btn-small">View Details</a>
@@ -967,9 +931,10 @@ def vendor_detail(vendor_id):
         return "Vendor not found", 404
     
     img_url = f"/static/uploads/{v['vendor_image']}" if v['vendor_image'] else ""
+    featured_badge = '<span class="badge badge-featured">⭐ FEATURED</span>' if is_featured_now(v['featured'], v['featured_expiry']) else ''
     content = f'''
     <div class="card">
-        <div class="card-header">{v['business_name']}</div>
+        <div class="card-header">{v['business_name']} {featured_badge}</div>
         <img src="{img_url}" style="width: 100%; max-height: 300px; object-fit: cover; border-radius: 16px; margin-bottom: 20px;">
         <p><strong>Location:</strong> {v['district']}{', ' + v['village'] if v['village'] else ''}</p>
         <p><strong>Description:</strong> {v['bio'] or 'No description'}</p>
@@ -988,18 +953,19 @@ def list_providers():
     providers = db.execute("""
         SELECT p.id, u.name, p.skills, u.phone, p.district, p.village, p.bio, p.profile_pic, p.status, p.featured, p.featured_expiry
         FROM providers p JOIN users u ON p.user_id = u.id
-        ORDER BY p.featured DESC, p.id DESC
+        ORDER BY CASE WHEN p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= date('now')) THEN 0 ELSE 1 END, p.id DESC
     """).fetchall()
     
     cards = ""
     for p in providers:
         status_class = p['status'].lower().replace(' ', '-')
         img_url = f"/static/uploads/{p['profile_pic']}" if p['profile_pic'] else ""
+        featured_badge = '<span class="badge badge-featured">⭐ FEATURED</span>' if is_featured_now(p['featured'], p['featured_expiry']) else ''
         cards += f'''
         <div class="provider-card">
             <img src="{img_url or 'https://placehold.co/80x80?text=👤'}" class="profile-pic">
             <div class="provider-info">
-                <h3><a href="/provider/{p['id']}">{p['name']}</a> <span class="badge badge-{status_class}">{p['status']}</span></h3>
+                <h3><a href="/provider/{p['id']}">{p['name']}</a> <span class="badge badge-{status_class}">{p['status']}</span> {featured_badge}</h3>
                 <p><strong>{p['skills'] or 'No skills'}</strong> · {p['district'] or 'Uganda'}</p>
                 <p>{p['bio'][:100] if p['bio'] else ''}</p>
                 <a href="/provider/{p['id']}" class="btn btn-small">View Profile</a>
@@ -1022,9 +988,10 @@ def provider_detail(provider_id):
         return "Provider not found", 404
     
     img_url = f"/static/uploads/{p['profile_pic']}" if p['profile_pic'] else ""
+    featured_badge = '<span class="badge badge-featured">⭐ FEATURED</span>' if is_featured_now(p['featured'], p['featured_expiry']) else ''
     content = f'''
     <div class="card">
-        <div class="card-header">{p['name']}</div>
+        <div class="card-header">{p['name']} {featured_badge}</div>
         <img src="{img_url}" class="profile-pic" style="width: 120px; height: 120px;">
         <p><strong>Skills:</strong> {p['skills'] or 'No skills'}</p>
         <p><strong>Location:</strong> {p['district']}{', ' + p['village'] if p['village'] else ''}</p>
@@ -1042,17 +1009,18 @@ def provider_detail(provider_id):
 def list_jobs():
     db = get_db()
     jobs = db.execute("""
-        SELECT j.id, j.title, j.company, j.description, j.location, j.status, j.posted_date
+        SELECT j.id, j.title, j.company, j.description, j.location, j.status, j.posted_date, j.featured, j.featured_expiry
         FROM jobs j WHERE j.status='Open'
-        ORDER BY j.featured DESC, j.id DESC
+        ORDER BY CASE WHEN j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= date('now')) THEN 0 ELSE 1 END, j.id DESC
     """).fetchall()
     
     jobs_html = ""
     for j in jobs:
+        featured_badge = '<span class="badge badge-featured">🔥 FEATURED</span>' if is_featured_now(j['featured'], j['featured_expiry']) else ''
         jobs_html += f'''
         <div class="job-card">
             <div class="job-info">
-                <h3>{j['title']} <span class="badge badge-open">Open</span></h3>
+                <h3>{j['title']} <span class="badge badge-open">Open</span> {featured_badge}</h3>
                 <p>{j['company'] or 'Individual'} · {j['location'] or 'Uganda'} · {j['posted_date'][:10] if j['posted_date'] else ''}</p>
                 <p>{j['description'][:150] if j['description'] else ''}</p>
                 <a href="/job/{j['id']}" class="btn btn-small">View Details</a>
@@ -1074,9 +1042,10 @@ def job_detail(job_id):
     if not j:
         return "Job not found", 404
     
+    featured_badge = '<span class="badge badge-featured">🔥 FEATURED</span>' if is_featured_now(j['featured'], j['featured_expiry']) else ''
     content = f'''
     <div class="card">
-        <div class="card-header">{j['title']}</div>
+        <div class="card-header">{j['title']} {featured_badge}</div>
         <p><strong>Employer:</strong> {j['name']}</p>
         <p><strong>Location:</strong> {j['location']}{', ' + j['village'] if j['village'] else ''}</p>
         <p><strong>Description:</strong></p>
@@ -1180,304 +1149,304 @@ def edit_job(job_id):
     return render_page("Edit Job", content)
 
 # ============================================================
-# BOOST SYSTEM
+# BOOST SYSTEM WITH SMS VERIFICATION (from RockabyWiFi)
 # ============================================================
-@app.route('/boost')
+
+@app.route('/boost-profile', methods=['GET', 'POST'])
 @login_required
 def boost_profile():
-    content = '''
+    """Step 1: Select boost plan and enter phone number"""
+    db = get_db()
+    provider = db.execute("SELECT id FROM providers WHERE user_id=?", (session['user_id'],)).fetchone()
+    if not provider:
+        return redirect('/create-profile')
+    
+    if request.method == 'POST':
+        plan_days = request.form['plan']
+        phone = request.form['phone'].strip()
+        
+        # Store in session for SMS verification
+        session['boost_type'] = 'profile'
+        session['boost_plan'] = plan_days
+        session['boost_phone'] = phone
+        session['boost_amount'] = BOOST_PLANS[plan_days]['price']
+        session['boost_days'] = BOOST_PLANS[plan_days]['days']
+        
+        return redirect(url_for('boost_payment_verify'))
+    
+    content = f'''
     <div class="card">
-        <div class="card-header">Boost Your Profile</div>
-        <p>Get featured at the top of search results!</p>
+        <div class="card-header"><i class="fas fa-rocket"></i> Boost Your Profile</div>
+        <p>Get featured at the top of search results and attract more customers!</p>
+        
         <div style="background: linear-gradient(135deg, rgba(245,175,25,0.1), rgba(26,115,232,0.1)); padding: 20px; border-radius: 16px; margin: 20px 0;">
-            <h3>💰 Pricing</h3>
-            <p>7 days: UGX 5,000 | 30 days: UGX 15,000</p>
+            <h3>💰 Boost Packages</h3>
+            <ul style="list-style: none; padding: 0;">
+                <li>📅 7 days - <strong>UGX {BOOST_PLANS['7']['price']:,}</strong></li>
+                <li>📅 30 days - <strong>UGX {BOOST_PLANS['30']['price']:,}</strong></li>
+                <li>📅 Quarterly (90 days) - <strong>UGX {BOOST_PLANS['90']['price']:,}</strong></li>
+            </ul>
         </div>
-        <form method="POST" action="/boost-submit">
-            <label>Select Plan</label>
+        
+        <hr>
+        <p><strong>📱 How to pay:</strong></p>
+        <ol style="margin-left: 20px;">
+            <li>Send the amount to:<br>
+                <strong>MTN Mobile Money: 0785686404</strong><br>
+                <strong>Airtel: 0751318876</strong><br>
+                <strong>Name: Rocky Peter Abayo</strong>
+            </li>
+            <li>After payment, you'll verify by pasting the SMS.</li>
+        </ol>
+        
+        <form method="POST" style="margin-top: 20px;">
+            <label><i class="fas fa-calendar"></i> Select Plan</label>
             <select name="plan" required>
-                <option value="7">7 Days - UGX 5,000</option>
-                <option value="30">30 Days - UGX 15,000</option>
+                <option value="7">7 Days - UGX {BOOST_PLANS['7']['price']:,}</option>
+                <option value="30">30 Days - UGX {BOOST_PLANS['30']['price']:,}</option>
+                <option value="90">Quarterly (90 Days) - UGX {BOOST_PLANS['90']['price']:,}</option>
             </select>
-            <label>Transaction ID</label>
-            <input type="text" name="trans_id" required placeholder="MTN/Airtel transaction ID">
-            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Submit Request</button>
+            <label><i class="fas fa-phone"></i> Your Phone Number *</label>
+            <input type="tel" name="phone" required placeholder="e.g., 0751318876">
+            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;"><i class="fas fa-arrow-right"></i> Continue to Payment Verification</button>
         </form>
-        <p style="margin-top: 15px;">Send payment to: MTN 0785686404 or Airtel 0751318876 (Rocky Peter Abayo)</p>
     </div>
     '''
     return render_page("Boost Profile", content)
 
-@app.route('/boost-submit', methods=['POST'])
+@app.route('/boost-vendor', methods=['GET', 'POST'])
 @login_required
-def boost_submit():
-    trans_id = request.form['trans_id']
-    plan = request.form['plan']
+def boost_vendor():
+    """Step 1: Select boost plan and enter phone number for vendor"""
     db = get_db()
-    db.execute("INSERT INTO boost_requests (user_id, transaction_id, plan, status, boost_type) VALUES (?,?,?,'pending','profile')",
-               (session['user_id'], trans_id, plan))
-    db.commit()
-    content = '''
-    <div class="card" style="text-align: center;">
-        <div class="card-header">Request Submitted</div>
-        <p>Your boost request will be verified within 24 hours.</p>
-        <a href="/dashboard" class="btn">Back to Dashboard</a>
-    </div>
-    '''
-    return render_page("Boost Submitted", content)
-
-@app.route('/boost-job/<int:job_id>')
-@login_required
-def boost_job(job_id):
-    db = get_db()
-    job = db.execute("SELECT title FROM jobs WHERE id=? AND employer_id=?", (job_id, session['user_id'])).fetchone()
-    if not job:
-        return "Job not found", 404
+    vendor = db.execute("SELECT id FROM vendors WHERE user_id=?", (session['user_id'],)).fetchone()
+    if not vendor:
+        return redirect('/create-vendor-profile')
+    
+    if request.method == 'POST':
+        plan_days = request.form['plan']
+        phone = request.form['phone'].strip()
+        
+        session['boost_type'] = 'vendor'
+        session['boost_plan'] = plan_days
+        session['boost_phone'] = phone
+        session['boost_amount'] = BOOST_PLANS[plan_days]['price']
+        session['boost_days'] = BOOST_PLANS[plan_days]['days']
+        
+        return redirect(url_for('boost_payment_verify'))
     
     content = f'''
     <div class="card">
-        <div class="card-header">Boost Job: {job['title']}</div>
-        <form method="POST" action="/boost-job-submit/{job_id}">
-            <label>Select Plan</label>
+        <div class="card-header"><i class="fas fa-rocket"></i> Boost Your Vendor Profile</div>
+        <p>Get your shop featured at the top of vendor listings and attract more customers!</p>
+        
+        <div style="background: linear-gradient(135deg, rgba(245,175,25,0.1), rgba(26,115,232,0.1)); padding: 20px; border-radius: 16px; margin: 20px 0;">
+            <h3>💰 Boost Packages</h3>
+            <ul style="list-style: none; padding: 0;">
+                <li>📅 7 days - <strong>UGX {BOOST_PLANS['7']['price']:,}</strong></li>
+                <li>📅 30 days - <strong>UGX {BOOST_PLANS['30']['price']:,}</strong></li>
+                <li>📅 Quarterly (90 days) - <strong>UGX {BOOST_PLANS['90']['price']:,}</strong></li>
+            </ul>
+        </div>
+        
+        <hr>
+        <p><strong>📱 How to pay:</strong></p>
+        <ol style="margin-left: 20px;">
+            <li>Send the amount to:<br>
+                <strong>MTN Mobile Money: 0785686404</strong><br>
+                <strong>Airtel: 0751318876</strong><br>
+                <strong>Name: Rocky Peter Abayo</strong>
+            </li>
+            <li>After payment, you'll verify by pasting the SMS.</li>
+        </ol>
+        
+        <form method="POST" style="margin-top: 20px;">
+            <label><i class="fas fa-calendar"></i> Select Plan</label>
             <select name="plan" required>
-                <option value="7">7 Days - UGX 5,000</option>
-                <option value="30">30 Days - UGX 15,000</option>
+                <option value="7">7 Days - UGX {BOOST_PLANS['7']['price']:,}</option>
+                <option value="30">30 Days - UGX {BOOST_PLANS['30']['price']:,}</option>
+                <option value="90">Quarterly (90 Days) - UGX {BOOST_PLANS['90']['price']:,}</option>
             </select>
-            <label>Transaction ID</label>
-            <input type="text" name="trans_id" required>
-            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Submit</button>
-        </form>
-    </div>
-    '''
-    return render_page("Boost Job", content)
-
-@app.route('/boost-job-submit/<int:job_id>', methods=['POST'])
-@login_required
-def boost_job_submit(job_id):
-    trans_id = request.form['trans_id']
-    plan = request.form['plan']
-    db = get_db()
-    db.execute("INSERT INTO boost_requests (user_id, transaction_id, plan, status, boost_type, item_id) VALUES (?,?,?,'pending','job',?)",
-               (session['user_id'], trans_id, plan, job_id))
-    db.commit()
-    content = '''
-    <div class="card" style="text-align: center;">
-        <div class="card-header">Job Boost Submitted</div>
-        <p>Your request will be verified within 24 hours.</p>
-        <a href="/dashboard" class="btn">Back</a>
-    </div>
-    '''
-    return render_page("Boost Submitted", content)
-
-@app.route('/boost-vendor')
-@login_required
-def boost_vendor():
-    content = '''
-    <div class="card">
-        <div class="card-header">Boost Your Vendor Profile</div>
-        <form method="POST" action="/boost-vendor-submit">
-            <label>Select Plan</label>
-            <select name="plan" required>
-                <option value="7">7 Days - UGX 5,000</option>
-                <option value="30">30 Days - UGX 15,000</option>
-            </select>
-            <label>Transaction ID</label>
-            <input type="text" name="trans_id" required>
-            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Submit</button>
+            <label><i class="fas fa-phone"></i> Your Phone Number *</label>
+            <input type="tel" name="phone" required placeholder="e.g., 0751318876">
+            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;"><i class="fas fa-arrow-right"></i> Continue to Payment Verification</button>
         </form>
     </div>
     '''
     return render_page("Boost Vendor", content)
 
-@app.route('/boost-vendor-submit', methods=['POST'])
+@app.route('/boost-job/<int:job_id>', methods=['GET', 'POST'])
 @login_required
-def boost_vendor_submit():
-    trans_id = request.form['trans_id']
-    plan = request.form['plan']
+def boost_job(job_id):
+    """Step 1: Select boost plan and enter phone number for job"""
     db = get_db()
-    db.execute("INSERT INTO boost_requests (user_id, transaction_id, plan, status, boost_type, item_id) VALUES (?,?,?,'pending','vendor',0)",
-               (session['user_id'], trans_id, plan))
-    db.commit()
-    content = '''
-    <div class="card" style="text-align: center;">
-        <div class="card-header">Vendor Boost Submitted</div>
-        <p>Your request will be verified within 24 hours.</p>
-        <a href="/dashboard" class="btn">Back</a>
-    </div>
-    '''
-    return render_page("Boost Submitted", content)
-
-# ============================================================
-# PAYMENT SYSTEM
-# ============================================================
-@app.route('/plans')
-def list_plans():
-    db = get_db()
-    plans = db.execute("SELECT * FROM plans WHERE is_active=1 AND is_public=1 ORDER BY price_ugx ASC").fetchall()
-    
-    plans_html = ""
-    for p in plans:
-        plans_html += f'''
-        <div class="card" style="text-align: center;">
-            <h3>{p['name']}</h3>
-            <p style="font-size: 2rem; color: var(--primary); font-weight: bold;">UGX {p['price_ugx']:,}</p>
-            <p>{p['duration_minutes']} minutes of internet access</p>
-            <a href="/buy-plan/{p['id']}" class="btn">Buy Now</a>
-        </div>
-        '''
-    
-    content = f'''
-    <div class="card">
-        <div class="card-header"><i class="fas fa-wifi"></i> Internet Plans</div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
-            {plans_html}
-        </div>
-    </div>
-    '''
-    return render_page("Internet Plans", content)
-
-@app.route('/buy-plan/<int:plan_id>', methods=['GET', 'POST'])
-def buy_plan(plan_id):
-    db = get_db()
-    plan = db.execute("SELECT * FROM plans WHERE id=?", (plan_id,)).fetchone()
-    if not plan:
-        return redirect('/plans')
+    job = db.execute("SELECT title FROM jobs WHERE id=? AND employer_id=?", (job_id, session['user_id'])).fetchone()
+    if not job:
+        return "Job not found", 404
     
     if request.method == 'POST':
+        plan_days = request.form['plan']
         phone = request.form['phone'].strip()
-        session['pending_phone'] = phone
-        session['pending_plan_id'] = plan_id
-        return redirect(url_for('verify_payment'))
+        
+        session['boost_type'] = 'job'
+        session['boost_item_id'] = job_id
+        session['boost_plan'] = plan_days
+        session['boost_phone'] = phone
+        session['boost_amount'] = BOOST_PLANS[plan_days]['price']
+        session['boost_days'] = BOOST_PLANS[plan_days]['days']
+        
+        return redirect(url_for('boost_payment_verify'))
     
     content = f'''
     <div class="card">
-        <div class="card-header">Buy {plan['name']} - UGX {plan['price_ugx']:,}</div>
-        <form method="POST">
-            <label>Your Phone Number</label>
-            <input type="tel" name="phone" required placeholder="0751318876">
-            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Continue to Payment</button>
+        <div class="card-header"><i class="fas fa-rocket"></i> Boost Job: {job['title']}</div>
+        <p>Make your job listing stand out and get more applicants!</p>
+        
+        <div style="background: linear-gradient(135deg, rgba(245,175,25,0.1), rgba(26,115,232,0.1)); padding: 20px; border-radius: 16px; margin: 20px 0;">
+            <h3>💰 Boost Packages</h3>
+            <ul style="list-style: none; padding: 0;">
+                <li>📅 7 days - <strong>UGX {BOOST_PLANS['7']['price']:,}</strong></li>
+                <li>📅 30 days - <strong>UGX {BOOST_PLANS['30']['price']:,}</strong></li>
+                <li>📅 Quarterly (90 days) - <strong>UGX {BOOST_PLANS['90']['price']:,}</strong></li>
+            </ul>
+        </div>
+        
+        <hr>
+        <p><strong>📱 How to pay:</strong></p>
+        <ol style="margin-left: 20px;">
+            <li>Send the amount to:<br>
+                <strong>MTN Mobile Money: 0785686404</strong><br>
+                <strong>Airtel: 0751318876</strong><br>
+                <strong>Name: Rocky Peter Abayo</strong>
+            </li>
+            <li>After payment, you'll verify by pasting the SMS.</li>
+        </ol>
+        
+        <form method="POST" style="margin-top: 20px;">
+            <label><i class="fas fa-calendar"></i> Select Plan</label>
+            <select name="plan" required>
+                <option value="7">7 Days - UGX {BOOST_PLANS['7']['price']:,}</option>
+                <option value="30">30 Days - UGX {BOOST_PLANS['30']['price']:,}</option>
+                <option value="90">Quarterly (90 Days) - UGX {BOOST_PLANS['90']['price']:,}</option>
+            </select>
+            <label><i class="fas fa-phone"></i> Your Phone Number *</label>
+            <input type="tel" name="phone" required placeholder="e.g., 0751318876">
+            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;"><i class="fas fa-arrow-right"></i> Continue to Payment Verification</button>
         </form>
     </div>
     '''
-    return render_page("Buy Plan", content)
+    return render_page("Boost Job", content)
 
-@app.route('/verify-payment', methods=['GET', 'POST'])
-def verify_payment():
-    phone = session.get('pending_phone', '')
-    plan_id = session.get('pending_plan_id', 1)
+@app.route('/boost-payment-verify', methods=['GET', 'POST'])
+@login_required
+def boost_payment_verify():
+    """Step 2: Paste SMS for verification"""
+    boost_type = session.get('boost_type')
+    plan_days = session.get('boost_plan')
+    phone = session.get('boost_phone')
+    expected_amount = session.get('boost_amount')
     
-    db = get_db()
-    plan = db.execute("SELECT * FROM plans WHERE id=?", (plan_id,)).fetchone()
-    if not plan:
-        return redirect('/plans')
+    if not boost_type or not plan_days:
+        return redirect('/dashboard')
+    
+    plan_info = BOOST_PLANS.get(plan_days, BOOST_PLANS['7'])
     
     if request.method == 'POST':
         raw_sms = request.form['raw_sms'].strip()
         
+        # Parse SMS (MTN or Airtel)
         if 'TID' in raw_sms or 'SENT.TID' in raw_sms:
             parsed = parse_airtel_sms(raw_sms)
         else:
             parsed = parse_mtn_sms(raw_sms)
         
+        error = None
         if not parsed['tid']:
+            error = "Could not detect Transaction ID in the SMS."
+        elif not parsed['amount']:
+            error = "Could not detect amount in the SMS."
+        elif parsed['amount'] != expected_amount:
+            error = f"Amount mismatch. Expected UGX {expected_amount:,}, got UGX {parsed['amount']:,}."
+        
+        if error:
             return render_page("Verify Payment", f'''
-            <div class="card"><div class="alert alert-error">Could not detect Transaction ID.</div>
-            <form method="POST"><textarea name="raw_sms" rows="6" required></textarea><button type="submit" class="btn">Verify Again</button></form></div>
+            <div class="card">
+                <div class="alert alert-error">{error}</div>
+                <p><strong>Plan:</strong> {plan_info['name']} - UGX {expected_amount:,}</p>
+                <p>Send payment to: MTN 0785686404 or Airtel 0751318876</p>
+                <form method="POST">
+                    <label>Paste the Full SMS Here</label>
+                    <textarea name="raw_sms" rows="6" required></textarea>
+                    <button type="submit" class="btn" style="margin-top:20px;">Verify Again</button>
+                </form>
+                <a href="/dashboard" class="btn btn-outline" style="margin-top:10px;">Cancel</a>
+            </div>
             ''')
         
-        if parsed['amount'] != plan['price_ugx']:
-            return render_page("Verify Payment", f'''
-            <div class="card"><div class="alert alert-error">Amount mismatch. Expected UGX {plan['price_ugx']:,}.</div>
-            <form method="POST"><textarea name="raw_sms" rows="6" required></textarea><button type="submit" class="btn">Verify Again</button></form></div>
-            ''')
-        
-        existing = db.execute("SELECT id FROM voucher_requests WHERE transaction_id=?", (parsed['tid'],)).fetchone()
+        # Check if transaction ID already used
+        db = get_db()
+        existing = db.execute("SELECT id FROM boost_requests WHERE transaction_id=? AND status='approved'", (parsed['tid'],)).fetchone()
         if existing:
-            return render_page("Verify Payment", '<div class="card"><div class="alert alert-error">This transaction ID has already been used.</div><a href="/plans" class="btn">Back to Plans</a></div>')
+            return render_page("Verify Payment", '''
+            <div class="card">
+                <div class="alert alert-error">This Transaction ID has already been used.</div>
+                <a href="/dashboard" class="btn">Back to Dashboard</a>
+            </div>
+            ''')
         
-        code = generate_voucher_code()
-        db.execute("INSERT INTO vouchers (code, plan_id, payment_method, phone_number) VALUES (?,?,'sms',?)", (code, plan_id, phone))
-        db.execute("INSERT INTO voucher_requests (phone_number, plan_id, raw_sms, transaction_id, amount, recipient, payment_date, status, voucher_code) VALUES (?,?,?,?,?,?,?,'approved',?)",
-                   (phone, plan_id, raw_sms, parsed['tid'], parsed['amount'], parsed.get('recipient_name', ''), parsed.get('date', ''), code))
+        # Save boost request for admin verification
+        db.execute("""
+            INSERT INTO boost_requests (user_id, boost_type, plan_days, amount, phone_number, transaction_id, raw_sms, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+        """, (session['user_id'], boost_type, plan_info['days'], expected_amount, phone, parsed['tid'], raw_sms))
         db.commit()
         
-        session.pop('pending_phone', None)
-        session.pop('pending_plan_id', None)
+        # Clear session
+        session.pop('boost_type', None)
+        session.pop('boost_plan', None)
+        session.pop('boost_phone', None)
+        session.pop('boost_amount', None)
+        session.pop('boost_days', None)
+        session.pop('boost_item_id', None)
         
-        return render_page("Payment Success", f'''
+        return render_page("Boost Request Submitted", '''
         <div class="card" style="text-align: center;">
-            <div class="card-header">✅ Payment Successful!</div>
-            <p>Your voucher code:</p>
-            <div class="voucher-code" id="vc">{code}</div>
-            <button class="copy-btn" onclick="navigator.clipboard.writeText('{code}')">Copy</button>
-            <p style="margin-top: 20px;">Use this code to connect to the internet.</p>
-            <a href="/" class="btn">Back to Home</a>
+            <div class="card-header">✅ Payment Verification Submitted!</div>
+            <p>Your payment has been recorded and will be verified by an admin within 24 hours.</p>
+            <p>Once approved, your profile/vendor will be featured at the top of search results.</p>
+            <a href="/dashboard" class="btn">Back to Dashboard</a>
         </div>
         ''')
     
     content = f'''
     <div class="card">
-        <div class="card-header">Verify Payment</div>
-        <p><strong>Plan:</strong> {plan['name']} - UGX {plan['price_ugx']:,}</p>
-        <p>Send payment to:</p>
-        <ul>
-            <li><strong>MTN Mobile Money:</strong> 0785686404</li>
-            <li><strong>Airtel Money:</strong> 0751318876</li>
-            <li><strong>Name:</strong> RockabyTech</li>
-        </ul>
+        <div class="card-header">📱 Verify Your Payment</div>
+        <p><strong>Selected Plan:</strong> {plan_info['name']} - UGX {expected_amount:,}</p>
+        <p><strong>Your Phone:</strong> {phone}</p>
+        
+        <div style="background: #f0f4f8; padding: 15px; border-radius: 12px; margin: 15px 0;">
+            <p><strong>Send payment to:</strong></p>
+            <p>📱 MTN Mobile Money: <strong>0785686404</strong></p>
+            <p>📱 Airtel Money: <strong>0751318876</strong></p>
+            <p>👤 Name: <strong>Rocky Peter Abayo</strong></p>
+        </div>
+        
         <hr>
+        <p><strong>After sending payment, paste the full SMS below:</strong></p>
+        
         <form method="POST">
-            <label>Paste the Full SMS Here</label>
-            <textarea name="raw_sms" rows="8" required placeholder="You have sent UGX 1,000 to ROCKABYTECH..."></textarea>
-            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Verify Payment</button>
+            <label><i class="fas fa-sms"></i> Full SMS from MTN/Airtel</label>
+            <textarea name="raw_sms" rows="8" required placeholder="Example: You have sent UGX 5,000 to ROCKABYTECH... Transaction ID: MTN123456..."></textarea>
+            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;"><i class="fas fa-check-circle"></i> Verify Payment</button>
         </form>
+        
+        <a href="/dashboard" class="btn btn-outline" style="margin-top: 10px;">Cancel</a>
     </div>
     '''
     return render_page("Verify Payment", content)
 
-@app.route('/redeem', methods=['GET', 'POST'])
-def redeem_voucher():
-    if request.method == 'POST':
-        code = request.form['code'].strip().upper()
-        db = get_db()
-        voucher = db.execute("SELECT * FROM vouchers WHERE code=? AND used=0", (code,)).fetchone()
-        if voucher:
-            db.execute("UPDATE vouchers SET used=1, used_at=CURRENT_TIMESTAMP WHERE id=?", (voucher['id'],))
-            db.commit()
-            return render_page("Voucher Redeemed", '''
-            <div class="card" style="text-align: center;">
-                <div class="card-header">🎉 Success!</div>
-                <p>Your voucher has been activated!</p>
-                <a href="/" class="btn">Back to Home</a>
-            </div>
-            ''')
-        else:
-            return render_page("Redeem Voucher", '''
-            <div class="card">
-                <div class="alert alert-error">Invalid or already used voucher code.</div>
-                <form method="POST">
-                    <label>Enter Voucher Code</label>
-                    <input type="text" name="code" placeholder="CONNECT-XXXX-XXXX-XXXX" required>
-                    <button type="submit" class="btn">Redeem</button>
-                </form>
-            </div>
-            ''')
-    
-    content = '''
-    <div class="card">
-        <div class="card-header">Redeem Voucher</div>
-        <form method="POST">
-            <label>Enter Your Voucher Code</label>
-            <input type="text" name="code" placeholder="CONNECT-XXXX-XXXX-XXXX" required>
-            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Redeem</button>
-        </form>
-        <p style="margin-top: 15px;"><a href="/plans">Don't have a voucher? Buy one here</a></p>
-    </div>
-    '''
-    return render_page("Redeem Voucher", content)
-
 # ============================================================
-# SEPARATE ADMIN PANEL
+# SEPARATE ADMIN PANEL (Tracks Everything)
 # ============================================================
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
@@ -1516,17 +1485,23 @@ def admin_dashboard():
         return redirect('/admin/login')
     
     db = get_db()
+    
+    # Statistics
     total_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     total_providers = db.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
     total_vendors = db.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
     total_jobs = db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-    pending_boosts = db.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'").fetchone()[0]
-    pending_payments = db.execute("SELECT COUNT(*) FROM voucher_requests WHERE status='pending'").fetchone()[0]
     
+    # Boost statistics
+    pending_boosts = db.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'").fetchone()[0]
+    approved_boosts = db.execute("SELECT COUNT(*) FROM boost_requests WHERE status='approved'").fetchone()[0]
+    total_revenue = db.execute("SELECT COALESCE(SUM(amount), 0) FROM boost_requests WHERE status='approved'").fetchone()[0]
+    
+    # Pending boost requests
     boosts = db.execute("""
-        SELECT br.id, u.name, u.phone, br.transaction_id, br.plan, br.boost_type
+        SELECT br.id, u.name, u.phone, br.boost_type, br.plan_days, br.amount, br.transaction_id, br.created_at
         FROM boost_requests br JOIN users u ON br.user_id = u.id
-        WHERE br.status='pending' ORDER BY br.request_date DESC
+        WHERE br.status='pending' ORDER BY br.created_at DESC
     """).fetchall()
     
     boosts_html = ""
@@ -1534,40 +1509,38 @@ def admin_dashboard():
         boosts_html += f'''
         <tr>
             <td>{b['name']}<br><small>{b['phone']}</small></td>
+            <td>{b['boost_type']} - {b['plan_days']} days</td>
+            <td>UGX {b['amount']:,}</td>
             <td>{b['transaction_id']}</td>
-                    </tr>
-            <td>{b['plan']} days</td>
-            <td>{b['boost_type']}</td>
+            <td><small>{b['created_at'][:16] if b['created_at'] else ''}</small></td>
             <td>
                 <a href="/admin/approve-boost/{b['id']}" style="background:green; color:white; padding:4px 8px; text-decoration:none; border-radius:4px;">Approve</a>
                 <a href="/admin/reject-boost/{b['id']}" style="background:red; color:white; padding:4px 8px; text-decoration:none; border-radius:4px;">Reject</a>
             </td>
-        </tr>'''
+        <tr>'''
     
     if not boosts_html:
-        boosts_html = '<tr><td colspan="5">No pending boost requests</td></tr>'
+        boosts_html = '<tr><td colspan="6">No pending boost requests</td></tr>'
     
-    # Get pending payments
-    payments = db.execute("""
-        SELECT id, phone_number, amount, transaction_id, created_at
-        FROM voucher_requests WHERE status='pending' ORDER BY created_at DESC
+    # Recently approved boosts (activity log)
+    recent_approvals = db.execute("""
+        SELECT br.id, u.name, br.boost_type, br.plan_days, br.amount, br.verified_at
+        FROM boost_requests br JOIN users u ON br.user_id = u.id
+        WHERE br.status='approved' ORDER BY br.verified_at DESC LIMIT 10
     """).fetchall()
     
-    payments_html = ""
-    for p in payments:
-        payments_html += f'''
+    recent_html = ""
+    for r in recent_approvals:
+        recent_html += f'''
         <tr>
-            <td>{p['phone_number']}</td>
-            <td>UGX {p['amount']:,}</td>
-            <td>{p['transaction_id']}</td>
-            <td>
-                <a href="/admin/approve-payment/{p['id']}" style="background:green; color:white; padding:4px 8px; text-decoration:none; border-radius:4px;">Approve</a>
-                <a href="/admin/reject-payment/{p['id']}" style="background:red; color:white; padding:4px 8px; text-decoration:none; border-radius:4px;">Reject</a>
-            </td>
+            <td>{r['name']}</td>
+            <td>{r['boost_type']} - {r['plan_days']} days</td>
+            <td>UGX {r['amount']:,}</td>
+            <td><small>{r['verified_at'][:16] if r['verified_at'] else ''}</small></td>
         </tr>'''
     
-    if not payments_html:
-        payments_html = '<tr><td colspan="4">No pending payments</td></tr>'
+    if not recent_html:
+        recent_html = '<tr><td colspan="4">No recent approvals</td></tr>'
     
     db.close()
     
@@ -1575,12 +1548,12 @@ def admin_dashboard():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Admin Dashboard</title>
+        <title>Admin Dashboard - RockabyConnect</title>
         <style>
             body {{ font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }}
-            .container {{ max-width: 1200px; margin: 0 auto; }}
+            .container {{ max-width: 1400px; margin: 0 auto; }}
             .card {{ background: white; border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-            .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+            .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }}
             .stat {{ background: linear-gradient(135deg, #f5af19, #e09e15); color: white; padding: 20px; border-radius: 12px; text-align: center; }}
             .stat h3 {{ font-size: 2rem; margin: 0; }}
             table {{ width: 100%; border-collapse: collapse; }}
@@ -1588,6 +1561,8 @@ def admin_dashboard():
             th {{ background: #f5f5f5; }}
             .btn {{ display: inline-block; padding: 10px 20px; background: #f5af19; color: white; text-decoration: none; border-radius: 8px; margin-top: 10px; }}
             .btn-danger {{ background: #dc3545; }}
+            .status-pending {{ background: #ffc107; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }}
+            .status-approved {{ background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }}
         </style>
     </head>
     <body>
@@ -1600,29 +1575,30 @@ def admin_dashboard():
                     <div class="stat"><h3>{total_vendors}</h3><p>Vendors</p></div>
                     <div class="stat"><h3>{total_jobs}</h3><p>Jobs</p></div>
                     <div class="stat"><h3>{pending_boosts}</h3><p>Pending Boosts</p></div>
-                    <div class="stat"><h3>{pending_payments}</h3><p>Pending Payments</p></div>
+                    <div class="stat"><h3>{approved_boosts}</h3><p>Approved Boosts</p></div>
+                    <div class="stat"><h3>UGX {total_revenue:,}</h3><p>Total Revenue</p></div>
                 </div>
             </div>
             
             <div class="card">
-                <h3>Pending Boost Requests</h3>
+                <h3>⏳ Pending Boost Verification Requests</h3>
                 <table>
-                    <tr><th>User</th><th>Transaction</th><th>Plan</th><th>Type</th><th>Action</th></tr>
-                    {boosts_html}
+                    <thead>
+                        <tr><th>User</th><th>Type</th><th>Amount</th><th>Transaction ID</th><th>Date</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>{boosts_html}</tbody>
                 </table>
             </div>
             
             <div class="card">
-                <h3>Pending Payment Verifications</h3>
+                <h3>✅ Recent Approved Boosts</h3>
                 <table>
-                    <tr><th>Phone</th><th>Amount</th><th>Transaction ID</th><th>Action</th></tr>
-                    {payments_html}
+                    <thead><tr><th>User</th><th>Type</th><th>Amount</th><th>Approved At</th></tr></thead>
+                    <tbody>{recent_html}</tbody>
                 </table>
             </div>
             
             <div class="card">
-                <h3>Admin Actions</h3>
-                <a href="/admin/plans" class="btn">Manage Plans</a>
                 <a href="/admin/logout" class="btn btn-danger">Logout</a>
             </div>
         </div>
@@ -1636,18 +1612,26 @@ def admin_approve_boost(bid):
         return redirect('/admin/login')
     
     db = get_db()
-    boost = db.execute("SELECT user_id, plan, boost_type, item_id FROM boost_requests WHERE id=?", (bid,)).fetchone()
+    boost = db.execute("SELECT user_id, boost_type, plan_days FROM boost_requests WHERE id=?", (bid,)).fetchone()
     if boost:
-        days = int(boost['plan'])
+        days = boost['plan_days']
         expiry = date.today() + timedelta(days=days)
+        
         if boost['boost_type'] == 'profile':
             db.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, boost['user_id']))
-        elif boost['boost_type'] == 'job':
-            db.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, boost['item_id']))
         elif boost['boost_type'] == 'vendor':
             db.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, boost['user_id']))
-        db.execute("UPDATE boost_requests SET status='approved' WHERE id=?", (bid,))
+        elif boost['boost_type'] == 'job':
+            # For job boosts, we need the item_id - get it from the request
+            item = db.execute("SELECT item_id FROM boost_requests WHERE id=?", (bid,)).fetchone()
+            if item and item['item_id']:
+                db.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, item['item_id']))
+        
+        db.execute("UPDATE boost_requests SET status='approved', verified_at=CURRENT_TIMESTAMP WHERE id=?", (bid,))
         db.commit()
+        
+        add_notification(boost['user_id'], 'boost', f'Your {boost["boost_type"]} boost for {days} days has been approved!')
+    
     db.close()
     return redirect('/admin/dashboard')
 
@@ -1657,208 +1641,14 @@ def admin_reject_boost(bid):
         return redirect('/admin/login')
     
     db = get_db()
-    db.execute("UPDATE boost_requests SET status='rejected' WHERE id=?", (bid,))
-    db.commit()
+    boost = db.execute("SELECT user_id FROM boost_requests WHERE id=?", (bid,)).fetchone()
+    if boost:
+        db.execute("UPDATE boost_requests SET status='rejected' WHERE id=?", (bid,))
+        db.commit()
+        add_notification(boost['user_id'], 'boost', 'Your boost request was rejected. Please contact support.')
+    
     db.close()
     return redirect('/admin/dashboard')
-
-@app.route('/admin/approve-payment/<int:pid>')
-def admin_approve_payment(pid):
-    if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
-    
-    db = get_db()
-    payment = db.execute("SELECT * FROM voucher_requests WHERE id=?", (pid,)).fetchone()
-    if payment:
-        code = generate_voucher_code()
-        db.execute("INSERT INTO vouchers (code, plan_id, payment_method, phone_number) VALUES (?,?,'sms',?)", 
-                   (code, payment['plan_id'], payment['phone_number']))
-        db.execute("UPDATE voucher_requests SET status='approved', voucher_code=? WHERE id=?", (code, pid))
-        db.commit()
-    db.close()
-    return redirect('/admin/dashboard')
-
-@app.route('/admin/reject-payment/<int:pid>')
-def admin_reject_payment(pid):
-    if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
-    
-    db = get_db()
-    db.execute("UPDATE voucher_requests SET status='rejected' WHERE id=?", (pid,))
-    db.commit()
-    db.close()
-    return redirect('/admin/dashboard')
-
-@app.route('/admin/plans')
-def admin_plans():
-    if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
-    
-    db = get_db()
-    plans = db.execute("SELECT * FROM plans ORDER BY price_ugx ASC").fetchall()
-    
-    rows = ""
-    for p in plans:
-        rows += f'''
-        <tr>
-            <td>{p['name']}</td>
-            <td>{p['duration_minutes']} min</td>
-            <td>UGX {p['price_ugx']:,}</td>
-            <td>{'Yes' if p['is_active'] else 'No'}</td>
-            <td>
-                <a href="/admin/plan/edit/{p['id']}" style="background:#f5af19; color:white; padding:4px 8px; text-decoration:none; border-radius:4px;">Edit</a>
-                <a href="/admin/plan/delete/{p['id']}" style="background:#dc3545; color:white; padding:4px 8px; text-decoration:none; border-radius:4px;" onclick="return confirm('Delete?')">Delete</a>
-            </td>
-        </tr>'''
-    
-    db.close()
-    
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Manage Plans</title>
-        <style>
-            body {{ font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }}
-            .container {{ max-width: 1000px; margin: 0 auto; }}
-            .card {{ background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-            table {{ width: 100%; border-collapse: collapse; }}
-            th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
-            th {{ background: #f5f5f5; }}
-            .btn {{ display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 8px; margin-bottom: 20px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="card">
-                <h2>Manage Internet Plans</h2>
-                <a href="/admin/plan/add" class="btn">+ Add Plan</a>
-                <table>
-                    <tr><th>Name</th><th>Duration</th><th>Price</th><th>Active</th><th>Action</th></tr>
-                    {rows}
-                </table>
-                <a href="/admin/dashboard" style="display: inline-block; margin-top: 20px; color: #f5af19;">Back to Dashboard</a>
-            </div>
-        </div>
-    </body>
-    </html>
-    '''
-
-@app.route('/admin/plan/add', methods=['GET', 'POST'])
-def admin_add_plan():
-    if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
-    
-    if request.method == 'POST':
-        name = request.form['name']
-        duration = int(request.form['duration'])
-        price = int(request.form['price'])
-        db = get_db()
-        db.execute("INSERT INTO plans (name, duration_minutes, price_ugx, is_public) VALUES (?,?,?,1)", (name, duration, price))
-        db.commit()
-        db.close()
-        return redirect('/admin/plans')
-    
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Add Plan</title>
-        <style>
-            body { font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }
-            .container { max-width: 500px; margin: 0 auto; }
-            .card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            input, select { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }
-            button { width: 100%; padding: 10px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="card">
-                <h2>Add New Plan</h2>
-                <form method="POST">
-                    <label>Plan Name</label>
-                    <input type="text" name="name" required>
-                    <label>Duration (minutes)</label>
-                    <input type="number" name="duration" required>
-                    <label>Price (UGX)</label>
-                    <input type="number" name="price" required>
-                    <button type="submit">Create Plan</button>
-                </form>
-                <a href="/admin/plans" style="display: inline-block; margin-top: 20px;">Back</a>
-            </div>
-        </div>
-    </body>
-    </html>
-    '''
-
-@app.route('/admin/plan/edit/<int:plan_id>', methods=['GET', 'POST'])
-def admin_edit_plan(plan_id):
-    if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
-    
-    db = get_db()
-    plan = db.execute("SELECT * FROM plans WHERE id=?", (plan_id,)).fetchone()
-    if not plan:
-        return redirect('/admin/plans')
-    
-    if request.method == 'POST':
-        name = request.form['name']
-        duration = int(request.form['duration'])
-        price = int(request.form['price'])
-        is_active = 1 if request.form.get('is_active') else 0
-        db.execute("UPDATE plans SET name=?, duration_minutes=?, price_ugx=?, is_active=? WHERE id=?", 
-                   (name, duration, price, is_active, plan_id))
-        db.commit()
-        db.close()
-        return redirect('/admin/plans')
-    
-    db.close()
-    
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Edit Plan</title>
-        <style>
-            body {{ font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }}
-            .container {{ max-width: 500px; margin: 0 auto; }}
-            .card {{ background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-            input, select {{ width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }}
-            button {{ width: 100%; padding: 10px; background: #f5af19; color: white; border: none; border-radius: 8px; cursor: pointer; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="card">
-                <h2>Edit Plan: {plan['name']}</h2>
-                <form method="POST">
-                    <label>Plan Name</label>
-                    <input type="text" name="name" value="{plan['name']}" required>
-                    <label>Duration (minutes)</label>
-                    <input type="number" name="duration" value="{plan['duration_minutes']}" required>
-                    <label>Price (UGX)</label>
-                    <input type="number" name="price" value="{plan['price_ugx']}" required>
-                    <label><input type="checkbox" name="is_active" {'checked' if plan['is_active'] else ''}> Active</label>
-                    <button type="submit">Update Plan</button>
-                </form>
-                <a href="/admin/plans" style="display: inline-block; margin-top: 20px;">Back</a>
-            </div>
-        </div>
-    </body>
-    </html>
-    '''
-
-@app.route('/admin/plan/delete/<int:plan_id>')
-def admin_delete_plan(plan_id):
-    if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
-    
-    db = get_db()
-    db.execute("DELETE FROM plans WHERE id=?", (plan_id,))
-    db.commit()
-    db.close()
-    return redirect('/admin/plans')
 
 @app.route('/admin/logout')
 def admin_logout():
