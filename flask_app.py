@@ -57,10 +57,12 @@ def close_db(exception):
 
 def init_db():
     """Initialize all database tables"""
-    db = get_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
     
     # Users table
-    db.execute('''CREATE TABLE IF NOT EXISTS users (
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         phone TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
@@ -68,7 +70,7 @@ def init_db():
     )''')
     
     # Providers (freelancers) table
-    db.execute('''CREATE TABLE IF NOT EXISTS providers (
+    c.execute('''CREATE TABLE IF NOT EXISTS providers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER UNIQUE NOT NULL,
         skills TEXT,
@@ -83,14 +85,14 @@ def init_db():
     )''')
     
     # Add missing columns to providers if needed
-    db.execute("PRAGMA table_info(providers)")
-    prov_cols = [col[1] for col in db.fetchall()]
+    c.execute("PRAGMA table_info(providers)")
+    prov_cols = [col[1] for col in c.fetchall()]  # ✅ FIXED: use c.fetchall()
     for col in ['skills', 'village', 'featured_expiry']:
         if col not in prov_cols:
-            db.execute(f"ALTER TABLE providers ADD COLUMN {col} TEXT")
+            c.execute(f"ALTER TABLE providers ADD COLUMN {col} TEXT")
     
     # Vendors table
-    db.execute('''CREATE TABLE IF NOT EXISTS vendors (
+    c.execute('''CREATE TABLE IF NOT EXISTS vendors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER UNIQUE NOT NULL,
         business_name TEXT NOT NULL,
@@ -108,14 +110,14 @@ def init_db():
     )''')
     
     # Add missing columns to vendors
-    db.execute("PRAGMA table_info(vendors)")
-    vend_cols = [col[1] for col in db.fetchall()]
+    c.execute("PRAGMA table_info(vendors)")
+    vend_cols = [col[1] for col in c.fetchall()]  # ✅ FIXED: use c.fetchall()
     for col in ['landmark', 'vendor_image2', 'vendor_image3', 'featured_expiry']:
         if col not in vend_cols:
-            db.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
+            c.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
     
     # Jobs table
-    db.execute('''CREATE TABLE IF NOT EXISTS jobs (
+    c.execute('''CREATE TABLE IF NOT EXISTS jobs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         employer_id INTEGER NOT NULL,
         title TEXT NOT NULL,
@@ -133,14 +135,14 @@ def init_db():
     )''')
     
     # Add missing columns to jobs
-    db.execute("PRAGMA table_info(jobs)")
-    job_cols = [col[1] for col in db.fetchall()]
+    c.execute("PRAGMA table_info(jobs)")
+    job_cols = [col[1] for col in c.fetchall()]  # ✅ FIXED: use c.fetchall()
     for col in ['village', 'job_image', 'featured', 'featured_expiry']:
         if col not in job_cols:
-            db.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
+            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
     
     # Reviews table
-    db.execute('''CREATE TABLE IF NOT EXISTS reviews (
+    c.execute('''CREATE TABLE IF NOT EXISTS reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         provider_id INTEGER NOT NULL,
         reviewer_id INTEGER NOT NULL,
@@ -152,7 +154,7 @@ def init_db():
     )''')
     
     # Boost requests table
-    db.execute('''CREATE TABLE IF NOT EXISTS boost_requests (
+    c.execute('''CREATE TABLE IF NOT EXISTS boost_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         transaction_id TEXT NOT NULL,
@@ -165,7 +167,7 @@ def init_db():
     )''')
     
     # Notifications table
-    db.execute('''CREATE TABLE IF NOT EXISTS notifications (
+    c.execute('''CREATE TABLE IF NOT EXISTS notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
         type TEXT NOT NULL,
@@ -174,10 +176,8 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
     
-    # ========== PAYMENT TABLES ==========
-    
-    # Vouchers table (for payments)
-    db.execute('''CREATE TABLE IF NOT EXISTS vouchers (
+    # Payment tables
+    c.execute('''CREATE TABLE IF NOT EXISTS vouchers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         code TEXT UNIQUE NOT NULL,
         plan_id INTEGER,
@@ -188,8 +188,7 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     
-    # Voucher requests (payment verification)
-    db.execute('''CREATE TABLE IF NOT EXISTS voucher_requests (
+    c.execute('''CREATE TABLE IF NOT EXISTS voucher_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         phone_number TEXT NOT NULL,
         plan_id INTEGER,
@@ -203,8 +202,7 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     
-    # Yo! Payments transactions
-    db.execute('''CREATE TABLE IF NOT EXISTS yo_tx (
+    c.execute('''CREATE TABLE IF NOT EXISTS yo_tx (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         tx_ref TEXT UNIQUE,
         phone TEXT,
@@ -214,8 +212,7 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     
-    # Plans table (for paid services)
-    db.execute('''CREATE TABLE IF NOT EXISTS plans (
+    c.execute('''CREATE TABLE IF NOT EXISTS plans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         duration_minutes INTEGER NOT NULL,
@@ -228,7 +225,8 @@ def init_db():
     )''')
     
     # Check if plans exist, if not, add default ones
-    plan_count = db.execute("SELECT COUNT(*) FROM plans").fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM plans")
+    plan_count = c.fetchone()[0]  # ✅ FIXED: use c.fetchone()
     if plan_count == 0:
         default_plans = [
             ('3 Hours', 180, 500),
@@ -238,16 +236,18 @@ def init_db():
             ('Free Trial', 5, 0)
         ]
         for name, mins, price in default_plans:
-            db.execute("INSERT INTO plans (name, duration_minutes, price_ugx, is_public) VALUES (?,?,?,1)",
-                      (name, mins, price))
+            c.execute("INSERT INTO plans (name, duration_minutes, price_ugx, is_public) VALUES (?,?,?,1)", 
+                     (name, mins, price))
     
     # Insert default admin user if not exists
-    admin_exists = db.execute("SELECT COUNT(*) FROM users WHERE phone='256751318876'").fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM users WHERE phone='256751318876'")
+    admin_exists = c.fetchone()[0]  # ✅ FIXED: use c.fetchone()
     if admin_exists == 0:
         hashed = generate_password_hash('admin123')
-        db.execute("INSERT INTO users (phone, name, password_hash) VALUES ('256751318876', 'RockabyTech Admin', ?)", (hashed,))
+        c.execute("INSERT INTO users (phone, name, password_hash) VALUES ('256751318876', 'RockabyTech Admin', ?)", (hashed,))
     
-    db.commit()
+    conn.commit()
+    conn.close()
 
 # ============================================================
 # HELPER FUNCTIONS
