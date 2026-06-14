@@ -1373,7 +1373,12 @@ def boost_payment_verify():
             <div class="card">
                 <div class="alert alert-error">{error}</div>
                 <p><strong>Plan:</strong> {plan_info['name']} - UGX {expected_amount:,}</p>
-                <p>Send payment to: MTN 0785686404 or Airtel 0751318876</p>
+                <div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 15px; margin: 15px 0;">
+                    <p><strong>Send payment to:</strong></p>
+                    <p>📱 MTN Mobile Money: <strong>0785686404</strong></p>
+                    <p>📱 Airtel Money: <strong>0751318876</strong></p>
+                    <p>👤 Name: <strong>Rocky Peter Abayo</strong></p>
+                </div>
                 <form method="POST">
                     <label>Paste the Full SMS Here</label>
                     <textarea name="raw_sms" rows="6" required></textarea>
@@ -1424,11 +1429,11 @@ def boost_payment_verify():
         <p><strong>Selected Plan:</strong> {plan_info['name']} - UGX {expected_amount:,}</p>
         <p><strong>Your Phone:</strong> {phone}</p>
         
-        <div style="background: #f0f4f8; padding: 15px; border-radius: 12px; margin: 15px 0;">
-            <p><strong>Send payment to:</strong></p>
-            <p>📱 MTN Mobile Money: <strong>0785686404</strong></p>
-            <p>📱 Airtel Money: <strong>0751318876</strong></p>
-            <p>👤 Name: <strong>Rocky Peter Abayo</strong></p>
+        <div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 15px; margin: 15px 0;">
+            <p><strong>📱 Send payment to:</strong></p>
+            <p>MTN Mobile Money: <strong>0785686404</strong></p>
+            <p>Airtel Money: <strong>0751318876</strong></p>
+            <p>Name: <strong>Rocky Peter Abayo</strong></p>
         </div>
         
         <hr>
