@@ -63,7 +63,8 @@ def init_db():
     c.execute("PRAGMA table_info(providers)")
     prov_cols = [col[1] for col in c.fetchall()]
     for col in ['skills', 'village', 'featured_expiry']:
-        if col not in prov_cols: c.execute(f"ALTER TABLE providers ADD COLUMN {col} TEXT")
+        if col not in prov_cols:
+            c.execute(f"ALTER TABLE providers ADD COLUMN {col} TEXT")
 
     c.execute('''CREATE TABLE IF NOT EXISTS vendors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,7 +85,8 @@ def init_db():
     c.execute("PRAGMA table_info(vendors)")
     vend_cols = [col[1] for col in c.fetchall()]
     for col in ['landmark', 'vendor_image2', 'vendor_image3', 'featured_expiry']:
-        if col not in vend_cols: c.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
+        if col not in vend_cols:
+            c.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
 
     c.execute('''CREATE TABLE IF NOT EXISTS jobs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,7 +107,8 @@ def init_db():
     c.execute("PRAGMA table_info(jobs)")
     job_cols = [col[1] for col in c.fetchall()]
     for col in ['village', 'job_image', 'featured', 'featured_expiry']:
-        if col not in job_cols: c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
+        if col not in job_cols:
+            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
 
     c.execute('''CREATE TABLE IF NOT EXISTS reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,10 +142,12 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+    # Insert admin if not exists
     c.execute("SELECT COUNT(*) FROM users WHERE id=1")
     if c.fetchone()[0] == 0:
         hashed = generate_password_hash('admin123')
         c.execute("INSERT INTO users (phone, name, password_hash) VALUES ('256751318876', 'RockabyTech Admin', ?)", (hashed,))
+
     conn.commit()
     conn.close()
 
