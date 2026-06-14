@@ -10,6 +10,10 @@ app = Flask(__name__)
 app.secret_key = 'rockabyconnect-secret-key-change-in-production'
 app.permanent_session_lifetime = timedelta(days=30)
 
+# Initialize database on startup
+with app.app_context():
+    init_db()
+
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
