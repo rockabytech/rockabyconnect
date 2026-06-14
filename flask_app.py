@@ -1968,6 +1968,172 @@ def admin_logout():
     session.pop('admin_logged_in', None)
     return redirect('/admin/login')
 
+    # ============================================================
+# SEPARATE ADMIN PANEL
+# ============================================================
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        if request.form.get('password') == 'Trythorous2909@1707#!':
+            session['admin_logged_in'] = True
+            return redirect('/admin/dashboard')
+        return '<div class="alert alert-error">Wrong password. <a href="/admin/login">Try again</a></div>'
+    
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin Login</title>
+        <style>
+            body { font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f4f8; }
+            .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 300px; }
+            input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }
+            button { width: 100%; padding: 10px; background: #f5af19; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h2>Admin Login</h2>
+            <form method="POST">
+                <input type="password" name="password" placeholder="Enter admin password" required>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/admin/dashboard')
+def admin_dashboard():
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    import sqlite3
+    db = sqlite3.connect('rockabyconnect.db')
+    db.row_factory = sqlite3.Row
+    c = db.cursor()
+    
+    total_users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    total_providers = c.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
+    total_vendors = c.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
+    total_jobs = c.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+    pending_boosts = c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'").fetchone()[0]
+    
+    boosts = c.execute("""
+        SELECT br.id, u.name, u.phone, br.transaction_id, br.plan, br.boost_type
+        FROM boost_requests br JOIN users u ON br.user_id = u.id
+        WHERE br.status='pending' ORDER BY br.request_date DESC
+    """).fetchall()
+    
+    db.close()
+    
+    boosts_html = ""
+    for b in boosts:
+        boosts_html += f'''
+        <tr>
+            <td>{b['name']}<br><small>{b['phone']}</small></td>
+            <td>{b['transaction_id']}</td>
+            <td>{b['plan']} days</td>
+            <td>{b['boost_type']}</td>
+            <td>
+                <a href="/admin/approve-boost/{b['id']}" style="background:green; color:white; padding:4px 8px; text-decoration:none; border-radius:4px;">Approve</a>
+                <a href="/admin/reject-boost/{b['id']}" style="background:red; color:white; padding:4px 8px; text-decoration:none; border-radius:4px;">Reject</a>
+            </td>
+        </tr>'''
+    
+    if not boosts_html:
+        boosts_html = '<tr><td colspan="5">No pending boost requests</td></tr>'
+    
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin Dashboard</title>
+        <style>
+            body {{ font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }}
+            .container {{ max-width: 1200px; margin: 0 auto; }}
+            .card {{ background: white; border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+            .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+            .stat {{ background: linear-gradient(135deg, #f5af19, #e09e15); color: white; padding: 20px; border-radius: 12px; text-align: center; }}
+            .stat h3 {{ font-size: 2rem; margin: 0; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+            th {{ background: #f5f5f5; }}
+            .btn {{ display: inline-block; padding: 10px 20px; background: #f5af19; color: white; text-decoration: none; border-radius: 8px; margin-top: 20px; }}
+            .btn-danger {{ background: #dc3545; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="card">
+                <h2>Admin Dashboard</h2>
+                <div class="stats">
+                    <div class="stat"><h3>{total_users}</h3><p>Total Users</p></div>
+                    <div class="stat"><h3>{total_providers}</h3><p>Freelancers</p></div>
+                    <div class="stat"><h3>{total_vendors}</h3><p>Vendors</p></div>
+                    <div class="stat"><h3>{total_jobs}</h3><p>Jobs</p></div>
+                    <div class="stat"><h3>{pending_boosts}</h3><p>Pending Boosts</p></div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>Pending Boost Requests</h3>
+                <table>
+                    <tr><th>User</th><th>Transaction</th><th>Plan</th><th>Type</th><th>Action</th></tr>
+                    {boosts_html}
+                </table>
+                <a href="/admin/logout" class="btn btn-danger">Logout</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/admin/approve-boost/<int:bid>')
+def admin_approve_boost(bid):
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    import sqlite3
+    from datetime import date, timedelta
+    
+    db = sqlite3.connect('rockabyconnect.db')
+    c = db.cursor()
+    
+    boost = c.execute("SELECT user_id, plan, boost_type, item_id FROM boost_requests WHERE id=?", (bid,)).fetchone()
+    if boost:
+        days = int(boost[1])
+        expiry = date.today() + timedelta(days=days)
+        if boost[2] == 'profile':
+            c.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, boost[0]))
+        elif boost[2] == 'job':
+            c.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, boost[3]))
+        elif boost[2] == 'vendor':
+            c.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, boost[0]))
+        c.execute("UPDATE boost_requests SET status='approved' WHERE id=?", (bid,))
+        db.commit()
+    
+    db.close()
+    return redirect('/admin/dashboard')
+
+@app.route('/admin/reject-boost/<int:bid>')
+def admin_reject_boost(bid):
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    import sqlite3
+    db = sqlite3.connect('rockabyconnect.db')
+    c = db.cursor()
+    c.execute("UPDATE boost_requests SET status='rejected' WHERE id=?", (bid,))
+    db.commit()
+    db.close()
+    return redirect('/admin/dashboard')
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_logged_in', None)
+    return redirect('/admin/login')
+
 # ============================================================
 # RUN APP
 # ============================================================
