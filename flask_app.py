@@ -597,6 +597,34 @@ def offer_skill():
         return redirect('/edit-profile')
     return redirect('/create-profile')
 
+@app.route('/edit-name', methods=['GET', 'POST'])
+@login_required
+def edit_name():
+    db = get_db()
+    user = db.execute("SELECT name FROM users WHERE id=?", (session['user_id'],)).fetchone()
+    
+    if request.method == 'POST':
+        new_name = request.form['name'].strip()
+        if not new_name:
+            return render_page("Edit Name", '<div class="card"><div class="alert alert-error">Name cannot be empty.</div><a href="/edit-name">Try again</a></div>')
+        db.execute("UPDATE users SET name=? WHERE id=?", (new_name, session['user_id']))
+        db.commit()
+        session['user_name'] = new_name
+        return redirect('/dashboard')
+    
+    content = f'''
+    <div class="card" style="max-width: 500px; margin: 0 auto;">
+        <div class="card-header">✏️ Edit Your Name</div>
+        <form method="POST">
+            <label>Full Name</label>
+            <input type="text" name="name" value="{user['name']}" required>
+            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Update Name</button>
+        </form>
+        <a href="/dashboard" class="btn btn-outline" style="margin-top: 10px;">Cancel</a>
+    </div>
+    '''
+    return render_page("Edit Name", content)
+
 # ============================================================
 # USER DASHBOARD
 # ============================================================
@@ -674,6 +702,7 @@ def dashboard():
     dashboard_content = f'''
     <div class="card">
         <div class="card-header">Welcome, {session['user_name']}!</div>
+        <p><a href="/edit-name" class="btn btn-small btn-outline"><i class="fas fa-edit"></i> Edit my name</a></p>
         <p>Manage your freelance presence, vendor profile, and job postings from one place.</p>
     </div>
     {profile_section}
@@ -685,7 +714,6 @@ def dashboard():
     </div>
     '''
     return render_page("Dashboard", dashboard_content)
-
 # ============================================================
 # FREELANCER PROFILE ROUTES
 # ============================================================
@@ -987,8 +1015,61 @@ def provider_detail(provider_id):
     if not p:
         return "Provider not found", 404
     
+    # Get reviews
+    reviews = db.execute("""
+        SELECT u.name, r.rating, r.comment, r.created_at 
+        FROM reviews r JOIN users u ON r.reviewer_id = u.id
+        WHERE r.provider_id=? ORDER BY r.created_at DESC
+    """, (provider_id,)).fetchall()
+    
+    avg_rating = db.execute("SELECT AVG(rating) as avg, COUNT(*) as cnt FROM reviews WHERE provider_id=?", (provider_id,)).fetchone()
+    avg_rating_value = round(avg_rating['avg'], 1) if avg_rating['avg'] else 0
+    review_count = avg_rating['cnt'] or 0
+    
     img_url = f"/static/uploads/{p['profile_pic']}" if p['profile_pic'] else ""
     featured_badge = '<span class="badge badge-featured">⭐ FEATURED</span>' if is_featured_now(p['featured'], p['featured_expiry']) else ''
+    
+    reviews_html = ""
+    for r in reviews:
+        stars = ''.join(['★' for _ in range(r['rating'])]) + ''.join(['☆' for _ in range(5 - r['rating'])])
+        reviews_html += f'''
+        <div class="review-card">
+            <strong>{r['name']}</strong> <span class="rating">{stars}</span>
+            <br><small>{r['created_at'][:10] if r['created_at'] else ''}</small>
+            <p>{r['comment'] or 'No comment'}</p>
+        </div>'''
+    
+    if not reviews_html:
+        reviews_html = "<p>No reviews yet. Be the first to review this freelancer!</p>"
+    
+    # Review form (only if logged in and not already reviewed)
+    review_form = ""
+    if 'user_id' in session:
+        existing_review = db.execute("SELECT id FROM reviews WHERE provider_id=? AND reviewer_id=?", (provider_id, session['user_id'])).fetchone()
+        if not existing_review:
+            review_form = f'''
+            <hr>
+            <h4>Leave a Review</h4>
+            <form method="POST" action="/review/{provider_id}">
+                <label>Rating</label>
+                <select name="rating" required>
+                    <option value="">Select</option>
+                    <option value="5">★★★★★ (5)</option>
+                    <option value="4">★★★★☆ (4)</option>
+                    <option value="3">★★★☆☆ (3)</option>
+                    <option value="2">★★☆☆☆ (2)</option>
+                    <option value="1">★☆☆☆☆ (1)</option>
+                </select>
+                <label>Comment</label>
+                <textarea name="comment" rows="3" placeholder="Share your experience..."></textarea>
+                <button type="submit" class="btn" style="margin-top: 10px;">Submit Review</button>
+            </form>
+            '''
+        else:
+            review_form = '<p><em>You already reviewed this freelancer.</em></p>'
+    else:
+        review_form = '<p><a href="/login">Login</a> to leave a review.</p>'
+    
     content = f'''
     <div class="card">
         <div class="card-header">{p['name']} {featured_badge}</div>
@@ -999,8 +1080,26 @@ def provider_detail(provider_id):
         <p><strong>Status:</strong> <span class="badge badge-{p['status'].lower().replace(' ', '-')}">{p['status']}</span></p>
         <a href="{whatsapp_link(p['phone'])}" target="_blank" class="btn btn-whatsapp">Contact on WhatsApp</a>
     </div>
+    
+    <div class="card">
+        <div class="card-header">📝 Reviews ({avg_rating_value}/5 from {review_count} reviews)</div>
+        <div id="reviews">{reviews_html}</div>
+        {review_form}
+    </div>
     '''
     return render_page(p['name'], content)
+
+@app.route('/review/<int:provider_id>', methods=['POST'])
+@login_required
+def add_review(provider_id):
+    rating = int(request.form['rating'])
+    comment = request.form.get('comment', '')
+    db = get_db()
+    db.execute("INSERT INTO reviews (provider_id, reviewer_id, rating, comment) VALUES (?,?,?,?)",
+               (provider_id, session['user_id'], rating, comment))
+    db.commit()
+    add_notification(provider_id, 'review', f'You received a {rating}-star review!')
+    return redirect(url_for('provider_detail', provider_id=provider_id))
 
 # ============================================================
 # JOB ROUTES
