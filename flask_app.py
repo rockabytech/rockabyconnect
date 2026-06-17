@@ -199,23 +199,51 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def save_resized_image(file, max_width=800):
+    """Resize image to max_width (keeping aspect ratio), save with unique name. Returns filename."""
+    if not file or not file.filename:
+        return None
+    
+    # Secure the filename
     filename = secure_filename(file.filename)
     base, ext = os.path.splitext(filename)
     ext = ext.lower()
+    
+    # Validate extension
     if ext not in ('.png', '.jpg', '.jpeg', '.gif'):
         ext = '.jpg'
+    
+    # Generate unique filename
     new_filename = f"{base}_{os.urandom(4).hex()}{ext}"
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
     
-    img = Image.open(file.stream)
-    if img.width > max_width:
-        ratio = max_width / img.width
-        new_height = int(img.height * ratio)
-        img = img.resize((max_width, new_height), Image.LANCZOS)
-    if img.mode in ('RGBA', 'P'):
-        img = img.convert('RGB')
-    img.save(filepath, quality=85)
-    return new_filename
+    try:
+        # Open and process image
+        img = Image.open(file.stream)
+        
+        # Resize if needed
+        if img.width > max_width:
+            ratio = max_width / img.width
+            new_height = int(img.height * ratio)
+            img = img.resize((max_width, new_height), Image.LANCZOS)
+        
+        # Convert to RGB if necessary
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        
+        # Save with compression
+        img.save(filepath, quality=85, optimize=True)
+        
+        return new_filename
+    except Exception as e:
+        print(f"Image resize error: {e}")
+        # Try fallback - save original without resize
+        try:
+            file.stream.seek(0)
+            img = Image.open(file.stream)
+            img.save(filepath, quality=85)
+            return new_filename
+        except:
+            return None
 
 def whatsapp_link(phone):
     digits = ''.join(filter(str.isdigit, phone))
@@ -815,25 +843,38 @@ def create_profile():
 @app.route('/edit-profile', methods=['GET', 'POST'])
 @login_required
 def edit_profile():
+    user_id = session['user_id']
     db = get_db()
-    provider = db.execute("SELECT * FROM providers WHERE user_id=?", (session['user_id'],)).fetchone()
+    
+    provider = db.execute("SELECT * FROM providers WHERE user_id=?", (user_id,)).fetchone()
     if not provider:
         return redirect('/create-profile')
     
     if request.method == 'POST':
         skills = request.form['skills'].strip()
         district = request.form['district'].strip()
-        village = request.form.get('village', '')
-        bio = request.form.get('bio', '')
+        village = request.form.get('village', '').strip()
+        bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Available')
         file = request.files.get('profile_pic')
-        if file and allowed_file(file.filename):
-            filename = save_resized_image(file)
-            db.execute("UPDATE providers SET skills=?, district=?, village=?, bio=?, profile_pic=?, status=? WHERE user_id=?",
-                       (skills, district, village, bio, filename, status, session['user_id']))
-        else:
-            db.execute("UPDATE providers SET skills=?, district=?, village=?, bio=?, status=? WHERE user_id=?",
-                       (skills, district, village, bio, status, session['user_id']))
+        
+        # Handle file upload
+        filename = provider['profile_pic']  # keep existing if no new file
+        if file and file.filename and allowed_file(file.filename):
+            uploaded = save_resized_image(file, max_width=800)
+            if uploaded:
+                filename = uploaded
+            else:
+                return render_page("Edit Profile", """
+                <div class="card">
+                    <div class="alert alert-error">Image upload failed. Please try again with a different image.</div>
+                    <a href="/edit-profile" class="btn">Try again</a>
+                </div>
+                """)
+        
+        # Update database - ensure profile_pic is included
+        db.execute("UPDATE providers SET skills=?, district=?, village=?, bio=?, profile_pic=?, status=? WHERE user_id=?",
+                   (skills, district, village, bio, filename, status, user_id))
         db.commit()
         return redirect('/dashboard')
     
@@ -842,9 +883,9 @@ def edit_profile():
     <div class="card">
         <div class="card-header">Edit Your Freelancer Profile</div>
         <form method="POST" enctype="multipart/form-data">
-            <label>Skills</label>
+            <label>Skills *</label>
             <input type="text" name="skills" value="{provider['skills'] or ''}" required>
-            <label>District/City</label>
+            <label>District/City *</label>
             <input type="text" name="district" value="{provider['district'] or ''}" required>
             <label>Village/Area</label>
             <input type="text" name="village" value="{provider['village'] or ''}">
@@ -852,6 +893,7 @@ def edit_profile():
             <textarea name="bio" rows="3">{provider['bio'] or ''}</textarea>
             <label>Profile Picture</label>
             <input type="file" name="profile_pic" accept="image/*">
+            <p style="font-size:0.8rem;">Current: {provider['profile_pic'] or 'No image uploaded'}</p>
             <label>Status</label>
             <select name="status">{status_options}</select>
             <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Save Changes</button>
@@ -928,10 +970,7 @@ def edit_vendor_profile():
     user_id = session['user_id']
     db = get_db()
     
-    # Fetch vendor
     vendor = db.execute("SELECT * FROM vendors WHERE user_id=?", (user_id,)).fetchone()
-    
-    # If no vendor exists, redirect to create one
     if not vendor:
         return redirect('/create-vendor-profile')
     
@@ -943,11 +982,22 @@ def edit_vendor_profile():
         bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Open')
         
+        # Handle images - start with existing
         current_images = [vendor['vendor_image'], vendor['vendor_image2'], vendor['vendor_image3']]
+        
         for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
             file = request.files.get(field)
-            if file and allowed_file(file.filename):
-                current_images[idx] = save_resized_image(file, max_width=800)
+            if file and file.filename and allowed_file(file.filename):
+                uploaded = save_resized_image(file, max_width=800)
+                if uploaded:
+                    current_images[idx] = uploaded
+                else:
+                    return render_page("Edit Vendor Profile", """
+                    <div class="card">
+                        <div class="alert alert-error">Image upload failed. Please try again.</div>
+                        <a href="/edit-vendor-profile" class="btn">Try again</a>
+                    </div>
+                    """)
         
         db.execute("""UPDATE vendors SET 
                    business_name=?, district=?, village=?, landmark=?, bio=?, 
@@ -958,17 +1008,14 @@ def edit_vendor_profile():
         db.commit()
         return redirect('/dashboard')
     
-    # Build status options
     status_options = ''.join([f'<option value="{s}" {"selected" if s==vendor["status"] else ""}>{s}</option>' for s in VENDOR_STATUSES])
-    
-    # Render the form
     content = f'''
     <div class="card">
         <div class="card-header">Edit Vendor Profile</div>
         <form method="POST" enctype="multipart/form-data">
-            <label>Business Name</label>
+            <label>Business Name *</label>
             <input type="text" name="business_name" value="{vendor['business_name']}" required>
-            <label>District/City</label>
+            <label>District/City *</label>
             <input type="text" name="district" value="{vendor['district'] or ''}" required>
             <label>Village/Area</label>
             <input type="text" name="village" value="{vendor['village'] or ''}">
@@ -1233,19 +1280,31 @@ def job_detail(job_id):
 @login_required
 def post_job():
     if request.method == 'POST':
-        title = request.form['title']
-        company = request.form.get('company', '')
-        description = request.form['description']
-        location = request.form['location']
-        village = request.form.get('village', '')
-        contact = request.form.get('contact', '')
+        title = request.form['title'].strip()
+        company = request.form.get('company', '').strip()
+        description = request.form['description'].strip()
+        location = request.form['location'].strip()
+        village = request.form.get('village', '').strip()
+        contact = request.form.get('contact', '').strip()
         file = request.files.get('job_image')
+        
         filename = None
-        if file and allowed_file(file.filename):
-            filename = save_resized_image(file, max_width=800)
+        if file and file.filename and allowed_file(file.filename):
+            uploaded = save_resized_image(file, max_width=800)
+            if uploaded:
+                filename = uploaded
+            else:
+                return render_page("Post a Job", """
+                <div class="card">
+                    <div class="alert alert-error">Image upload failed. Please try again.</div>
+                    <a href="/post-job" class="btn">Try again</a>
+                </div>
+                """)
         
         db = get_db()
-        db.execute("INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image) VALUES (?,?,?,?,?,?,?,'Open',?)",
+        db.execute("""INSERT INTO jobs 
+                   (employer_id, title, company, description, location, village, contact, status, job_image) 
+                   VALUES (?,?,?,?,?,?,?,'Open',?)""",
                    (session['user_id'], title, company, description, location, village, contact, filename))
         db.commit()
         return redirect('/dashboard')
