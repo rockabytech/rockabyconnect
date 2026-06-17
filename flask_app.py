@@ -447,7 +447,7 @@ BASE_HTML = """
 <body>
     <nav class="navbar">
         <a href="/" class="logo">
-            <div class="logo-icon">🔗</div>
+            <img src="/static/pngwing.com.png" alt="RockabyConnect Logo" style="height:45px; width:45px; border-radius:12px; object-fit:cover;">
             <div>
                 <div class="logo-text">ROCKABY<span>CONNECT</span></div>
                 <div class="logo-sub">Connecting Skills, Building Uganda</div>
@@ -539,35 +539,25 @@ def home():
     open_jobs = get_open_jobs_count()
     
     content = f'''
-    <div class="hero">
-        <h1>✨ Get Work Done – or Get Paid</h1>
-        <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers near you.</p>
-        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-            <a href="/offer-skill" class="btn"><i class="fas fa-user-plus"></i> Offer Your Skill</a>
-            <a href="/post-job" class="btn btn-outline"><i class="fas fa-briefcase"></i> Post a Job</a>
-        </div>
-        <div class="category-chips">
-            <span>Popular:</span>
-            <a href="/list?search=Boda+Rider" class="chip">Boda Rider</a>
-            <a href="/list?search=Maid" class="chip">Maid</a>
-            <a href="/list?search=Plumbing" class="chip">Plumbing</a>
-            <a href="/list?search=Electrical" class="chip">Electrical</a>
-            <a href="/list?search=Carpentry" class="chip">Carpentry</a>
-        </div>
+   <div class="hero">
+    <div style="display:flex; align-items:center; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:15px;">
+        <img src="/static/ug-06.png" alt="RockabyConnect Logo" style="height:70px; width:70px; border-radius:16px; object-fit:cover; box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+        <h1 style="margin:0;">Get Work Done – or Get Paid</h1>
     </div>
-    <div class="stat-grid">
-        <div class="stat-card"><h3>{provider_count}</h3><small>Skilled Workers</small></div>
-        <div class="stat-card"><h3>{open_jobs}</h3><small>Open Jobs</small></div>
-        <div class="stat-card"><h3>10K+</h3><small>Monthly Visitors</small></div>
+    <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers near you.</p>
+    <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+        <a href="/offer-skill" class="btn"><i class="fas fa-user-plus"></i> Offer Your Skill</a>
+        <a href="/post-job" class="btn btn-outline"><i class="fas fa-briefcase"></i> Post a Job</a>
     </div>
-    <div class="card">
-        <div class="card-header">📖 How It Works</div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: center;">
-            <div><div style="font-size: 2rem;">🔍</div><h3>1. Find Skills</h3><p>Browse verified workers</p></div>
-            <div><div style="font-size: 2rem;">📝</div><h3>2. Post a Job</h3><p>Describe what you need</p></div>
-            <div><div style="font-size: 2rem;">💬</div><h3>3. Connect</h3><p>Chat on WhatsApp</p></div>
-        </div>
+    <div class="category-chips">
+        <span>Popular:</span>
+        <a href="/list?search=Boda+Rider" class="chip">Boda Rider</a>
+        <a href="/list?search=Maid" class="chip">Maid</a>
+        <a href="/list?search=Plumbing" class="chip">Plumbing</a>
+        <a href="/list?search=Electrical" class="chip">Electrical</a>
+        <a href="/list?search=Carpentry" class="chip">Carpentry</a>
     </div>
+</div>
     '''
     return render_page("Home", content)
 
