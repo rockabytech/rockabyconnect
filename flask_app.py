@@ -2146,6 +2146,295 @@ def import_db():
     </html>
     '''
 
+import shutil
+import time
+from flask import send_file
+
+# ============================================================
+# DATABASE BACKUP & RESTORE SYSTEM
+# ============================================================
+
+# Create backups directory if it doesn't exist
+BACKUP_DIR = os.path.join(os.getcwd(), 'backups')
+os.makedirs(BACKUP_DIR, exist_ok=True)
+
+@app.route('/admin/backup')
+def admin_backup():
+    """Create a timestamped backup of the current database."""
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    try:
+        # Ensure database file exists
+        if not os.path.exists(DB_PATH):
+            return "Database file not found.", 404
+        
+        # Create backup filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_filename = f"rockabyconnect_backup_{timestamp}.db"
+        backup_path = os.path.join(BACKUP_DIR, backup_filename)
+        
+        # Copy database file
+        shutil.copy2(DB_PATH, backup_path)
+        
+        # Also create a JSON export for easy reading
+        # (we'll just copy the db, that's fine)
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Backup Created</title></head>
+        <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
+                <h2>✅ Backup Created</h2>
+                <p>Backup saved as: <strong>{backup_filename}</strong></p>
+                <p>Location: {BACKUP_DIR}</p>
+                <p><a href="/admin/download-backup/{backup_filename}" class="btn">Download Backup</a></p>
+                <p><a href="/admin/backups">View All Backups</a></p>
+                <p><a href="/admin/dashboard">Back to Admin</a></p>
+            </div>
+        </body>
+        </html>
+        """
+    except Exception as e:
+        return f"Backup failed: {e}", 500
+
+@app.route('/admin/download-backup/<filename>')
+def admin_download_backup(filename):
+    """Download a specific backup file."""
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    # Security: prevent path traversal
+    if '..' in filename or '/' in filename:
+        return "Invalid filename", 400
+    
+    backup_path = os.path.join(BACKUP_DIR, filename)
+    if not os.path.exists(backup_path):
+        return "Backup file not found.", 404
+    
+    return send_file(backup_path, as_attachment=True, download_name=filename)
+
+@app.route('/admin/download-current-db')
+def admin_download_current_db():
+    """Download the current live database."""
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    if not os.path.exists(DB_PATH):
+        return "Database file not found.", 404
+    
+    return send_file(DB_PATH, as_attachment=True, download_name='rockabyconnect_current.db')
+
+@app.route('/admin/backups')
+def admin_list_backups():
+    """List all available backups."""
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    backups = []
+    for f in os.listdir(BACKUP_DIR):
+        if f.endswith('.db'):
+            stat = os.stat(os.path.join(BACKUP_DIR, f))
+            backups.append({
+                'name': f,
+                'size': stat.st_size,
+                'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            })
+    backups.sort(key=lambda x: x['modified'], reverse=True)
+    
+    rows = ''.join(f"""
+        <tr>
+            <td>{b['name']}</td>
+            <td>{b['modified']}</td>
+            <td>{b['size'] // 1024} KB</td>
+            <td><a href="/admin/download-backup/{b['name']}" class="btn-small">Download</a></td>
+        </tr>
+    """ for b in backups)
+    
+    if not rows:
+        rows = "<tr><td colspan='4'>No backups found.</td></tr>"
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Backups</title>
+        <style>
+            body {{ font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }}
+            .container {{ max-width: 800px; margin: 0 auto; }}
+            .card {{ background: white; border-radius: 16px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+            th {{ background: #f5f5f5; }}
+            .btn-small {{ background: #f5af19; padding: 4px 12px; text-decoration: none; border-radius: 4px; color: white; }}
+            .btn {{ display: inline-block; padding: 10px 20px; background: #f5af19; color: white; text-decoration: none; border-radius: 8px; margin-top: 10px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="card">
+                <h2>Database Backups</h2>
+                <a href="/admin/backup" class="btn">Create New Backup</a>
+                <a href="/admin/download-current-db" class="btn" style="background: #28a745;">Download Current DB</a>
+                <table>
+                    <thead><tr><th>Filename</th><th>Modified</th><th>Size</th><th>Action</th></tr></thead>
+                    <tbody>{rows}</tbody>
+                </table>
+                <a href="/admin/dashboard" style="color: #666; text-decoration: none;">Back to Admin</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+@app.route('/admin/restore', methods=['GET', 'POST'])
+def admin_restore():
+    """Restore database from a backup file."""
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    if request.method == 'POST':
+        if 'backup_file' not in request.files:
+            return "No file uploaded"
+        file = request.files['backup_file']
+        if file.filename == '':
+            return "No file selected"
+        
+        # Save uploaded file temporarily
+        temp_path = '/tmp/restore_temp.db'
+        file.save(temp_path)
+        
+        # Verify it's a valid SQLite database
+        try:
+            test_conn = sqlite3.connect(temp_path)
+            test_conn.execute("SELECT 1")
+            test_conn.close()
+        except Exception as e:
+            return f"Invalid database file: {e}"
+        
+        # Backup current database first (just in case)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_before_restore = os.path.join(BACKUP_DIR, f"pre_restore_{timestamp}.db")
+        if os.path.exists(DB_PATH):
+            shutil.copy2(DB_PATH, backup_before_restore)
+        
+        # Replace current database with restored one
+        shutil.copy2(temp_path, DB_PATH)
+        os.remove(temp_path)
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Restore Complete</title></head>
+        <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
+                <h2>✅ Database Restored</h2>
+                <p>The database has been replaced with the uploaded backup.</p>
+                <p>A backup of the previous database was saved as: <strong>pre_restore_{timestamp}.db</strong></p>
+                <p><a href="/admin/backups" class="btn">View Backups</a></p>
+                <p><a href="/admin/dashboard" class="btn">Back to Admin</a></p>
+            </div>
+        </body>
+        </html>
+        """
+    
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Restore Database</title>
+        <style>
+            body { font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }
+            .container { max-width: 500px; margin: 50px auto; }
+            .card { background: white; border-radius: 16px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            input, button { padding: 12px; margin: 10px 0; width: 100%; border-radius: 8px; }
+            input { border: 1px solid #ddd; }
+            button { background: #f5af19; border: none; cursor: pointer; font-weight: bold; font-size: 16px; }
+            button:hover { background: #e09e15; }
+            .warning { background: #fff3cd; padding: 10px; border-radius: 8px; margin: 15px 0; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="card">
+                <h2>⚠️ Restore Database</h2>
+                <p>Upload a backup file (`.db`) to replace the current database.</p>
+                <div class="warning">
+                    <strong>Warning:</strong> This will overwrite your current database. The current database will be backed up automatically before restoration.
+                </div>
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="file" name="backup_file" accept=".db" required>
+                    <button type="submit">Restore Database</button>
+                </form>
+                <a href="/admin/backups" style="color: #666; text-decoration: none;">Back to Backups</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/admin/reset-db')
+def admin_reset_db():
+    """⚠️ WARNING: Deletes all data and resets the database to fresh state."""
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    # Confirm via query parameter to prevent accidental clicks
+    confirm = request.args.get('confirm')
+    if confirm != 'yes':
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Reset Database</title></head>
+        <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
+                <h2>⚠️ Reset Database</h2>
+                <p style="color: red;"><strong>WARNING:</strong> This will delete ALL data in the database.</p>
+                <p>This cannot be undone.</p>
+                <p><a href="/admin/reset-db?confirm=yes" style="background: red; color: white; padding: 10px 20px; text-decoration: none; border-radius: 8px;">Yes, Reset Database</a></p>
+                <p><a href="/admin/dashboard">Cancel</a></p>
+            </div>
+        </body>
+        </html>
+        '''
+    
+    try:
+        # Backup current DB before resetting
+        if os.path.exists(DB_PATH):
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_filename = f"pre_reset_backup_{timestamp}.db"
+            backup_path = os.path.join(BACKUP_DIR, backup_filename)
+            shutil.copy2(DB_PATH, backup_path)
+            backup_msg = f"Backup saved as: {backup_filename}"
+        else:
+            backup_msg = "No existing database to backup."
+        
+        # Delete the database file if it exists
+        if os.path.exists(DB_PATH):
+            os.remove(DB_PATH)
+        
+        # Re-initialize empty database
+        init_db()
+        
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Database Reset</title></head>
+        <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
+                <h2>✅ Database Reset Complete</h2>
+                <p>All data has been cleared and a fresh database initialized.</p>
+                <p>{backup_msg}</p>
+                <p>You can now import your old data using <a href="/admin/import-db">/admin/import-db</a>.</p>
+                <p><a href="/admin/dashboard" class="btn">Back to Admin</a></p>
+            </div>
+        </body>
+        </html>
+        '''
+    except Exception as e:
+        return f"Reset failed: {e}", 500
+
 # ============================================================
 # RUN APP
 # ============================================================
