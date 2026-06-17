@@ -2159,8 +2159,31 @@ def admin_dashboard():
     pending_boosts = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='approved'")
     approved_boosts = c.fetchone()[0]
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM boost_requests WHERE status='approved'")
-    total_revenue = c.fetchone()[0]
+    # Compute revenue from plan (7 -> 5000, 30 -> 15000, 90 -> 40000)
+    c.execute("SELECT plan FROM boost_requests WHERE status='approved'")
+    plans = c.fetchall()
+    total_revenue = 0
+    for (plan,) in plans:
+        if plan == '7':
+            total_revenue += 5000
+        elif plan == '30':
+            total_revenue += 15000
+        elif plan == '90':
+            total_revenue += 40000
+        else:
+            # fallback: try to convert to int and multiply?
+            try:
+                days = int(plan)
+                if days == 7:
+                    total_revenue += 5000
+                elif days == 30:
+                    total_revenue += 15000
+                elif days == 90:
+                    total_revenue += 40000
+                else:
+                    total_revenue += 0
+            except:
+                pass
     conn.close()
 
     # Pending boost requests
@@ -2253,12 +2276,15 @@ def admin_stats():
     pending_boosts = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='approved'")
     approved_boosts = c.fetchone()[0]
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM boost_requests WHERE status='approved'")
-    total_revenue = c.fetchone()[0]
-
     # Revenue breakdown by plan
     c.execute("SELECT plan, COUNT(*) FROM boost_requests WHERE status='approved' GROUP BY plan")
     plan_breakdown = c.fetchall()
+
+    # Compute revenue per plan
+    revenue_by_plan = []
+    for plan, count in plan_breakdown:
+        price = 5000 if plan == '7' else 15000 if plan == '30' else 40000 if plan == '90' else 0
+        revenue_by_plan.append((plan, count, price, count * price))
 
     # Top 5 skills
     c.execute("SELECT skills FROM providers WHERE skills IS NOT NULL AND skills != ''")
@@ -2271,9 +2297,6 @@ def admin_stats():
                 skill_counter[skill] += 1
     top_skills = sorted(skill_counter.items(), key=lambda x: x[1], reverse=True)[:5]
     top_skills_html = "".join(f"<tr><td>{skill}</td><td>{cnt}</td></tr>" for skill, cnt in top_skills) or "<tr><td colspan='2'>No skills yet.</td></tr>"
-
-    # Recent activity
-    recent = []
     conn.close()
 
     content = f"""
@@ -2291,7 +2314,6 @@ def admin_stats():
             <div class="stat-card"><h3>{away_vendors}</h3><small>Away Vendors</small></div>
             <div class="stat-card"><h3>{pending_boosts}</h3><small>Pending Boosts</small></div>
             <div class="stat-card"><h3>{approved_boosts}</h3><small>Approved Boosts</small></div>
-            <div class="stat-card"><h3>UGX {total_revenue:,}</h3><small>Total Revenue</small></div>
         </div>
     </div>
 
@@ -2307,10 +2329,10 @@ def admin_stats():
         <div class="card-header">📈 Revenue by Plan</div>
         <ul>
     """
-    for plan, count in plan_breakdown:
-        price = 5000 if plan == '7' else 15000 if plan == '30' else 40000
-        content += f"<li>{plan} days: {count} boosts = UGX {count * price:,}</li>"
-    if not plan_breakdown:
+    if revenue_by_plan:
+        for plan, count, price, total in revenue_by_plan:
+            content += f"<li>{plan} days: {count} boosts = UGX {total:,}</li>"
+    else:
         content += "<li>No approved boosts yet.</li>"
     content += """
         </ul>
