@@ -1835,7 +1835,7 @@ def debug():
     return "App is running! PWA routes should work now."
 
 # ============================================================
-# TEMPORARY IMPORT ROUTE – DELETE AFTER MIGRATION
+# FIXED IMPORT ROUTE – HANDLES ALL ERRORS
 # ============================================================
 @app.route('/admin/import-db', methods=['GET', 'POST'])
 def import_db():
@@ -1863,24 +1863,31 @@ def import_db():
         
         results = {}
         
-        # 1. Import Users (skip if id exists)
+        # 1. Import Users
         try:
             old_cursor.execute("SELECT * FROM users")
             users = old_cursor.fetchall()
             users_imported = 0
             for user in users:
-                # Check if user already exists by phone (or id)
+                # Check if user exists by phone
                 existing = new_db.execute("SELECT id FROM users WHERE phone=?", (user['phone'],)).fetchone()
                 if not existing:
-                    # Insert without id to let SQLite auto-generate
-                    new_db.execute("INSERT INTO users (phone, name, password_hash) VALUES (?,?,?)",
-                                   (user['phone'], user['name'], user['password_hash']))
-                    users_imported += 1
+                    # Also check by ID to avoid UNIQUE constraint
+                    existing_by_id = new_db.execute("SELECT id FROM users WHERE id=?", (user['id'],)).fetchone()
+                    if not existing_by_id:
+                        new_db.execute("INSERT INTO users (id, phone, name, password_hash) VALUES (?,?,?,?)",
+                                       (user['id'], user['phone'], user['name'], user['password_hash']))
+                        users_imported += 1
+                    else:
+                        # ID exists but phone doesn't – insert without ID
+                        new_db.execute("INSERT INTO users (phone, name, password_hash) VALUES (?,?,?)",
+                                       (user['phone'], user['name'], user['password_hash']))
+                        users_imported += 1
             results['users'] = users_imported
         except Exception as e:
             results['users'] = f"Error: {e}"
         
-        # 2. Import Providers
+        # 2. Import Providers (using direct column access, no .get())
         try:
             old_cursor.execute("SELECT * FROM providers")
             providers = old_cursor.fetchall()
@@ -1888,14 +1895,33 @@ def import_db():
             for p in providers:
                 existing = new_db.execute("SELECT id FROM providers WHERE user_id=?", (p['user_id'],)).fetchone()
                 if not existing:
-                    # Convert Row to dict for safe .get()
-                    p_dict = dict(p)
-                    new_db.execute("""INSERT INTO providers 
-                               (user_id, skills, district, village, bio, profile_pic, status, featured, featured_expiry) 
-                               VALUES (?,?,?,?,?,?,?,?,?)""",
-                              (p_dict.get('user_id'), p_dict.get('skills'), p_dict.get('district'),
-                               p_dict.get('village'), p_dict.get('bio'), p_dict.get('profile_pic'),
-                               p_dict.get('status', 'Available'), p_dict.get('featured', 0), p_dict.get('featured_expiry')))
+                    # Check if ID exists
+                    existing_by_id = new_db.execute("SELECT id FROM providers WHERE id=?", (p['id'],)).fetchone()
+                    if existing_by_id:
+                        # ID exists – insert without ID
+                        new_db.execute("""INSERT INTO providers 
+                                   (user_id, skills, district, village, bio, profile_pic, status, featured, featured_expiry) 
+                                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                                  (p['user_id'], p['skills'] if 'skills' in p.keys() else '',
+                                   p['district'] if 'district' in p.keys() else '',
+                                   p['village'] if 'village' in p.keys() else '',
+                                   p['bio'] if 'bio' in p.keys() else '',
+                                   p['profile_pic'] if 'profile_pic' in p.keys() else '',
+                                   p['status'] if 'status' in p.keys() else 'Available',
+                                   p['featured'] if 'featured' in p.keys() else 0,
+                                   p['featured_expiry'] if 'featured_expiry' in p.keys() else None))
+                    else:
+                        new_db.execute("""INSERT INTO providers 
+                                   (id, user_id, skills, district, village, bio, profile_pic, status, featured, featured_expiry) 
+                                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                                  (p['id'], p['user_id'], p['skills'] if 'skills' in p.keys() else '',
+                                   p['district'] if 'district' in p.keys() else '',
+                                   p['village'] if 'village' in p.keys() else '',
+                                   p['bio'] if 'bio' in p.keys() else '',
+                                   p['profile_pic'] if 'profile_pic' in p.keys() else '',
+                                   p['status'] if 'status' in p.keys() else 'Available',
+                                   p['featured'] if 'featured' in p.keys() else 0,
+                                   p['featured_expiry'] if 'featured_expiry' in p.keys() else None))
                     providers_imported += 1
             results['providers'] = providers_imported
         except Exception as e:
@@ -1909,14 +1935,37 @@ def import_db():
             for v in vendors:
                 existing = new_db.execute("SELECT id FROM vendors WHERE user_id=?", (v['user_id'],)).fetchone()
                 if not existing:
-                    v_dict = dict(v)
-                    new_db.execute("""INSERT INTO vendors 
-                               (user_id, business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, status, featured, featured_expiry) 
-                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                              (v_dict.get('user_id'), v_dict.get('business_name'), v_dict.get('district'),
-                               v_dict.get('village'), v_dict.get('landmark'), v_dict.get('bio'),
-                               v_dict.get('vendor_image'), v_dict.get('vendor_image2'), v_dict.get('vendor_image3'),
-                               v_dict.get('status', 'Open'), v_dict.get('featured', 0), v_dict.get('featured_expiry')))
+                    existing_by_id = new_db.execute("SELECT id FROM vendors WHERE id=?", (v['id'],)).fetchone()
+                    if existing_by_id:
+                        new_db.execute("""INSERT INTO vendors 
+                                   (user_id, business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, status, featured, featured_expiry) 
+                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                  (v['user_id'], v['business_name'] if 'business_name' in v.keys() else '',
+                                   v['district'] if 'district' in v.keys() else '',
+                                   v['village'] if 'village' in v.keys() else '',
+                                   v['landmark'] if 'landmark' in v.keys() else '',
+                                   v['bio'] if 'bio' in v.keys() else '',
+                                   v['vendor_image'] if 'vendor_image' in v.keys() else '',
+                                   v['vendor_image2'] if 'vendor_image2' in v.keys() else '',
+                                   v['vendor_image3'] if 'vendor_image3' in v.keys() else '',
+                                   v['status'] if 'status' in v.keys() else 'Open',
+                                   v['featured'] if 'featured' in v.keys() else 0,
+                                   v['featured_expiry'] if 'featured_expiry' in v.keys() else None))
+                    else:
+                        new_db.execute("""INSERT INTO vendors 
+                                   (id, user_id, business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, status, featured, featured_expiry) 
+                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                  (v['id'], v['user_id'], v['business_name'] if 'business_name' in v.keys() else '',
+                                   v['district'] if 'district' in v.keys() else '',
+                                   v['village'] if 'village' in v.keys() else '',
+                                   v['landmark'] if 'landmark' in v.keys() else '',
+                                   v['bio'] if 'bio' in v.keys() else '',
+                                   v['vendor_image'] if 'vendor_image' in v.keys() else '',
+                                   v['vendor_image2'] if 'vendor_image2' in v.keys() else '',
+                                   v['vendor_image3'] if 'vendor_image3' in v.keys() else '',
+                                   v['status'] if 'status' in v.keys() else 'Open',
+                                   v['featured'] if 'featured' in v.keys() else 0,
+                                   v['featured_expiry'] if 'featured_expiry' in v.keys() else None))
                     vendors_imported += 1
             results['vendors'] = vendors_imported
         except Exception as e:
@@ -1928,14 +1977,20 @@ def import_db():
             jobs = old_cursor.fetchall()
             jobs_imported = 0
             for j in jobs:
-                j_dict = dict(j)
-                new_db.execute("""INSERT INTO jobs 
-                           (employer_id, title, company, description, location, village, contact, status, posted_date, job_image, featured, featured_expiry) 
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                          (j_dict.get('employer_id'), j_dict.get('title'), j_dict.get('company'),
-                           j_dict.get('description'), j_dict.get('location'), j_dict.get('village'),
-                           j_dict.get('contact'), j_dict.get('status', 'Open'), j_dict.get('posted_date'),
-                           j_dict.get('job_image'), j_dict.get('featured', 0), j_dict.get('featured_expiry')))
+                new_db.execute("""INSERT OR IGNORE INTO jobs 
+                           (id, employer_id, title, company, description, location, village, contact, status, posted_date, job_image, featured, featured_expiry) 
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                          (j['id'], j['employer_id'], j['title'] if 'title' in j.keys() else '',
+                           j['company'] if 'company' in j.keys() else '',
+                           j['description'] if 'description' in j.keys() else '',
+                           j['location'] if 'location' in j.keys() else '',
+                           j['village'] if 'village' in j.keys() else '',
+                           j['contact'] if 'contact' in j.keys() else '',
+                           j['status'] if 'status' in j.keys() else 'Open',
+                           j['posted_date'] if 'posted_date' in j.keys() else None,
+                           j['job_image'] if 'job_image' in j.keys() else '',
+                           j['featured'] if 'featured' in j.keys() else 0,
+                           j['featured_expiry'] if 'featured_expiry' in j.keys() else None))
                 jobs_imported += 1
             results['jobs'] = jobs_imported
         except Exception as e:
@@ -1947,12 +2002,12 @@ def import_db():
             reviews = old_cursor.fetchall()
             reviews_imported = 0
             for r in reviews:
-                r_dict = dict(r)
-                new_db.execute("""INSERT INTO reviews 
-                           (provider_id, reviewer_id, rating, comment, created_at) 
-                           VALUES (?,?,?,?,?)""",
-                          (r_dict.get('provider_id'), r_dict.get('reviewer_id'),
-                           r_dict.get('rating'), r_dict.get('comment'), r_dict.get('created_at')))
+                new_db.execute("""INSERT OR IGNORE INTO reviews 
+                           (id, provider_id, reviewer_id, rating, comment, created_at) 
+                           VALUES (?,?,?,?,?,?)""",
+                          (r['id'], r['provider_id'], r['reviewer_id'],
+                           r['rating'], r['comment'] if 'comment' in r.keys() else '',
+                           r['created_at'] if 'created_at' in r.keys() else None))
                 reviews_imported += 1
             results['reviews'] = reviews_imported
         except Exception as e:
@@ -1964,24 +2019,29 @@ def import_db():
             boosts = old_cursor.fetchall()
             boosts_imported = 0
             for b in boosts:
-                b_dict = dict(b)
                 # Map old columns to new
-                boost_type = b_dict.get('boost_type', 'profile')
-                # If old table had 'plan' as number of days, use that; else default 7
-                plan_days = int(b_dict.get('plan', 7)) if b_dict.get('plan') else 7
-                amount = b_dict.get('amount', 0) if b_dict.get('amount') else 0
-                phone_number = b_dict.get('phone_number', '') if b_dict.get('phone_number') else ''
-                transaction_id = b_dict.get('transaction_id')
-                raw_sms = b_dict.get('raw_sms')
-                status = b_dict.get('status', 'pending')
-                verified_at = b_dict.get('verified_at')
-                created_at = b_dict.get('created_at')
-                
-                new_db.execute("""INSERT INTO boost_requests 
-                           (user_id, boost_type, plan_days, amount, phone_number, transaction_id, raw_sms, status, verified_at, created_at) 
-                           VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                          (b_dict.get('user_id'), boost_type, plan_days, amount, phone_number,
-                           transaction_id, raw_sms, status, verified_at, created_at))
+                plan_days = int(b['plan']) if 'plan' in b.keys() and b['plan'] else 7
+                amount = b['amount'] if 'amount' in b.keys() else 0
+                if amount == 0:
+                    # Calculate amount from plan days
+                    if plan_days == 7:
+                        amount = 5000
+                    elif plan_days == 30:
+                        amount = 15000
+                    else:
+                        amount = 40000
+                new_db.execute("""INSERT OR IGNORE INTO boost_requests 
+                           (id, user_id, boost_type, plan_days, amount, phone_number, transaction_id, raw_sms, status, verified_at, created_at) 
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                          (b['id'], b['user_id'],
+                           b['boost_type'] if 'boost_type' in b.keys() else 'profile',
+                           plan_days, amount,
+                           b['phone_number'] if 'phone_number' in b.keys() else '',
+                           b['transaction_id'] if 'transaction_id' in b.keys() else '',
+                           b['raw_sms'] if 'raw_sms' in b.keys() else '',
+                           b['status'] if 'status' in b.keys() else 'pending',
+                           b['verified_at'] if 'verified_at' in b.keys() else None,
+                           b['created_at'] if 'created_at' in b.keys() else None))
                 boosts_imported += 1
             results['boosts'] = boosts_imported
         except Exception as e:
@@ -1993,9 +2053,10 @@ def import_db():
             notifs = old_cursor.fetchall()
             notifs_imported = 0
             for n in notifs:
-                n_dict = dict(n)
-                new_db.execute("INSERT INTO notifications (user_id, type, message, created_at) VALUES (?,?,?,?)",
-                              (n_dict.get('user_id'), n_dict.get('type'), n_dict.get('message'), n_dict.get('created_at')))
+                new_db.execute("INSERT OR IGNORE INTO notifications (id, user_id, type, message, created_at) VALUES (?,?,?,?,?)",
+                              (n['id'], n['user_id'], n['type'] if 'type' in n.keys() else '',
+                               n['message'] if 'message' in n.keys() else '',
+                               n['created_at'] if 'created_at' in n.keys() else None))
                 notifs_imported += 1
             results['notifications'] = notifs_imported
         except Exception as e:
