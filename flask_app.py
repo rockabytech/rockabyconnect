@@ -1814,6 +1814,91 @@ def admin_logout():
     session.pop('admin_logged_in', None)
     return redirect('/admin/login')
 
+@app.route('/manifest.json')
+def manifest():
+    manifest_content = {
+        "name": "RockabyConnect",
+        "short_name": "RockabyConnect",
+        "description": "Uganda's freelance marketplace connecting skilled workers with local jobs",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#f5af19",
+        "theme_color": "#f5af19",
+        "orientation": "portrait",
+        "icons": [
+            {"src": "/static/icon-72.png", "sizes": "72x72", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icon-96.png", "sizes": "96x96", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icon-152.png", "sizes": "152x152", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+        ]
+    }
+    import json
+    resp = make_response(json.dumps(manifest_content))
+    resp.headers['Content-Type'] = 'application/json'
+    return resp
+
+@app.route('/service-worker.js')
+def service_worker():
+    sw_content = '''
+const CACHE_NAME = 'rockabyconnect-v1';
+const urlsToCache = [
+    '/',
+    '/static/icon-72.png',
+    '/static/icon-96.png',
+    '/static/icon-128.png',
+    '/static/icon-144.png',
+    '/static/icon-152.png',
+    '/static/icon-192.png',
+    '/static/icon-384.png',
+    '/static/icon-512.png'
+];
+
+self.addEventListener('install', event => {
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(cache => {
+                console.log('Cached app assets');
+                return cache.addAll(urlsToCache);
+            })
+            .catch(err => console.log('Cache failed:', err))
+    );
+});
+
+self.addEventListener('fetch', event => {
+    event.respondWith(
+        caches.match(event.request)
+            .then(response => {
+                return response || fetch(event.request);
+            })
+            .catch(() => {
+                return caches.match('/');
+            })
+    );
+});
+
+self.addEventListener('activate', event => {
+    const cacheWhitelist = [CACHE_NAME];
+    event.waitUntil(
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.map(cacheName => {
+                    if (cacheWhitelist.indexOf(cacheName) === -1) {
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        })
+    );
+});
+'''
+    resp = make_response(sw_content)
+    resp.headers['Content-Type'] = 'application/javascript'
+    return resp
+
 # ============================================================
 # RUN APP
 # ============================================================
