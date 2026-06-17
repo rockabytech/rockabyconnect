@@ -228,84 +228,348 @@ base_template = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>RockabyConnect – {title}</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#f5af19">
-    {% raw %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         :root {
-            --primary: #f5af19; --primary-dark: #e09e15;
-            --bg: #f3f2ef; --card-bg: #ffffff; --text: #1a1a1a;
-            --text-secondary: #666666; --border: #e0e0e0;
-            --radius: 12px; --shadow: 0 1px 3px rgba(0,0,0,0.1);
+            --primary: #f5af19;
+            --primary-dark: #e09e15;
+            --primary-light: #f7c35c;
+            --secondary: #1a73e8;
+            --bg: #f0f4f8;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.3);
+            --text: #1a1a1a;
+            --text-secondary: #666;
+            --border: #e0e0e0;
+            --radius: 20px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            --shadow-hover: 0 12px 48px rgba(0, 0, 0, 0.12);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        * { margin:0; padding:0; box-sizing:border-box; }
+
+        body.dark-mode {
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg); color: var(--text); min-height: 100vh;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(245, 175, 25, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 90% 80%, rgba(26, 115, 232, 0.08) 0%, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
+            transition: var(--transition);
         }
+
         .navbar {
-            background: var(--card-bg); box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            padding: 12px 20px; position: sticky; top: 0; z-index: 100;
-            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 16px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
         }
-        .navbar .logo { font-size: 1.5rem; font-weight: 700; color: var(--primary-dark); text-decoration: none; }
-        .nav-links { display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .logo img {
+            height: 45px;
+            width: 45px;
+            border-radius: 12px;
+            object-fit: cover;
+            box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
+        }
+
+        .logo-text {
+            font-size: 1.3rem;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+        .logo-text span { color: var(--primary); }
+        .logo-sub {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            line-height: 1;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
         .nav-links a {
-            color: var(--text-secondary); text-decoration: none; font-weight: 500;
-            padding: 8px 12px; border-radius: 6px; transition: background 0.2s;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 12px;
+            transition: var(--transition);
+            font-size: 0.95rem;
         }
-        .nav-links a:hover, .nav-links a.active { background: #f5f5f5; color: var(--text); }
-        .btn {
-            display: inline-block; padding: 10px 20px; background: var(--primary);
-            color: #fff; border: none; border-radius: 6px; font-weight: 600;
-            cursor: pointer; text-decoration: none; transition: background 0.2s;
+        .nav-links a:hover,
+        .nav-links a.active {
+            background: rgba(245, 175, 25, 0.15);
+            color: var(--primary);
         }
-        .btn:hover { background: var(--primary-dark); }
-        .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary-dark); }
-        .btn-whatsapp { background: #25D366; color: white; margin-top: 10px; }
-        .btn-small { padding: 5px 10px; font-size: 0.8rem; }
-        .btn-danger { background: #dc3545; }
-        .container { max-width: 800px; margin: 20px auto; padding: 0 15px; }
+
+        .theme-toggle {
+            background: rgba(245, 175, 25, 0.1);
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: var(--transition);
+            color: var(--text);
+        }
+        .theme-toggle:hover {
+            background: rgba(245, 175, 25, 0.2);
+            transform: scale(1.05);
+        }
+
+        .hamburger {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.8rem;
+            cursor: pointer;
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 24px auto;
+            padding: 0 20px;
+        }
+
         .card {
-            background: var(--card-bg); border-radius: var(--radius); padding: 24px;
-            margin-bottom: 16px; box-shadow: var(--shadow); border: 1px solid var(--border);
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border-radius: var(--radius);
+            padding: 28px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--glass-border);
+            transition: var(--transition);
         }
-        .card-header { font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-        label { display: block; margin-top: 15px; font-weight: 500; }
-        input, textarea, select {
-            width: 100%; padding: 10px 12px; margin-top: 5px; border-radius: 6px;
-            border: 1px solid var(--border); font-size: 0.95rem;
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-hover);
         }
-        .hero {
-            background: linear-gradient(135deg, #24243e, #302b63);
-            color: white; padding: 40px 20px; text-align: center; border-radius: var(--radius);
+        .card-header {
+            font-size: 1.3rem;
+            font-weight: 700;
             margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        .hero h1 { font-size: 2rem; margin-bottom: 10px; }
-        .hero p { margin-bottom: 20px; color: #ccc; }
-        .category-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
+
+        .hero {
+            background: linear-gradient(135deg, rgba(245, 175, 25, 0.15), rgba(26, 115, 232, 0.15));
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius);
+            padding: 60px 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            border: 1px solid var(--glass-border);
+        }
+        .hero h1 {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: 25px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 28px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: var(--transition);
+            box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 175, 25, 0.4);
+        }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            box-shadow: none;
+        }
+        .btn-outline:hover {
+            background: rgba(245, 175, 25, 0.1);
+        }
+        .btn-whatsapp {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+        }
+        .btn-small {
+            padding: 6px 14px;
+            font-size: 0.85rem;
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border-radius: var(--radius);
+            padding: 28px 20px;
+            text-align: center;
+            border: 1px solid var(--glass-border);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -30px;
+            right: -30px;
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            opacity: 0.1;
+            border-radius: 50%;
+        }
+        .stat-card h3 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        .stat-card small {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .category-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
+        }
         .chip {
-            background: var(--primary); color: white; padding: 5px 12px;
-            border-radius: 20px; font-size: 0.85rem; text-decoration: none;
+            background: rgba(245, 175, 25, 0.2);
+            backdrop-filter: blur(5px);
+            color: var(--text);
+            font-weight: 600;
+            padding: 6px 18px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            text-decoration: none;
+            transition: var(--transition);
+            border: 1px solid var(--glass-border);
         }
-        .chip:hover { background: var(--primary-dark); }
+        .chip:hover {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+        }
+
         .provider-card, .job-card, .vendor-card {
-            display: flex; align-items: center; gap: 15px; padding: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 20px 0;
             border-bottom: 1px solid var(--border);
+            transition: var(--transition);
         }
-        .provider-card:last-child, .job-card:last-child, .vendor-card:last-child { border-bottom: none; }
-        .provider-info, .job-info, .vendor-info { flex:1; }
-        .provider-info h3, .job-info h3, .vendor-info h3 { margin:0; font-size:1.1rem; }
-        .meta { color: var(--text-secondary); font-size:0.9rem; }
-        .profile-pic { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); }
-        .vendor-img { width: 180px; height: auto; max-height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
-        .vendor-img-gallery { display: flex; gap: 10px; margin-top: 10px; }
-        .vendor-img-gallery img { width: 100px; height: 80px; object-fit: cover; border-radius: 6px; }
+        .provider-card:last-child, .job-card:last-child, .vendor-card:last-child {
+            border-bottom: none;
+        }
+        .provider-card:hover, .job-card:hover, .vendor-card:hover {
+            background: rgba(245, 175, 25, 0.05);
+            margin: 0 -10px;
+            padding: 20px 10px;
+            border-radius: 16px;
+        }
+        .provider-info, .job-info, .vendor-info { flex: 1; }
+
+        .profile-pic {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid var(--primary);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        .vendor-img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+        }
+
         .badge {
-            display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 8px;
-            vertical-align: middle; color: white;
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 8px;
+            vertical-align: middle;
         }
         .badge-available { background: #28a745; }
         .badge-occupied { background: #ffc107; color: #333; }
@@ -313,31 +577,173 @@ base_template = """
         .badge-open { background: #17a2b8; }
         .badge-taken { background: #6f42c1; }
         .badge-closed { background: #dc3545; }
-        .badge-away { background: #ffc107; color: #333; }
-        .search-bar input { width: 100%; padding: 12px 15px; border-radius: 30px; border: 1px solid var(--border); margin-bottom: 20px; }
-        footer { text-align: center; color: var(--text-secondary); padding: 30px 0; font-size: 0.9rem; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); }
-        .rating { color: var(--primary); font-size: 1.2rem; }
-        .review-card { border-left: 3px solid var(--primary); padding: 10px; margin: 10px 0; background: #f9f9f9; }
-        @media (max-width: 600px) {
-            .navbar { flex-direction: column; gap: 10px; }
-            .provider-card, .job-card, .vendor-card { flex-direction: column; align-items: flex-start; }
-            .vendor-img { width: 100%; max-height: 180px; }
+
+        .search-bar input {
+            width: 100%;
+            padding: 14px 20px;
+            border-radius: 40px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text);
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+        .search-bar input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(245, 175, 25, 0.2);
+        }
+
+        label {
+            display: block;
+            margin-top: 18px;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text);
+            font-size: 0.95rem;
+            transition: var(--transition);
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(245, 175, 25, 0.2);
+        }
+
+        .rating {
+            color: var(--primary);
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+        }
+        .review-card {
+            border-left: 3px solid var(--primary);
+            padding: 12px 16px;
+            margin: 12px 0;
+            background: rgba(245, 175, 25, 0.05);
+            border-radius: 0 12px 12px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .whatsapp-float {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.4);
+            z-index: 999;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+        .whatsapp-float:hover { transform: scale(1.1); }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+
+        .alert {
+            padding: 14px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .alert-success {
+            background: rgba(40, 167, 69, 0.15);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            color: #28a745;
+        }
+        .alert-error {
+            background: rgba(220, 53, 69, 0.15);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            color: #dc3545;
+        }
+
+        .install-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: none;
+            font-weight: 600;
+        }
+        .install-btn:hover { transform: scale(1.05); }
+
+        @media (max-width: 768px) {
+            .navbar { padding: 12px 16px; }
+            .nav-links {
+                display: none;
+                width: 100%;
+                flex-direction: column;
+                gap: 10px;
+                padding-top: 15px;
+            }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .hero h1 { font-size: 1.8rem; }
+            .hero { padding: 40px 20px; }
+            .provider-card, .job-card, .vendor-card {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .stat-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+            .container { padding: 0 16px; }
+            .card { padding: 20px; }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .card, .hero, .stat-card {
+            animation: fadeInUp 0.6s ease-out;
         }
     </style>
-    {% endraw %}
 </head>
 <body>
     <nav class="navbar">
-        <a href="/" class="logo" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
-    <img src="/static/icon-192.png" alt="RockabyConnect" style="height:40px; width:40px; border-radius:8px;">
-    <div>
-        <div style="font-size:1.3rem; font-weight:700; line-height:1.2;">ROCKABY<span style="color:var(--primary-dark);">CONNECT</span></div>
-        <div style="font-size:0.7rem; color:var(--text-secondary); line-height:1;">Connecting Skills, Building Uganda</div>
-    </div>
-</a>
-        <div class="nav-links">
+        <a href="/" class="logo">
+            <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
+            <div>
+                <div class="logo-text">ROCKABY<span>CONNECT</span></div>
+                <div class="logo-sub">Connecting Skills, Building Uganda</div>
+            </div>
+        </a>
+        <button class="hamburger" onclick="toggleMenu()">☰</button>
+        <div class="nav-links" id="navMenu">
             <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">Home</a>
             {% if session.user_id %}
                 <a href="/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
@@ -346,24 +752,62 @@ base_template = """
             <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">Jobs</a>
             <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">Vendors</a>
             {% if session.user_id %}
-                <a href="/logout">Logout ({{ session.user_name }})</a>
+                <a href="/logout">Logout</a>
             {% else %}
                 <a href="/login" class="{{ 'active' if active_page == 'login' else '' }}">Login</a>
                 <a href="/signup" class="{{ 'active' if active_page == 'signup' else '' }}">Sign Up</a>
             {% endif %}
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
+            <button id="installBtn" class="install-btn"><i class="fas fa-download"></i> Install App</button>
         </div>
     </nav>
     <div class="container">
         {content}
     </div>
-    <footer>
-        &copy; 2025 RockabyTech – Connecting Uganda's Workforce
-    </footer>
-    <a href="https://wa.me/256751318876?text=Hi%20RockabyConnect%20Support" target="_blank" style="position:fixed; bottom:20px; right:20px; background:#25D366; color:white; width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; box-shadow:0 4px 10px rgba(0,0,0,0.3); z-index:999; text-decoration:none;">💬</a>
+    <footer>&copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬</footer>
+    <a href="https://wa.me/256751318876?text=Hi%20RockabyConnect%20Support" target="_blank" class="whatsapp-float">💬</a>
     <script>
+        function toggleMenu() {
+            document.getElementById('navMenu').classList.toggle('open');
+        }
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            const theme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
+            localStorage.setItem('rockabyconnect-theme', theme);
+        }
+        const savedTheme = localStorage.getItem('rockabyconnect-theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+        }
+
+        // PWA install prompt
+        let deferredPrompt;
+        const installBtn = document.getElementById('installBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.style.display = 'inline-block';
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                deferredPrompt = null;
+                installBtn.style.display = 'none';
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            installBtn.style.display = 'none';
+        });
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js');
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(() => console.log('Service Worker registered'))
+                    .catch(err => console.log('Service Worker failed:', err));
             });
         }
     </script>
@@ -376,40 +820,40 @@ base_template = """
 # ============================================================
 home_page = base_template.replace("{title}", "Home").replace("{active_page}", "home").replace("{content}", """
     <div class="hero">
-        <h1>Get Work Done – or Get Paid</h1>
-        <p>Uganda’s freelance marketplace. Connect with trusted skilled workers near you.</p>
-        <div style="margin-top:20px;">
-            <a href="/offer-skill" class="btn" style="margin-right:10px;">Offer Your Skill</a>
+        <div style="display:flex; align-items:center; justify-content:center; gap:20px; flex-wrap:wrap; margin-bottom:15px;">
+            <img src="/static/ug-06.png" alt="RockabyConnect Logo" style="height:80px; width:80px; border-radius:16px; object-fit:cover; box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+            <h1 style="margin:0;">Get Work Done – or Get Paid</h1>
+        </div>
+        <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers near you.</p>
+        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+            <a href="/offer-skill" class="btn" style="border-color:white; color:white; background:var(--primary);">Offer Your Skill</a>
             <a href="/post-job" class="btn btn-outline" style="border-color:white; color:white;">Post a Job</a>
         </div>
         <div class="category-chips">
-            <span style="color:white; margin-right:8px;">Popular:</span>
+            <span style="color: var(--text-secondary);">Popular:</span>
             <a href="/list?search=Boda+Rider" class="chip">Boda Rider</a>
             <a href="/list?search=Maid" class="chip">Maid</a>
             <a href="/list?search=Plumbing" class="chip">Plumbing</a>
-            <a href="/list?search=Construction" class="chip">Construction</a>
+            <a href="/list?search=Electrical" class="chip">Electrical</a>
+            <a href="/list?search=Carpentry" class="chip">Carpentry</a>
             <a href="/list?search=Cooking" class="chip">Cooking</a>
             <a href="/list?search=Driver" class="chip">Driver</a>
         </div>
     </div>
-    <div style="display:flex; gap:15px; margin-bottom:20px; text-align:center;">
-        <div class="card" style="flex:1;">
-            <h3>{provider_count}</h3>
-            <small>Skilled Workers</small>
-        </div>
-        <div class="card" style="flex:1;">
-            <h3>{open_jobs}</h3>
-            <small>Open Jobs</small>
-        </div>
+    <div class="stat-grid">
+        <div class="stat-card"><h3>{provider_count}</h3><small>Skilled Workers</small></div>
+        <div class="stat-card"><h3>{open_jobs}</h3><small>Open Jobs</small></div>
+        <div class="stat-card"><h3>10K+</h3><small>Monthly Visitors</small></div>
     </div>
     <div class="card">
-        <div class="card-header">How It Works</div>
-        <p>1️⃣ <strong>Find Skills</strong> – Browse verified workers in your area.</p>
-        <p>2️⃣ <strong>Post a Job</strong> – Describe what you need done.</p>
-        <p>3️⃣ <strong>Connect</strong> – Chat on WhatsApp and get it done!</p>
+        <div class="card-header">📖 How It Works</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: center;">
+            <div><div style="font-size: 2rem;">🔍</div><h3>1. Find Skills</h3><p>Browse verified workers</p></div>
+            <div><div style="font-size: 2rem;">📝</div><h3>2. Post a Job</h3><p>Describe what you need</p></div>
+            <div><div style="font-size: 2rem;">💬</div><h3>3. Connect</h3><p>Chat on WhatsApp</p></div>
+        </div>
     </div>
 """)
-
 signup_page = base_template.replace("{title}", "Sign Up").replace("{active_page}", "signup").replace("{content}", """
     <div class="card">
         <div class="card-header">Create Your Free Account</div>
