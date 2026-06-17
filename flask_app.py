@@ -2390,6 +2390,104 @@ def admin_logout():
     session.pop('admin', None)
     return redirect('/admin/login')
 
+# ============================================================
+# ADMIN BACKUP ROUTES
+# ============================================================
+
+@app.route('/admin/backup')
+def admin_backup():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    try:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_filename = f"backup_{timestamp}.db"
+        backup_path = os.path.join(BACKUP_DIR, backup_filename)
+        shutil.copy2(DB_PATH, backup_path)
+        
+        content = f"""
+        <div class="card" style="text-align:center;">
+            <div class="card-header">✅ Backup Created</div>
+            <p>File: <strong>{backup_filename}</strong></p>
+            <a href="/admin/download-backup/{backup_filename}" class="btn">Download</a>
+            <a href="/admin/backups" class="btn btn-outline">View All Backups</a>
+        </div>
+        """
+        return render_template_string(admin_base_template.replace("{title}", "Backup Created").replace("{active_page}", "backups").replace("{content}", content))
+    except Exception as e:
+        return f"Backup failed: {e}", 500
+
+@app.route('/admin/backups')
+def admin_backups():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    backups = []
+    for f in os.listdir(BACKUP_DIR):
+        if f.endswith('.db'):
+            stat = os.stat(os.path.join(BACKUP_DIR, f))
+            backups.append({
+                'name': f,
+                'size': stat.st_size,
+                'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            })
+    backups.sort(key=lambda x: x['modified'], reverse=True)
+    
+    rows = ""
+    for b in backups:
+        rows += f"""
+        <tr>
+            <td>{b['name']}</td>
+            <td>{b['modified']}</td>
+            <td>{b['size'] // 1024} KB</td>
+            <td><a href="/admin/download-backup/{b['name']}" class="btn btn-small">Download</a></td>
+        </tr>"""
+    
+    if not rows:
+        rows = "<tr><td colspan='4'>No backups found.</td></tr>"
+    
+    content = f"""
+    <div class="card">
+        <div class="card-header">💾 Database Backups</div>
+        <a href="/admin/backup" class="btn" style="margin-bottom:20px;">Create New Backup</a>
+        <a href="/admin/download-current-db" class="btn btn-outline" style="margin-bottom:20px; margin-left:10px;">Download Current DB</a>
+        <table>
+            <thead>
+                <tr><th>Filename</th><th>Modified</th><th>Size</th><th>Action</th></tr>
+            </thead>
+            <tbody>{rows}</tbody>
+        </table>
+        <div style="margin-top:20px;">
+            <a href="/admin/dashboard" class="btn btn-outline">Back to Dashboard</a>
+        </div>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Backups").replace("{active_page}", "backups").replace("{content}", content))
+
+@app.route('/admin/download-backup/<filename>')
+def admin_download_backup(filename):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    if '..' in filename or '/' in filename:
+        return "Invalid filename", 400
+    
+    backup_path = os.path.join(BACKUP_DIR, filename)
+    if not os.path.exists(backup_path):
+        return "Backup not found", 404
+    
+    return send_file(backup_path, as_attachment=True, download_name=filename)
+
+@app.route('/admin/download-current-db')
+def admin_download_current_db():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    if not os.path.exists(DB_PATH):
+        return "Database not found", 404
+    
+    return send_file(DB_PATH, as_attachment=True, download_name='rockabyconnect_current.db')
+
 
 # ---------- Job posting, editing, public job listing, provider detail, reviews ----------
 @app.route('/post-job', methods=['GET', 'POST'])
