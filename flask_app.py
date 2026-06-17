@@ -1899,6 +1899,10 @@ self.addEventListener('activate', event => {
     resp.headers['Content-Type'] = 'application/javascript'
     return resp
 
+@app.route('/debug')
+def debug():
+    return "App is running! PWA routes should work now."
+
 # ============================================================
 # RUN APP
 # ============================================================
