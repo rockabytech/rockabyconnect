@@ -1835,6 +1835,242 @@ def debug():
     return "App is running! PWA routes should work now."
 
 # ============================================================
+# TEMPORARY IMPORT ROUTE – DELETE AFTER MIGRATION
+# ============================================================
+@app.route('/admin/import-db', methods=['GET', 'POST'])
+def import_db():
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    if request.method == 'POST':
+        if 'db_file' not in request.files:
+            return "No file uploaded"
+        file = request.files['db_file']
+        if file.filename == '':
+            return "No file selected"
+        
+        # Save uploaded file temporarily
+        temp_path = '/tmp/old_providers.db'
+        file.save(temp_path)
+        
+        # Connect to old database
+        old_db = sqlite3.connect(temp_path)
+        old_db.row_factory = sqlite3.Row
+        old_cursor = old_db.cursor()
+        
+        # Connect to new database
+        new_db = get_db()
+        
+        results = {}
+        
+        # 1. Import Users
+        try:
+            old_cursor.execute("SELECT * FROM users")
+            users = old_cursor.fetchall()
+            users_imported = 0
+            for user in users:
+                # Check if user exists by phone
+                existing = new_db.execute("SELECT id FROM users WHERE phone=?", (user['phone'],)).fetchone()
+                if not existing:
+                    new_db.execute("INSERT INTO users (id, phone, name, password_hash) VALUES (?,?,?,?)",
+                                   (user['id'], user['phone'], user['name'], user['password_hash']))
+                    users_imported += 1
+            results['users'] = users_imported
+        except Exception as e:
+            results['users'] = f"Error: {e}"
+        
+        # 2. Import Providers
+        try:
+            old_cursor.execute("SELECT * FROM providers")
+            providers = old_cursor.fetchall()
+            providers_imported = 0
+            for p in providers:
+                existing = new_db.execute("SELECT id FROM providers WHERE user_id=?", (p['user_id'],)).fetchone()
+                if not existing:
+                    new_db.execute("""INSERT INTO providers 
+                               (id, user_id, skills, district, village, bio, profile_pic, status, featured, featured_expiry) 
+                               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                              (p['id'], p['user_id'], p.get('skills'), p.get('district'),
+                               p.get('village'), p.get('bio'), p.get('profile_pic'),
+                               p.get('status', 'Available'), p.get('featured', 0), p.get('featured_expiry')))
+                    providers_imported += 1
+            results['providers'] = providers_imported
+        except Exception as e:
+            results['providers'] = f"Error: {e}"
+        
+        # 3. Import Vendors
+        try:
+            old_cursor.execute("SELECT * FROM vendors")
+            vendors = old_cursor.fetchall()
+            vendors_imported = 0
+            for v in vendors:
+                existing = new_db.execute("SELECT id FROM vendors WHERE user_id=?", (v['user_id'],)).fetchone()
+                if not existing:
+                    new_db.execute("""INSERT INTO vendors 
+                               (id, user_id, business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, status, featured, featured_expiry) 
+                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                              (v['id'], v['user_id'], v.get('business_name'), v.get('district'),
+                               v.get('village'), v.get('landmark'), v.get('bio'),
+                               v.get('vendor_image'), v.get('vendor_image2'), v.get('vendor_image3'),
+                               v.get('status', 'Open'), v.get('featured', 0), v.get('featured_expiry')))
+                    vendors_imported += 1
+            results['vendors'] = vendors_imported
+        except Exception as e:
+            results['vendors'] = f"Error: {e}"
+        
+        # 4. Import Jobs
+        try:
+            old_cursor.execute("SELECT * FROM jobs")
+            jobs = old_cursor.fetchall()
+            jobs_imported = 0
+            for j in jobs:
+                new_db.execute("""INSERT INTO jobs 
+                           (id, employer_id, title, company, description, location, village, contact, status, posted_date, job_image, featured, featured_expiry) 
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                          (j['id'], j['employer_id'], j.get('title'), j.get('company'),
+                           j.get('description'), j.get('location'), j.get('village'), j.get('contact'),
+                           j.get('status', 'Open'), j.get('posted_date'), j.get('job_image'),
+                           j.get('featured', 0), j.get('featured_expiry')))
+                jobs_imported += 1
+            results['jobs'] = jobs_imported
+        except Exception as e:
+            results['jobs'] = f"Error: {e}"
+        
+        # 5. Import Reviews
+        try:
+            old_cursor.execute("SELECT * FROM reviews")
+            reviews = old_cursor.fetchall()
+            reviews_imported = 0
+            for r in reviews:
+                new_db.execute("""INSERT INTO reviews 
+                           (id, provider_id, reviewer_id, rating, comment, created_at) 
+                           VALUES (?,?,?,?,?,?)""",
+                          (r['id'], r['provider_id'], r['reviewer_id'],
+                           r['rating'], r.get('comment'), r.get('created_at')))
+                reviews_imported += 1
+            results['reviews'] = reviews_imported
+        except Exception as e:
+            results['reviews'] = f"Error: {e}"
+        
+        # 6. Import Boost Requests
+        try:
+            old_cursor.execute("SELECT * FROM boost_requests")
+            boosts = old_cursor.fetchall()
+            boosts_imported = 0
+            for b in boosts:
+                # Map old columns to new (if different)
+                new_db.execute("""INSERT INTO boost_requests 
+                           (id, user_id, boost_type, plan_days, amount, phone_number, transaction_id, raw_sms, status, verified_at, created_at) 
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                          (b['id'], b['user_id'], b.get('boost_type', 'profile'),
+                           int(b.get('plan', 7)) if b.get('plan') else 7,
+                           b.get('amount', 0) if b.get('amount') else 0,
+                           b.get('phone_number', '') if b.get('phone_number') else '',
+                           b.get('transaction_id'), b.get('raw_sms'),
+                           b.get('status', 'pending'), b.get('verified_at'), b.get('created_at')))
+                boosts_imported += 1
+            results['boosts'] = boosts_imported
+        except Exception as e:
+            results['boosts'] = f"Error: {e}"
+        
+        # 7. Import Notifications (optional)
+        try:
+            old_cursor.execute("SELECT * FROM notifications")
+            notifs = old_cursor.fetchall()
+            notifs_imported = 0
+            for n in notifs:
+                new_db.execute("INSERT INTO notifications (id, user_id, type, message, created_at) VALUES (?,?,?,?,?)",
+                              (n['id'], n['user_id'], n['type'], n['message'], n.get('created_at')))
+                notifs_imported += 1
+            results['notifications'] = notifs_imported
+        except Exception as e:
+            results['notifications'] = f"Error: {e}"
+        
+        new_db.commit()
+        old_db.close()
+        
+        # Clean up temp file
+        import os
+        os.remove(temp_path)
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Import Results</title>
+            <style>
+                body {{ font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }}
+                .container {{ max-width: 600px; margin: 0 auto; }}
+                .card {{ background: white; border-radius: 16px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                .success {{ color: green; }}
+                .error {{ color: red; }}
+                h2 {{ color: #f5af19; }}
+                ul {{ list-style: none; padding: 0; }}
+                li {{ padding: 8px 0; border-bottom: 1px solid #eee; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="card">
+                    <h2>✅ Data Import Complete!</h2>
+                    <ul>
+                        <li>Users imported: <strong>{results['users']}</strong></li>
+                        <li>Providers imported: <strong>{results['providers']}</strong></li>
+                        <li>Vendors imported: <strong>{results['vendors']}</strong></li>
+                        <li>Jobs imported: <strong>{results['jobs']}</strong></li>
+                        <li>Reviews imported: <strong>{results['reviews']}</strong></li>
+                        <li>Boost requests imported: <strong>{results['boosts']}</strong></li>
+                        <li>Notifications imported: <strong>{results['notifications']}</strong></li>
+                    </ul>
+                    <p style="margin-top: 20px;"><strong>Note:</strong> Profile pictures and images need to be uploaded separately to the static/uploads folder.</p>
+                    <a href="/admin/dashboard" class="btn">Back to Admin Dashboard</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+    
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Import Database</title>
+        <style>
+            body { font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }
+            .container { max-width: 500px; margin: 50px auto; }
+            .card { background: white; border-radius: 16px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            input, button { padding: 12px; margin: 10px 0; width: 100%; border-radius: 8px; }
+            input { border: 1px solid #ddd; }
+            button { background: #f5af19; border: none; cursor: pointer; font-weight: bold; font-size: 16px; }
+            button:hover { background: #e09e15; }
+            h2 { color: #333; margin-top: 0; }
+            .note { background: #fff3cd; padding: 10px; border-radius: 8px; margin-top: 20px; font-size: 14px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="card">
+                <h2>📦 Import Old Database</h2>
+                <p>Upload your <strong>providers.db</strong> file from PythonAnywhere.</p>
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="file" name="db_file" accept=".db" required>
+                    <button type="submit">Import Database</button>
+                </form>
+                <div class="note">
+                    <strong>⚠️ Note:</strong>
+                    <ul style="margin-top: 5px; margin-left: 20px;">
+                        <li>Existing records (by phone number) will be skipped</li>
+                        <li>Images need to be uploaded separately to static/uploads</li>
+                    </ul>
+                </div>
+                <a href="/admin/dashboard" style="color: #666; text-decoration: none;">Back to Dashboard</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+
+# ============================================================
 # RUN APP
 # ============================================================
 with app.app_context():
