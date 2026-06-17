@@ -307,8 +307,10 @@ BASE_HTML = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>RockabyConnect – {{title}}</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#f5af19">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
@@ -421,6 +423,19 @@ BASE_HTML = """
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background: var(--bg); font-weight: 600; }
+        /* Install Button */
+        .install-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: none;
+            font-weight: 600;
+        }
+        .install-btn:hover { transform: scale(1.05); }
         @media (max-width: 768px) {
             .nav-links { display: none; width: 100%; flex-direction: column; }
             .nav-links.open { display: flex; }
@@ -454,6 +469,7 @@ BASE_HTML = """
                 <a href="/signup">Sign Up</a>
             {% endif %}
             <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+            <button id="installBtn" class="install-btn"><i class="fas fa-download"></i> Install App</button>
         </div>
     </nav>
     <div class="container">{{content|safe}}</div>
@@ -466,6 +482,45 @@ BASE_HTML = """
             localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
         }
         if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark-mode');
+
+        // ============================================================
+        // PWA INSTALL PROMPT
+        // ============================================================
+        let deferredPrompt;
+        const installBtn = document.getElementById('installBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.style.display = 'inline-block';
+            console.log('Install prompt ready');
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`User response: ${outcome}`);
+                deferredPrompt = null;
+                installBtn.style.display = 'none';
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            console.log('App installed successfully!');
+            installBtn.style.display = 'none';
+        });
+
+        // ============================================================
+        // SERVICE WORKER REGISTRATION
+        // ============================================================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('Service Worker registered'))
+                    .catch(err => console.log('Service Worker failed:', err));
+            });
+        }
     </script>
 </body>
 </html>
