@@ -1,7 +1,7 @@
-import os, sqlite3, re, random, string, math, requests, json
+import os, sqlite3, re, random, string, math, json, shutil
 from datetime import date, timedelta, datetime
 from collections import defaultdict
-from flask import Flask, render_template_string, request, redirect, url_for, session, g, make_response
+from flask import Flask, render_template_string, request, redirect, url_for, session, g, make_response, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from functools import wraps
@@ -14,17 +14,22 @@ app = Flask(__name__)
 app.secret_key = 'rockabyconnect-secret-key-change-in-production-2025'
 app.permanent_session_lifetime = timedelta(days=30)
 
-# Admin password for separate admin panel
 ADMIN_PASSWORD = 'Trythorous2909@1707#!'
 
-# File upload settings
+# Dynamic paths for Render
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'rockabyconnect.db')
+
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-UPLOAD_FOLDER = os.path.join(os.getcwd(), 'static', 'uploads')
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
-# Skill suggestions for freelancers
+# Backup directory
+BACKUP_DIR = os.path.join(BASE_DIR, 'backups')
+os.makedirs(BACKUP_DIR, exist_ok=True)
+
 SKILL_SUGGESTIONS = [
     'Plumbing', 'Electrical', 'Carpentry', 'Painting', 'Cleaning',
     'Tutoring', 'Graphic Design', 'Web Development', 'Tailoring',
@@ -36,15 +41,12 @@ SKILL_SUGGESTIONS = [
 FREELANCER_STATUSES = ['Available', 'Occupied', 'On Leave']
 VENDOR_STATUSES = ['Open', 'Closed', 'Away']
 
-# Boost plans (for SMS payment verification)
+# Boost plans
 BOOST_PLANS = {
     '7': {'days': 7, 'price': 5000, 'name': '7 Days'},
     '30': {'days': 30, 'price': 15000, 'name': '30 Days'},
     '90': {'days': 90, 'price': 40000, 'name': 'Quarterly (90 Days)'}
 }
-
-# Database path
-DB_PATH = os.path.join(os.getcwd(), 'rockabyconnect.db')
 
 # ============================================================
 # DATABASE FUNCTIONS
@@ -63,20 +65,17 @@ def close_db(exception):
         db.close()
 
 def init_db():
-    """Initialize all database tables"""
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
-    
-    # Users table
+
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         phone TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
         password_hash TEXT NOT NULL
     )''')
-    
-    # Providers (freelancers) table
+
     c.execute('''CREATE TABLE IF NOT EXISTS providers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER UNIQUE NOT NULL,
@@ -90,14 +89,7 @@ def init_db():
         featured_expiry DATE,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
-    
-    c.execute("PRAGMA table_info(providers)")
-    prov_cols = [col[1] for col in c.fetchall()]
-    for col in ['skills', 'village', 'featured_expiry']:
-        if col not in prov_cols:
-            c.execute(f"ALTER TABLE providers ADD COLUMN {col} TEXT")
-    
-    # Vendors table
+
     c.execute('''CREATE TABLE IF NOT EXISTS vendors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER UNIQUE NOT NULL,
@@ -114,14 +106,7 @@ def init_db():
         featured_expiry DATE,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
-    
-    c.execute("PRAGMA table_info(vendors)")
-    vend_cols = [col[1] for col in c.fetchall()]
-    for col in ['landmark', 'vendor_image2', 'vendor_image3', 'featured_expiry']:
-        if col not in vend_cols:
-            c.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
-    
-    # Jobs table
+
     c.execute('''CREATE TABLE IF NOT EXISTS jobs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         employer_id INTEGER NOT NULL,
@@ -138,14 +123,23 @@ def init_db():
         featured_expiry DATE,
         FOREIGN KEY(employer_id) REFERENCES users(id)
     )''')
-    
-    c.execute("PRAGMA table_info(jobs)")
-    job_cols = [col[1] for col in c.fetchall()]
-    for col in ['village', 'job_image', 'featured', 'featured_expiry']:
-        if col not in job_cols:
-            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
-    
-    # Reviews table
+
+    c.execute('''CREATE TABLE IF NOT EXISTS boost_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        boost_type TEXT DEFAULT 'profile',
+        plan_days INTEGER DEFAULT 7,
+        amount INTEGER DEFAULT 0,
+        phone_number TEXT,
+        transaction_id TEXT,
+        raw_sms TEXT,
+        status TEXT DEFAULT 'pending',
+        item_id INTEGER DEFAULT 0,
+        verified_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
     c.execute('''CREATE TABLE IF NOT EXISTS reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         provider_id INTEGER NOT NULL,
@@ -156,24 +150,7 @@ def init_db():
         FOREIGN KEY(provider_id) REFERENCES providers(id),
         FOREIGN KEY(reviewer_id) REFERENCES users(id)
     )''')
-    
-    # Boost requests table (for SMS payment verification)
-    c.execute('''CREATE TABLE IF NOT EXISTS boost_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        boost_type TEXT NOT NULL,
-        plan_days INTEGER NOT NULL,
-        amount INTEGER NOT NULL,
-        phone_number TEXT NOT NULL,
-        transaction_id TEXT,
-        raw_sms TEXT,
-        status TEXT DEFAULT 'pending',
-        verified_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )''')
-    
-    # Notifications table
+
     c.execute('''CREATE TABLE IF NOT EXISTS notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -182,68 +159,45 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
-    
-    # Insert default admin user
+
+    # Insert admin user if not exists
     c.execute("SELECT COUNT(*) FROM users WHERE phone='256751318876'")
     if c.fetchone()[0] == 0:
         hashed = generate_password_hash('admin123')
         c.execute("INSERT INTO users (phone, name, password_hash) VALUES ('256751318876', 'RockabyTech Admin', ?)", (hashed,))
-    
+
     conn.commit()
     conn.close()
 
 # ============================================================
-# HELPER FUNCTIONS
+# HELPERS
 # ============================================================
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def save_resized_image(file, max_width=800):
-    """Resize image to max_width (keeping aspect ratio), save with unique name. Returns filename."""
     if not file or not file.filename:
         return None
-    
-    # Secure the filename
     filename = secure_filename(file.filename)
     base, ext = os.path.splitext(filename)
     ext = ext.lower()
-    
-    # Validate extension
     if ext not in ('.png', '.jpg', '.jpeg', '.gif'):
         ext = '.jpg'
-    
-    # Generate unique filename
     new_filename = f"{base}_{os.urandom(4).hex()}{ext}"
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
-    
     try:
-        # Open and process image
         img = Image.open(file.stream)
-        
-        # Resize if needed
         if img.width > max_width:
             ratio = max_width / img.width
             new_height = int(img.height * ratio)
             img = img.resize((max_width, new_height), Image.LANCZOS)
-        
-        # Convert to RGB if necessary
         if img.mode in ('RGBA', 'P'):
             img = img.convert('RGB')
-        
-        # Save with compression
         img.save(filepath, quality=85, optimize=True)
-        
         return new_filename
     except Exception as e:
         print(f"Image resize error: {e}")
-        # Try fallback - save original without resize
-        try:
-            file.stream.seek(0)
-            img = Image.open(file.stream)
-            img.save(filepath, quality=85)
-            return new_filename
-        except:
-            return None
+        return None
 
 def whatsapp_link(phone):
     digits = ''.join(filter(str.isdigit, phone))
@@ -276,6 +230,11 @@ def add_notification(user_id, type, message):
     except Exception as e:
         print(f"Notification failed: {e}")
 
+def generate_voucher_code():
+    return 'CONNECT-' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + '-' + \
+           ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + '-' + \
+           ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+
 def get_provider_count():
     db = get_db()
     return db.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
@@ -284,15 +243,7 @@ def get_open_jobs_count():
     db = get_db()
     return db.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'").fetchone()[0]
 
-def get_pending_boosts_count():
-    db = get_db()
-    return db.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'").fetchone()[0]
-
-# ============================================================
-# SMS PARSING FUNCTIONS (from RockabyWiFi)
-# ============================================================
 def parse_mtn_sms(sms):
-    """Extract payment details from MTN SMS"""
     tid = re.search(r'ID:\s*(\d+)', sms)
     amount = re.search(r'UGX\s*([\d,]+)', sms)
     recipient_name = re.search(r'to\s+(.+?),', sms)
@@ -307,7 +258,6 @@ def parse_mtn_sms(sms):
     }
 
 def parse_airtel_sms(sms):
-    """Extract payment details from Airtel SMS"""
     tid = re.search(r'TID\s*(\d+)', sms)
     amount = re.search(r'UGX\s*([\d,]+)', sms)
     recipient_match = re.search(r'to\s+(.+?)\s+on\s+(\d+)', sms, re.IGNORECASE)
@@ -328,7 +278,13 @@ def parse_airtel_sms(sms):
     }
 
 # ============================================================
-# BASE TEMPLATE - Glassmorphism Design
+# RENDER PAGE FUNCTION
+# ============================================================
+def render_page(title, content):
+    return render_template_string(BASE_HTML, title=title, content=content, session=session)
+
+# ============================================================
+# BASE_HTML TEMPLATE
 # ============================================================
 BASE_HTML = """
 <!DOCTYPE html>
@@ -451,7 +407,6 @@ BASE_HTML = """
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background: var(--bg); font-weight: 600; }
-        /* Install Button */
         .install-btn {
             background: linear-gradient(135deg, #28a745, #20c997);
             color: white;
@@ -475,7 +430,7 @@ BASE_HTML = """
 <body>
     <nav class="navbar">
         <a href="/" class="logo">
-            <img src="/static/pngwing.com.png" alt="RockabyConnect Logo" style="height:45px; width:45px; border-radius:12px; object-fit:cover;">
+            <div class="logo-icon">🔗</div>
             <div>
                 <div class="logo-text">ROCKABY<span>CONNECT</span></div>
                 <div class="logo-sub">Connecting Skills, Building Uganda</div>
@@ -511,9 +466,6 @@ BASE_HTML = """
         }
         if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark-mode');
 
-        // ============================================================
-        // PWA INSTALL PROMPT
-        // ============================================================
         let deferredPrompt;
         const installBtn = document.getElementById('installBtn');
 
@@ -521,31 +473,25 @@ BASE_HTML = """
             e.preventDefault();
             deferredPrompt = e;
             installBtn.style.display = 'inline-block';
-            console.log('Install prompt ready');
         });
 
         installBtn.addEventListener('click', async () => {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
-                console.log(`User response: ${outcome}`);
                 deferredPrompt = null;
                 installBtn.style.display = 'none';
             }
         });
 
         window.addEventListener('appinstalled', () => {
-            console.log('App installed successfully!');
             installBtn.style.display = 'none';
         });
 
-        // ============================================================
-        // SERVICE WORKER REGISTRATION
-        // ============================================================
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/service-worker.js')
-                    .then(reg => console.log('Service Worker registered'))
+                    .then(() => console.log('Service Worker registered'))
                     .catch(err => console.log('Service Worker failed:', err));
             });
         }
@@ -554,44 +500,164 @@ BASE_HTML = """
 </html>
 """
 
-def render_page(title, content):
-    from flask import render_template_string
-    return render_template_string(BASE_HTML, title=title, content=content, session=session)
+# ============================================================
+# TEMPORARY ADMIN ROUTES
+# ============================================================
+@app.route('/admin/fix-tables')
+def fix_tables():
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    db = get_db()
+    results = {}
+    
+    try:
+        db.execute("PRAGMA table_info(providers)")
+        prov_cols = [col[1] for col in db.fetchall()]
+        added = []
+        for col in ['skills', 'village', 'featured_expiry']:
+            if col not in prov_cols:
+                db.execute(f"ALTER TABLE providers ADD COLUMN {col} TEXT")
+                added.append(col)
+        results['providers'] = added if added else 'No changes needed'
+    except Exception as e:
+        results['providers'] = f"Error: {e}"
+    
+    try:
+        db.execute("PRAGMA table_info(vendors)")
+        vend_cols = [col[1] for col in db.fetchall()]
+        added = []
+        for col in ['landmark', 'vendor_image2', 'vendor_image3', 'featured_expiry']:
+            if col not in vend_cols:
+                db.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
+                added.append(col)
+        results['vendors'] = added if added else 'No changes needed'
+    except Exception as e:
+        results['vendors'] = f"Error: {e}"
+    
+    try:
+        db.execute("PRAGMA table_info(jobs)")
+        job_cols = [col[1] for col in db.fetchall()]
+        added = []
+        for col in ['village', 'job_image', 'featured', 'featured_expiry']:
+            if col not in job_cols:
+                db.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
+                added.append(col)
+        results['jobs'] = added if added else 'No changes needed'
+    except Exception as e:
+        results['jobs'] = f"Error: {e}"
+    
+    db.commit()
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Tables Fixed</title></head>
+    <body style="font-family: Arial; padding: 20px; background: #f0f4f8;">
+        <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
+            <h2>✅ Database Tables Updated</h2>
+            <ul>
+                <li>Providers: {results['providers']}</li>
+                <li>Vendors: {results['vendors']}</li>
+                <li>Jobs: {results['jobs']}</li>
+            </ul>
+            <p><a href="/admin/dashboard">Back to Admin</a></p>
+        </div>
+    </body>
+    </html>
+    """
+
+@app.route('/admin/reset-db')
+def reset_db():
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    confirm = request.args.get('confirm')
+    if confirm != 'yes':
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Reset Database</title></head>
+        <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
+                <h2>⚠️ Reset Database</h2>
+                <p style="color: red;"><strong>WARNING:</strong> This will delete ALL data.</p>
+                <p><a href="/admin/reset-db?confirm=yes" style="background: red; color: white; padding: 10px 20px; text-decoration: none; border-radius: 8px;">Yes, Reset</a></p>
+                <p><a href="/admin/dashboard">Cancel</a></p>
+            </div>
+        </body>
+        </html>
+        '''
+    
+    try:
+        if os.path.exists(DB_PATH):
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_path = os.path.join(BACKUP_DIR, f"pre_reset_backup_{timestamp}.db")
+            shutil.copy2(DB_PATH, backup_path)
+        
+        if os.path.exists(DB_PATH):
+            os.remove(DB_PATH)
+        
+        init_db()
+        
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Database Reset</title></head>
+        <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
+                <h2>✅ Database Reset Complete</h2>
+                <p>All data has been cleared.</p>
+                <p><a href="/admin/dashboard">Back to Admin</a></p>
+            </div>
+        </body>
+        </html>
+        '''
+    except Exception as e:
+        return f"Reset failed: {e}", 500
 
 # ============================================================
-# HOME ROUTE
+# AUTH ROUTES
 # ============================================================
 @app.route('/')
 def home():
-    provider_count = get_provider_count()
-    open_jobs = get_open_jobs_count()
+    db = get_db()
+    provider_count = db.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
+    open_jobs = db.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'").fetchone()[0]
     
     content = f'''
-   <div class="hero">
-    <div style="display:flex; align-items:center; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:15px;">
-        <img src="/static/ug-06.png" alt="RockabyConnect Logo" style="height:70px; width:70px; border-radius:16px; object-fit:cover; box-shadow:0 4px 15px rgba(0,0,0,0.2);">
-        <h1 style="margin:0;">Get Work Done – or Get Paid</h1>
+    <div class="hero">
+        <h1>✨ Get Work Done – or Get Paid</h1>
+        <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers near you.</p>
+        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+            <a href="/offer-skill" class="btn"><i class="fas fa-user-plus"></i> Offer Your Skill</a>
+            <a href="/post-job" class="btn btn-outline"><i class="fas fa-briefcase"></i> Post a Job</a>
+        </div>
+        <div class="category-chips">
+            <span>Popular:</span>
+            <a href="/list?search=Boda+Rider" class="chip">Boda Rider</a>
+            <a href="/list?search=Maid" class="chip">Maid</a>
+            <a href="/list?search=Plumbing" class="chip">Plumbing</a>
+            <a href="/list?search=Electrical" class="chip">Electrical</a>
+            <a href="/list?search=Carpentry" class="chip">Carpentry</a>
+        </div>
     </div>
-    <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers near you.</p>
-    <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-        <a href="/offer-skill" class="btn"><i class="fas fa-user-plus"></i> Offer Your Skill</a>
-        <a href="/post-job" class="btn btn-outline"><i class="fas fa-briefcase"></i> Post a Job</a>
+    <div class="stat-grid">
+        <div class="stat-card"><h3>{provider_count}</h3><small>Skilled Workers</small></div>
+        <div class="stat-card"><h3>{open_jobs}</h3><small>Open Jobs</small></div>
+        <div class="stat-card"><h3>10K+</h3><small>Monthly Visitors</small></div>
     </div>
-    <div class="category-chips">
-        <span>Popular:</span>
-        <a href="/list?search=Boda+Rider" class="chip">Boda Rider</a>
-        <a href="/list?search=Maid" class="chip">Maid</a>
-        <a href="/list?search=Plumbing" class="chip">Plumbing</a>
-        <a href="/list?search=Electrical" class="chip">Electrical</a>
-        <a href="/list?search=Carpentry" class="chip">Carpentry</a>
+    <div class="card">
+        <div class="card-header">📖 How It Works</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: center;">
+            <div><div style="font-size: 2rem;">🔍</div><h3>1. Find Skills</h3><p>Browse verified workers</p></div>
+            <div><div style="font-size: 2rem;">📝</div><h3>2. Post a Job</h3><p>Describe what you need</p></div>
+            <div><div style="font-size: 2rem;">💬</div><h3>3. Connect</h3><p>Chat on WhatsApp</p></div>
+        </div>
     </div>
-</div>
     '''
     return render_page("Home", content)
 
-# ============================================================
-# AUTHENTICATION ROUTES
-# ============================================================
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
@@ -599,7 +665,7 @@ def signup():
         name = request.form['name'].strip()
         password = request.form['password']
         if not phone or not name or not password:
-            return render_page("Sign Up", '<div class="card"><div class="alert alert-error">All fields required.</div><a href="/signup">Try again</a></div>')
+            return render_page("Sign Up", '<div class="card"><div class="alert alert-error">All fields required.</div></div>')
         hashed = generate_password_hash(password)
         try:
             db = get_db()
@@ -616,7 +682,7 @@ def signup():
             <label>Full Name *</label>
             <input type="text" name="name" required>
             <label>Phone Number *</label>
-            <input type="tel" name="phone" required placeholder="0751318876">
+            <input type="tel" name="phone" required>
             <label>Password *</label>
             <input type="password" name="password" required>
             <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Sign Up</button>
@@ -638,7 +704,7 @@ def login():
             session['user_name'] = user['name']
             session['user_phone'] = phone
             return redirect(url_for('dashboard'))
-        return render_page("Login", '<div class="card"><div class="alert alert-error">Invalid credentials.</div><a href="/login">Try again</a></div>')
+        return render_page("Login", '<div class="card"><div class="alert alert-error">Invalid credentials.</div></div>')
     
     content = '''
     <div class="card" style="max-width: 500px; margin: 0 auto;">
@@ -679,7 +745,7 @@ def edit_name():
     if request.method == 'POST':
         new_name = request.form['name'].strip()
         if not new_name:
-            return render_page("Edit Name", '<div class="card"><div class="alert alert-error">Name cannot be empty.</div><a href="/edit-name">Try again</a></div>')
+            return render_page("Edit Name", '<div class="card"><div class="alert alert-error">Name cannot be empty.</div></div>')
         db.execute("UPDATE users SET name=? WHERE id=?", (new_name, session['user_id']))
         db.commit()
         session['user_name'] = new_name
@@ -699,13 +765,13 @@ def edit_name():
     return render_page("Edit Name", content)
 
 # ============================================================
-# USER DASHBOARD
+# DASHBOARD
 # ============================================================
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    user_id = session['user_id']
     db = get_db()
+    user_id = session['user_id']
     
     provider = db.execute("SELECT * FROM providers WHERE user_id=?", (user_id,)).fetchone()
     vendor = db.execute("SELECT * FROM vendors WHERE user_id=?", (user_id,)).fetchone()
@@ -787,16 +853,16 @@ def dashboard():
     </div>
     '''
     return render_page("Dashboard", dashboard_content)
+
 # ============================================================
 # FREELANCER PROFILE ROUTES
 # ============================================================
 @app.route('/create-profile', methods=['GET', 'POST'])
 @login_required
 def create_profile():
-    user_id = session['user_id']
     db = get_db()
+    user_id = session['user_id']
     
-    # Check if profile already exists
     existing = db.execute("SELECT id FROM providers WHERE user_id=?", (user_id,)).fetchone()
     if existing:
         return redirect('/edit-profile')
@@ -808,8 +874,9 @@ def create_profile():
         bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Available')
         file = request.files.get('profile_pic')
+        
         filename = None
-        if file and allowed_file(file.filename):
+        if file and file.filename and allowed_file(file.filename):
             filename = save_resized_image(file, max_width=800)
         
         db.execute("INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, status) VALUES (?,?,?,?,?,?,?)",
@@ -843,8 +910,8 @@ def create_profile():
 @app.route('/edit-profile', methods=['GET', 'POST'])
 @login_required
 def edit_profile():
-    user_id = session['user_id']
     db = get_db()
+    user_id = session['user_id']
     
     provider = db.execute("SELECT * FROM providers WHERE user_id=?", (user_id,)).fetchone()
     if not provider:
@@ -858,21 +925,12 @@ def edit_profile():
         status = request.form.get('status', 'Available')
         file = request.files.get('profile_pic')
         
-        # Handle file upload
-        filename = provider['profile_pic']  # keep existing if no new file
+        filename = provider['profile_pic']
         if file and file.filename and allowed_file(file.filename):
             uploaded = save_resized_image(file, max_width=800)
             if uploaded:
                 filename = uploaded
-            else:
-                return render_page("Edit Profile", """
-                <div class="card">
-                    <div class="alert alert-error">Image upload failed. Please try again with a different image.</div>
-                    <a href="/edit-profile" class="btn">Try again</a>
-                </div>
-                """)
         
-        # Update database - ensure profile_pic is included
         db.execute("UPDATE providers SET skills=?, district=?, village=?, bio=?, profile_pic=?, status=? WHERE user_id=?",
                    (skills, district, village, bio, filename, status, user_id))
         db.commit()
@@ -883,9 +941,9 @@ def edit_profile():
     <div class="card">
         <div class="card-header">Edit Your Freelancer Profile</div>
         <form method="POST" enctype="multipart/form-data">
-            <label>Skills *</label>
+            <label>Skills</label>
             <input type="text" name="skills" value="{provider['skills'] or ''}" required>
-            <label>District/City *</label>
+            <label>District/City</label>
             <input type="text" name="district" value="{provider['district'] or ''}" required>
             <label>Village/Area</label>
             <input type="text" name="village" value="{provider['village'] or ''}">
@@ -893,7 +951,7 @@ def edit_profile():
             <textarea name="bio" rows="3">{provider['bio'] or ''}</textarea>
             <label>Profile Picture</label>
             <input type="file" name="profile_pic" accept="image/*">
-            <p style="font-size:0.8rem;">Current: {provider['profile_pic'] or 'No image uploaded'}</p>
+            <p style="font-size:0.8rem;">Current: {provider['profile_pic'] or 'No image'}</p>
             <label>Status</label>
             <select name="status">{status_options}</select>
             <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Save Changes</button>
@@ -908,8 +966,8 @@ def edit_profile():
 @app.route('/create-vendor-profile', methods=['GET', 'POST'])
 @login_required
 def create_vendor_profile():
-    user_id = session['user_id']
     db = get_db()
+    user_id = session['user_id']
     
     existing = db.execute("SELECT id FROM vendors WHERE user_id=?", (user_id,)).fetchone()
     if existing:
@@ -926,7 +984,7 @@ def create_vendor_profile():
         filenames = [None, None, None]
         for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
             file = request.files.get(field)
-            if file and allowed_file(file.filename):
+            if file and file.filename and allowed_file(file.filename):
                 filenames[idx] = save_resized_image(file, max_width=800)
         
         db.execute("""INSERT INTO vendors 
@@ -967,8 +1025,8 @@ def create_vendor_profile():
 @app.route('/edit-vendor-profile', methods=['GET', 'POST'])
 @login_required
 def edit_vendor_profile():
-    user_id = session['user_id']
     db = get_db()
+    user_id = session['user_id']
     
     vendor = db.execute("SELECT * FROM vendors WHERE user_id=?", (user_id,)).fetchone()
     if not vendor:
@@ -982,22 +1040,13 @@ def edit_vendor_profile():
         bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Open')
         
-        # Handle images - start with existing
         current_images = [vendor['vendor_image'], vendor['vendor_image2'], vendor['vendor_image3']]
-        
         for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
             file = request.files.get(field)
             if file and file.filename and allowed_file(file.filename):
                 uploaded = save_resized_image(file, max_width=800)
                 if uploaded:
                     current_images[idx] = uploaded
-                else:
-                    return render_page("Edit Vendor Profile", """
-                    <div class="card">
-                        <div class="alert alert-error">Image upload failed. Please try again.</div>
-                        <a href="/edit-vendor-profile" class="btn">Try again</a>
-                    </div>
-                    """)
         
         db.execute("""UPDATE vendors SET 
                    business_name=?, district=?, village=?, landmark=?, bio=?, 
@@ -1013,9 +1062,9 @@ def edit_vendor_profile():
     <div class="card">
         <div class="card-header">Edit Vendor Profile</div>
         <form method="POST" enctype="multipart/form-data">
-            <label>Business Name *</label>
+            <label>Business Name</label>
             <input type="text" name="business_name" value="{vendor['business_name']}" required>
-            <label>District/City *</label>
+            <label>District/City</label>
             <input type="text" name="district" value="{vendor['district'] or ''}" required>
             <label>Village/Area</label>
             <input type="text" name="village" value="{vendor['village'] or ''}">
@@ -1045,7 +1094,7 @@ def list_vendors():
     vendors = db.execute("""
         SELECT v.id, v.business_name, v.district, v.village, v.landmark, v.bio, v.vendor_image, v.status, v.featured, v.featured_expiry, u.phone
         FROM vendors v JOIN users u ON v.user_id = u.id
-        ORDER BY CASE WHEN v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= date('now')) THEN 0 ELSE 1 END, v.id DESC
+        ORDER BY v.featured DESC, v.id DESC
     """).fetchall()
     
     cards = ""
@@ -1103,7 +1152,7 @@ def list_providers():
     providers = db.execute("""
         SELECT p.id, u.name, p.skills, u.phone, p.district, p.village, p.bio, p.profile_pic, p.status, p.featured, p.featured_expiry
         FROM providers p JOIN users u ON p.user_id = u.id
-        ORDER BY CASE WHEN p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= date('now')) THEN 0 ELSE 1 END, p.id DESC
+        ORDER BY p.featured DESC, p.id DESC
     """).fetchall()
     
     cards = ""
@@ -1137,7 +1186,6 @@ def provider_detail(provider_id):
     if not p:
         return "Provider not found", 404
     
-    # Get reviews
     reviews = db.execute("""
         SELECT u.name, r.rating, r.comment, r.created_at 
         FROM reviews r JOIN users u ON r.reviewer_id = u.id
@@ -1162,9 +1210,8 @@ def provider_detail(provider_id):
         </div>'''
     
     if not reviews_html:
-        reviews_html = "<p>No reviews yet. Be the first to review this freelancer!</p>"
+        reviews_html = "<p>No reviews yet.</p>"
     
-    # Review form (only if logged in and not already reviewed)
     review_form = ""
     if 'user_id' in session:
         existing_review = db.execute("SELECT id FROM reviews WHERE provider_id=? AND reviewer_id=?", (provider_id, session['user_id'])).fetchone()
@@ -1232,7 +1279,7 @@ def list_jobs():
     jobs = db.execute("""
         SELECT j.id, j.title, j.company, j.description, j.location, j.status, j.posted_date, j.featured, j.featured_expiry
         FROM jobs j WHERE j.status='Open'
-        ORDER BY CASE WHEN j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= date('now')) THEN 0 ELSE 1 END, j.id DESC
+        ORDER BY j.featured DESC, j.id DESC
     """).fetchall()
     
     jobs_html = ""
@@ -1290,16 +1337,7 @@ def post_job():
         
         filename = None
         if file and file.filename and allowed_file(file.filename):
-            uploaded = save_resized_image(file, max_width=800)
-            if uploaded:
-                filename = uploaded
-            else:
-                return render_page("Post a Job", """
-                <div class="card">
-                    <div class="alert alert-error">Image upload failed. Please try again.</div>
-                    <a href="/post-job" class="btn">Try again</a>
-                </div>
-                """)
+            filename = save_resized_image(file, max_width=800)
         
         db = get_db()
         db.execute("""INSERT INTO jobs 
@@ -1342,16 +1380,23 @@ def edit_job(job_id):
         return "Job not found", 404
     
     if request.method == 'POST':
-        title = request.form['title']
-        company = request.form.get('company', '')
-        description = request.form['description']
-        location = request.form['location']
-        village = request.form.get('village', '')
-        contact = request.form.get('contact', '')
+        title = request.form['title'].strip()
+        company = request.form.get('company', '').strip()
+        description = request.form['description'].strip()
+        location = request.form['location'].strip()
+        village = request.form.get('village', '').strip()
+        contact = request.form.get('contact', '').strip()
         status = request.form.get('status', 'Open')
+        file = request.files.get('job_image')
         
-        db.execute("UPDATE jobs SET title=?, company=?, description=?, location=?, village=?, contact=?, status=? WHERE id=?",
-                   (title, company, description, location, village, contact, status, job_id))
+        filename = job['job_image']
+        if file and file.filename and allowed_file(file.filename):
+            uploaded = save_resized_image(file, max_width=800)
+            if uploaded:
+                filename = uploaded
+        
+        db.execute("UPDATE jobs SET title=?, company=?, description=?, location=?, village=?, contact=?, status=?, job_image=? WHERE id=?",
+                   (title, company, description, location, village, contact, status, filename, job_id))
         db.commit()
         return redirect('/dashboard')
     
@@ -1366,7 +1411,7 @@ def edit_job(job_id):
     content = f'''
     <div class="card">
         <div class="card-header">Edit Job</div>
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
             <label>Job Title</label>
             <input type="text" name="title" value="{job['title']}" required>
             <label>Company Name</label>
@@ -1379,6 +1424,8 @@ def edit_job(job_id):
             <input type="text" name="village" value="{job['village'] or ''}">
             <label>Contact Info</label>
             <input type="text" name="contact" value="{job['contact'] or ''}">
+            <label>Job Image</label>
+            <input type="file" name="job_image" accept="image/*">
             <label>Status</label>
             {status_options}
             <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Update Job</button>
@@ -1388,13 +1435,11 @@ def edit_job(job_id):
     return render_page("Edit Job", content)
 
 # ============================================================
-# BOOST SYSTEM WITH SMS VERIFICATION (from RockabyWiFi)
+# BOOST SYSTEM
 # ============================================================
-
 @app.route('/boost-profile', methods=['GET', 'POST'])
 @login_required
 def boost_profile():
-    """Step 1: Select boost plan and enter phone number"""
     db = get_db()
     provider = db.execute("SELECT id FROM providers WHERE user_id=?", (session['user_id'],)).fetchone()
     if not provider:
@@ -1403,30 +1448,37 @@ def boost_profile():
     if request.method == 'POST':
         plan_days = request.form['plan']
         phone = request.form['phone'].strip()
+        trans_id = request.form['trans_id'].strip()
         
-        # Store in session for SMS verification
-        session['boost_type'] = 'profile'
-        session['boost_plan'] = plan_days
-        session['boost_phone'] = phone
-        session['boost_amount'] = BOOST_PLANS[plan_days]['price']
-        session['boost_days'] = BOOST_PLANS[plan_days]['days']
+        days = int(plan_days)
+        amount = 5000 if days == 7 else 15000 if days == 30 else 40000
         
-        return redirect(url_for('boost_payment_verify'))
+        db.execute("""INSERT INTO boost_requests 
+                   (user_id, boost_type, plan_days, amount, phone_number, transaction_id, status) 
+                   VALUES (?, 'profile', ?, ?, ?, ?, 'pending')""",
+                   (session['user_id'], days, amount, phone, trans_id))
+        db.commit()
+        
+        return render_page("Boost Submitted", '''
+        <div class="card" style="text-align: center;">
+            <div class="card-header">✅ Request Submitted</div>
+            <p>Your boost request will be verified within 24 hours.</p>
+            <a href="/dashboard" class="btn">Back to Dashboard</a>
+        </div>
+        ''')
     
     content = f'''
     <div class="card">
         <div class="card-header"><i class="fas fa-rocket"></i> Boost Your Profile</div>
         <p>Get featured at the top of search results and attract more customers!</p>
-        
         <div style="background: linear-gradient(135deg, rgba(245,175,25,0.1), rgba(26,115,232,0.1)); padding: 20px; border-radius: 16px; margin: 20px 0;">
             <h3>💰 Boost Packages</h3>
             <ul style="list-style: none; padding: 0;">
-                <li>📅 7 days - <strong>UGX {BOOST_PLANS['7']['price']:,}</strong></li>
-                <li>📅 30 days - <strong>UGX {BOOST_PLANS['30']['price']:,}</strong></li>
-                <li>📅 Quarterly (90 days) - <strong>UGX {BOOST_PLANS['90']['price']:,}</strong></li>
+                <li>📅 7 days - <strong>UGX 5,000</strong></li>
+                <li>📅 30 days - <strong>UGX 15,000</strong></li>
+                <li>📅 Quarterly (90 days) - <strong>UGX 40,000</strong></li>
             </ul>
         </div>
-        
         <hr>
         <p><strong>📱 How to pay:</strong></p>
         <ol style="margin-left: 20px;">
@@ -1435,19 +1487,20 @@ def boost_profile():
                 <strong>Airtel: 0751318876</strong><br>
                 <strong>Name: Rocky Peter Abayo</strong>
             </li>
-            <li>After payment, you'll verify by pasting the SMS.</li>
+            <li>Enter the Transaction ID from your Mobile Money confirmation below.</li>
         </ol>
-        
         <form method="POST" style="margin-top: 20px;">
             <label><i class="fas fa-calendar"></i> Select Plan</label>
             <select name="plan" required>
-                <option value="7">7 Days - UGX {BOOST_PLANS['7']['price']:,}</option>
-                <option value="30">30 Days - UGX {BOOST_PLANS['30']['price']:,}</option>
-                <option value="90">Quarterly (90 Days) - UGX {BOOST_PLANS['90']['price']:,}</option>
+                <option value="7">7 Days - UGX 5,000</option>
+                <option value="30">30 Days - UGX 15,000</option>
+                <option value="90">Quarterly (90 Days) - UGX 40,000</option>
             </select>
             <label><i class="fas fa-phone"></i> Your Phone Number *</label>
-            <input type="tel" name="phone" required placeholder="e.g., 0751318876">
-            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;"><i class="fas fa-arrow-right"></i> Continue to Payment Verification</button>
+            <input type="tel" name="phone" required>
+            <label><i class="fas fa-receipt"></i> Transaction ID *</label>
+            <input type="text" name="trans_id" required>
+            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Submit Request</button>
         </form>
     </div>
     '''
@@ -1456,7 +1509,6 @@ def boost_profile():
 @app.route('/boost-vendor', methods=['GET', 'POST'])
 @login_required
 def boost_vendor():
-    """Step 1: Select boost plan and enter phone number for vendor"""
     db = get_db()
     vendor = db.execute("SELECT id FROM vendors WHERE user_id=?", (session['user_id'],)).fetchone()
     if not vendor:
@@ -1465,29 +1517,37 @@ def boost_vendor():
     if request.method == 'POST':
         plan_days = request.form['plan']
         phone = request.form['phone'].strip()
+        trans_id = request.form['trans_id'].strip()
         
-        session['boost_type'] = 'vendor'
-        session['boost_plan'] = plan_days
-        session['boost_phone'] = phone
-        session['boost_amount'] = BOOST_PLANS[plan_days]['price']
-        session['boost_days'] = BOOST_PLANS[plan_days]['days']
+        days = int(plan_days)
+        amount = 5000 if days == 7 else 15000 if days == 30 else 40000
         
-        return redirect(url_for('boost_payment_verify'))
+        db.execute("""INSERT INTO boost_requests 
+                   (user_id, boost_type, plan_days, amount, phone_number, transaction_id, status) 
+                   VALUES (?, 'vendor', ?, ?, ?, ?, 'pending')""",
+                   (session['user_id'], days, amount, phone, trans_id))
+        db.commit()
+        
+        return render_page("Boost Submitted", '''
+        <div class="card" style="text-align: center;">
+            <div class="card-header">✅ Request Submitted</div>
+            <p>Your vendor boost request will be verified within 24 hours.</p>
+            <a href="/dashboard" class="btn">Back to Dashboard</a>
+        </div>
+        ''')
     
     content = f'''
     <div class="card">
         <div class="card-header"><i class="fas fa-rocket"></i> Boost Your Vendor Profile</div>
-        <p>Get your shop featured at the top of vendor listings and attract more customers!</p>
-        
+        <p>Get your shop featured at the top of vendor listings!</p>
         <div style="background: linear-gradient(135deg, rgba(245,175,25,0.1), rgba(26,115,232,0.1)); padding: 20px; border-radius: 16px; margin: 20px 0;">
             <h3>💰 Boost Packages</h3>
             <ul style="list-style: none; padding: 0;">
-                <li>📅 7 days - <strong>UGX {BOOST_PLANS['7']['price']:,}</strong></li>
-                <li>📅 30 days - <strong>UGX {BOOST_PLANS['30']['price']:,}</strong></li>
-                <li>📅 Quarterly (90 days) - <strong>UGX {BOOST_PLANS['90']['price']:,}</strong></li>
+                <li>📅 7 days - <strong>UGX 5,000</strong></li>
+                <li>📅 30 days - <strong>UGX 15,000</strong></li>
+                <li>📅 Quarterly (90 days) - <strong>UGX 40,000</strong></li>
             </ul>
         </div>
-        
         <hr>
         <p><strong>📱 How to pay:</strong></p>
         <ol style="margin-left: 20px;">
@@ -1496,19 +1556,20 @@ def boost_vendor():
                 <strong>Airtel: 0751318876</strong><br>
                 <strong>Name: Rocky Peter Abayo</strong>
             </li>
-            <li>After payment, you'll verify by pasting the SMS.</li>
+            <li>Enter the Transaction ID from your Mobile Money confirmation below.</li>
         </ol>
-        
         <form method="POST" style="margin-top: 20px;">
             <label><i class="fas fa-calendar"></i> Select Plan</label>
             <select name="plan" required>
-                <option value="7">7 Days - UGX {BOOST_PLANS['7']['price']:,}</option>
-                <option value="30">30 Days - UGX {BOOST_PLANS['30']['price']:,}</option>
-                <option value="90">Quarterly (90 Days) - UGX {BOOST_PLANS['90']['price']:,}</option>
+                <option value="7">7 Days - UGX 5,000</option>
+                <option value="30">30 Days - UGX 15,000</option>
+                <option value="90">Quarterly (90 Days) - UGX 40,000</option>
             </select>
             <label><i class="fas fa-phone"></i> Your Phone Number *</label>
-            <input type="tel" name="phone" required placeholder="e.g., 0751318876">
-            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;"><i class="fas fa-arrow-right"></i> Continue to Payment Verification</button>
+            <input type="tel" name="phone" required>
+            <label><i class="fas fa-receipt"></i> Transaction ID *</label>
+            <input type="text" name="trans_id" required>
+            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Submit Request</button>
         </form>
     </div>
     '''
@@ -1517,7 +1578,6 @@ def boost_vendor():
 @app.route('/boost-job/<int:job_id>', methods=['GET', 'POST'])
 @login_required
 def boost_job(job_id):
-    """Step 1: Select boost plan and enter phone number for job"""
     db = get_db()
     job = db.execute("SELECT title FROM jobs WHERE id=? AND employer_id=?", (job_id, session['user_id'])).fetchone()
     if not job:
@@ -1526,30 +1586,37 @@ def boost_job(job_id):
     if request.method == 'POST':
         plan_days = request.form['plan']
         phone = request.form['phone'].strip()
+        trans_id = request.form['trans_id'].strip()
         
-        session['boost_type'] = 'job'
-        session['boost_item_id'] = job_id
-        session['boost_plan'] = plan_days
-        session['boost_phone'] = phone
-        session['boost_amount'] = BOOST_PLANS[plan_days]['price']
-        session['boost_days'] = BOOST_PLANS[plan_days]['days']
+        days = int(plan_days)
+        amount = 5000 if days == 7 else 15000 if days == 30 else 40000
         
-        return redirect(url_for('boost_payment_verify'))
+        db.execute("""INSERT INTO boost_requests 
+                   (user_id, boost_type, plan_days, amount, phone_number, transaction_id, item_id, status) 
+                   VALUES (?, 'job', ?, ?, ?, ?, ?, 'pending')""",
+                   (session['user_id'], days, amount, phone, trans_id, job_id))
+        db.commit()
+        
+        return render_page("Boost Submitted", '''
+        <div class="card" style="text-align: center;">
+            <div class="card-header">✅ Request Submitted</div>
+            <p>Your job boost request will be verified within 24 hours.</p>
+            <a href="/dashboard" class="btn">Back to Dashboard</a>
+        </div>
+        ''')
     
     content = f'''
     <div class="card">
         <div class="card-header"><i class="fas fa-rocket"></i> Boost Job: {job['title']}</div>
         <p>Make your job listing stand out and get more applicants!</p>
-        
         <div style="background: linear-gradient(135deg, rgba(245,175,25,0.1), rgba(26,115,232,0.1)); padding: 20px; border-radius: 16px; margin: 20px 0;">
             <h3>💰 Boost Packages</h3>
             <ul style="list-style: none; padding: 0;">
-                <li>📅 7 days - <strong>UGX {BOOST_PLANS['7']['price']:,}</strong></li>
-                <li>📅 30 days - <strong>UGX {BOOST_PLANS['30']['price']:,}</strong></li>
-                <li>📅 Quarterly (90 days) - <strong>UGX {BOOST_PLANS['90']['price']:,}</strong></li>
+                <li>📅 7 days - <strong>UGX 5,000</strong></li>
+                <li>📅 30 days - <strong>UGX 15,000</strong></li>
+                <li>📅 Quarterly (90 days) - <strong>UGX 40,000</strong></li>
             </ul>
         </div>
-        
         <hr>
         <p><strong>📱 How to pay:</strong></p>
         <ol style="margin-left: 20px;">
@@ -1558,139 +1625,27 @@ def boost_job(job_id):
                 <strong>Airtel: 0751318876</strong><br>
                 <strong>Name: Rocky Peter Abayo</strong>
             </li>
-            <li>After payment, you'll verify by pasting the SMS.</li>
+            <li>Enter the Transaction ID from your Mobile Money confirmation below.</li>
         </ol>
-        
         <form method="POST" style="margin-top: 20px;">
             <label><i class="fas fa-calendar"></i> Select Plan</label>
             <select name="plan" required>
-                <option value="7">7 Days - UGX {BOOST_PLANS['7']['price']:,}</option>
-                <option value="30">30 Days - UGX {BOOST_PLANS['30']['price']:,}</option>
-                <option value="90">Quarterly (90 Days) - UGX {BOOST_PLANS['90']['price']:,}</option>
+                <option value="7">7 Days - UGX 5,000</option>
+                <option value="30">30 Days - UGX 15,000</option>
+                <option value="90">Quarterly (90 Days) - UGX 40,000</option>
             </select>
             <label><i class="fas fa-phone"></i> Your Phone Number *</label>
-            <input type="tel" name="phone" required placeholder="e.g., 0751318876">
-            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;"><i class="fas fa-arrow-right"></i> Continue to Payment Verification</button>
+            <input type="tel" name="phone" required>
+            <label><i class="fas fa-receipt"></i> Transaction ID *</label>
+            <input type="text" name="trans_id" required>
+            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Submit Request</button>
         </form>
     </div>
     '''
     return render_page("Boost Job", content)
 
-@app.route('/boost-payment-verify', methods=['GET', 'POST'])
-@login_required
-def boost_payment_verify():
-    """Step 2: Paste SMS for verification"""
-    boost_type = session.get('boost_type')
-    plan_days = session.get('boost_plan')
-    phone = session.get('boost_phone')
-    expected_amount = session.get('boost_amount')
-    
-    if not boost_type or not plan_days:
-        return redirect('/dashboard')
-    
-    plan_info = BOOST_PLANS.get(plan_days, BOOST_PLANS['7'])
-    
-    if request.method == 'POST':
-        raw_sms = request.form['raw_sms'].strip()
-        
-        # Parse SMS (MTN or Airtel)
-        if 'TID' in raw_sms or 'SENT.TID' in raw_sms:
-            parsed = parse_airtel_sms(raw_sms)
-        else:
-            parsed = parse_mtn_sms(raw_sms)
-        
-        error = None
-        if not parsed['tid']:
-            error = "Could not detect Transaction ID in the SMS."
-        elif not parsed['amount']:
-            error = "Could not detect amount in the SMS."
-        elif parsed['amount'] != expected_amount:
-            error = f"Amount mismatch. Expected UGX {expected_amount:,}, got UGX {parsed['amount']:,}."
-        
-        if error:
-            return render_page("Verify Payment", f'''
-            <div class="card">
-                <div class="alert alert-error">{error}</div>
-                <p><strong>Plan:</strong> {plan_info['name']} - UGX {expected_amount:,}</p>
-                <div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 15px; margin: 15px 0;">
-                    <p><strong>Send payment to:</strong></p>
-                    <p>📱 MTN Mobile Money: <strong>0785686404</strong></p>
-                    <p>📱 Airtel Money: <strong>0751318876</strong></p>
-                    <p>👤 Name: <strong>Rocky Peter Abayo</strong></p>
-                </div>
-                <form method="POST">
-                    <label>Paste the Full SMS Here</label>
-                    <textarea name="raw_sms" rows="6" required></textarea>
-                    <button type="submit" class="btn" style="margin-top:20px;">Verify Again</button>
-                </form>
-                <a href="/dashboard" class="btn btn-outline" style="margin-top:10px;">Cancel</a>
-            </div>
-            ''')
-        
-        # Check if transaction ID already used
-        db = get_db()
-        existing = db.execute("SELECT id FROM boost_requests WHERE transaction_id=? AND status='approved'", (parsed['tid'],)).fetchone()
-        if existing:
-            return render_page("Verify Payment", '''
-            <div class="card">
-                <div class="alert alert-error">This Transaction ID has already been used.</div>
-                <a href="/dashboard" class="btn">Back to Dashboard</a>
-            </div>
-            ''')
-        
-        # Save boost request for admin verification
-        db.execute("""
-            INSERT INTO boost_requests (user_id, boost_type, plan_days, amount, phone_number, transaction_id, raw_sms, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-        """, (session['user_id'], boost_type, plan_info['days'], expected_amount, phone, parsed['tid'], raw_sms))
-        db.commit()
-        
-        # Clear session
-        session.pop('boost_type', None)
-        session.pop('boost_plan', None)
-        session.pop('boost_phone', None)
-        session.pop('boost_amount', None)
-        session.pop('boost_days', None)
-        session.pop('boost_item_id', None)
-        
-        return render_page("Boost Request Submitted", '''
-        <div class="card" style="text-align: center;">
-            <div class="card-header">✅ Payment Verification Submitted!</div>
-            <p>Your payment has been recorded and will be verified by an admin within 24 hours.</p>
-            <p>Once approved, your profile/vendor will be featured at the top of search results.</p>
-            <a href="/dashboard" class="btn">Back to Dashboard</a>
-        </div>
-        ''')
-    
-    content = f'''
-    <div class="card">
-        <div class="card-header">📱 Verify Your Payment</div>
-        <p><strong>Selected Plan:</strong> {plan_info['name']} - UGX {expected_amount:,}</p>
-        <p><strong>Your Phone:</strong> {phone}</p>
-        
-        <div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 15px; margin: 15px 0;">
-            <p><strong>📱 Send payment to:</strong></p>
-            <p>MTN Mobile Money: <strong>0785686404</strong></p>
-            <p>Airtel Money: <strong>0751318876</strong></p>
-            <p>Name: <strong>Rocky Peter Abayo</strong></p>
-        </div>
-        
-        <hr>
-        <p><strong>After sending payment, paste the full SMS below:</strong></p>
-        
-        <form method="POST">
-            <label><i class="fas fa-sms"></i> Full SMS from MTN/Airtel</label>
-            <textarea name="raw_sms" rows="8" required placeholder="Example: You have sent UGX 5,000 to ROCKABYTECH... Transaction ID: MTN123456..."></textarea>
-            <button type="submit" class="btn" style="width: 100%; margin-top: 20px;"><i class="fas fa-check-circle"></i> Verify Payment</button>
-        </form>
-        
-        <a href="/dashboard" class="btn btn-outline" style="margin-top: 10px;">Cancel</a>
-    </div>
-    '''
-    return render_page("Verify Payment", content)
-
 # ============================================================
-# SEPARATE ADMIN PANEL (Tracks Everything)
+# ADMIN PANEL
 # ============================================================
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
@@ -1730,20 +1685,14 @@ def admin_dashboard():
     
     db = get_db()
     
-    # Statistics
     total_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     total_providers = db.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
     total_vendors = db.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
     total_jobs = db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-    
-    # Boost statistics
     pending_boosts = db.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'").fetchone()[0]
-    approved_boosts = db.execute("SELECT COUNT(*) FROM boost_requests WHERE status='approved'").fetchone()[0]
-    total_revenue = db.execute("SELECT COALESCE(SUM(amount), 0) FROM boost_requests WHERE status='approved'").fetchone()[0]
     
-    # Pending boost requests
     boosts = db.execute("""
-        SELECT br.id, u.name, u.phone, br.boost_type, br.plan_days, br.amount, br.transaction_id, br.created_at
+        SELECT br.id, u.name, u.phone, br.transaction_id, br.plan_days, br.boost_type
         FROM boost_requests br JOIN users u ON br.user_id = u.id
         WHERE br.status='pending' ORDER BY br.created_at DESC
     """).fetchall()
@@ -1753,38 +1702,17 @@ def admin_dashboard():
         boosts_html += f'''
         <tr>
             <td>{b['name']}<br><small>{b['phone']}</small></td>
-            <td>{b['boost_type']} - {b['plan_days']} days</td>
-            <td>UGX {b['amount']:,}</td>
             <td>{b['transaction_id']}</td>
-            <td><small>{b['created_at'][:16] if b['created_at'] else ''}</small></td>
+            <td>{b['plan_days']} days</td>
+            <td>{b['boost_type']}</td>
             <td>
                 <a href="/admin/approve-boost/{b['id']}" style="background:green; color:white; padding:4px 8px; text-decoration:none; border-radius:4px;">Approve</a>
                 <a href="/admin/reject-boost/{b['id']}" style="background:red; color:white; padding:4px 8px; text-decoration:none; border-radius:4px;">Reject</a>
             </td>
-        <tr>'''
-    
-    if not boosts_html:
-        boosts_html = '<tr><td colspan="6">No pending boost requests</td></tr>'
-    
-    # Recently approved boosts (activity log)
-    recent_approvals = db.execute("""
-        SELECT br.id, u.name, br.boost_type, br.plan_days, br.amount, br.verified_at
-        FROM boost_requests br JOIN users u ON br.user_id = u.id
-        WHERE br.status='approved' ORDER BY br.verified_at DESC LIMIT 10
-    """).fetchall()
-    
-    recent_html = ""
-    for r in recent_approvals:
-        recent_html += f'''
-        <tr>
-            <td>{r['name']}</td>
-            <td>{r['boost_type']} - {r['plan_days']} days</td>
-            <td>UGX {r['amount']:,}</td>
-            <td><small>{r['verified_at'][:16] if r['verified_at'] else ''}</small></td>
         </tr>'''
     
-    if not recent_html:
-        recent_html = '<tr><td colspan="4">No recent approvals</td></tr>'
+    if not boosts_html:
+        boosts_html = '<tr><td colspan="5">No pending boost requests</td></tr>'
     
     db.close()
     
@@ -1792,12 +1720,12 @@ def admin_dashboard():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Admin Dashboard - RockabyConnect</title>
+        <title>Admin Dashboard</title>
         <style>
             body {{ font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }}
-            .container {{ max-width: 1400px; margin: 0 auto; }}
+            .container {{ max-width: 1200px; margin: 0 auto; }}
             .card {{ background: white; border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-            .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+            .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }}
             .stat {{ background: linear-gradient(135deg, #f5af19, #e09e15); color: white; padding: 20px; border-radius: 12px; text-align: center; }}
             .stat h3 {{ font-size: 2rem; margin: 0; }}
             table {{ width: 100%; border-collapse: collapse; }}
@@ -1805,8 +1733,6 @@ def admin_dashboard():
             th {{ background: #f5f5f5; }}
             .btn {{ display: inline-block; padding: 10px 20px; background: #f5af19; color: white; text-decoration: none; border-radius: 8px; margin-top: 10px; }}
             .btn-danger {{ background: #dc3545; }}
-            .status-pending {{ background: #ffc107; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }}
-            .status-approved {{ background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }}
         </style>
     </head>
     <body>
@@ -1819,30 +1745,17 @@ def admin_dashboard():
                     <div class="stat"><h3>{total_vendors}</h3><p>Vendors</p></div>
                     <div class="stat"><h3>{total_jobs}</h3><p>Jobs</p></div>
                     <div class="stat"><h3>{pending_boosts}</h3><p>Pending Boosts</p></div>
-                    <div class="stat"><h3>{approved_boosts}</h3><p>Approved Boosts</p></div>
-                    <div class="stat"><h3>UGX {total_revenue:,}</h3><p>Total Revenue</p></div>
                 </div>
             </div>
             
             <div class="card">
-                <h3>⏳ Pending Boost Verification Requests</h3>
+                <h3>Pending Boost Requests</h3>
                 <table>
-                    <thead>
-                        <tr><th>User</th><th>Type</th><th>Amount</th><th>Transaction ID</th><th>Date</th><th>Action</th></tr>
-                    </thead>
-                    <tbody>{boosts_html}</tbody>
+                    <tr><th>User</th><th>Transaction</th><th>Plan</th><th>Type</th><th>Action</th></tr>
+                    {boosts_html}
                 </table>
-            </div>
-            
-            <div class="card">
-                <h3>✅ Recent Approved Boosts</h3>
-                <table>
-                    <thead><tr><th>User</th><th>Type</th><th>Amount</th><th>Approved At</th></tr></thead>
-                    <tbody>{recent_html}</tbody>
-                </table>
-            </div>
-            
-            <div class="card">
+                <a href="/admin/backups" class="btn">View Backups</a>
+                <a href="/admin/fix-tables" class="btn">Fix Tables</a>
                 <a href="/admin/logout" class="btn btn-danger">Logout</a>
             </div>
         </div>
@@ -1856,7 +1769,7 @@ def admin_approve_boost(bid):
         return redirect('/admin/login')
     
     db = get_db()
-    boost = db.execute("SELECT user_id, boost_type, plan_days FROM boost_requests WHERE id=?", (bid,)).fetchone()
+    boost = db.execute("SELECT user_id, boost_type, plan_days, item_id FROM boost_requests WHERE id=?", (bid,)).fetchone()
     if boost:
         days = boost['plan_days']
         expiry = date.today() + timedelta(days=days)
@@ -1866,15 +1779,10 @@ def admin_approve_boost(bid):
         elif boost['boost_type'] == 'vendor':
             db.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, boost['user_id']))
         elif boost['boost_type'] == 'job':
-            # For job boosts, we need the item_id - get it from the request
-            item = db.execute("SELECT item_id FROM boost_requests WHERE id=?", (bid,)).fetchone()
-            if item and item['item_id']:
-                db.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, item['item_id']))
+            db.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, boost['item_id']))
         
         db.execute("UPDATE boost_requests SET status='approved', verified_at=CURRENT_TIMESTAMP WHERE id=?", (bid,))
         db.commit()
-        
-        add_notification(boost['user_id'], 'boost', f'Your {boost["boost_type"]} boost for {days} days has been approved!')
     
     db.close()
     return redirect('/admin/dashboard')
@@ -1885,12 +1793,8 @@ def admin_reject_boost(bid):
         return redirect('/admin/login')
     
     db = get_db()
-    boost = db.execute("SELECT user_id FROM boost_requests WHERE id=?", (bid,)).fetchone()
-    if boost:
-        db.execute("UPDATE boost_requests SET status='rejected' WHERE id=?", (bid,))
-        db.commit()
-        add_notification(boost['user_id'], 'boost', 'Your boost request was rejected. Please contact support.')
-    
+    db.execute("UPDATE boost_requests SET status='rejected' WHERE id=?", (bid,))
+    db.commit()
     db.close()
     return redirect('/admin/dashboard')
 
@@ -1900,430 +1804,63 @@ def admin_logout():
     return redirect('/admin/login')
 
 # ============================================================
-# PWA ROUTES (Using send_from_directory)
+# BACKUP ROUTES
 # ============================================================
-from flask import send_from_directory
-
-@app.route('/manifest.json')
-def manifest():
-    try:
-        return send_from_directory(os.getcwd(), 'manifest.json', mimetype='application/json')
-    except Exception as e:
-        return f"Error: {e}", 404
-
-@app.route('/service-worker.js')
-def service_worker():
-    try:
-        return send_from_directory(os.getcwd(), 'service-worker.js', mimetype='application/javascript')
-    except Exception as e:
-        return f"Error: {e}", 404
-
-@app.route('/debug-routes')
-def debug_routes():
-    routes = []
-    for rule in app.url_map.iter_rules():
-        routes.append(str(rule))
-    return "<br>".join(routes)
-
-@app.route('/debug')
-def debug():
-    return "App is running! PWA routes should work now."
-
-# ============================================================
-# FIXED IMPORT ROUTE – HANDLES ALL ERRORS
-# ============================================================
-@app.route('/admin/import-db', methods=['GET', 'POST'])
-def import_db():
-    if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
-    
-    if request.method == 'POST':
-        if 'db_file' not in request.files:
-            return "No file uploaded"
-        file = request.files['db_file']
-        if file.filename == '':
-            return "No file selected"
-        
-        # Save uploaded file temporarily
-        temp_path = '/tmp/old_providers.db'
-        file.save(temp_path)
-        
-        # Connect to old database
-        old_db = sqlite3.connect(temp_path)
-        old_db.row_factory = sqlite3.Row
-        old_cursor = old_db.cursor()
-        
-        # Connect to new database
-        new_db = get_db()
-        
-        results = {}
-        
-        # 1. Import Users
-        try:
-            old_cursor.execute("SELECT * FROM users")
-            users = old_cursor.fetchall()
-            users_imported = 0
-            for user in users:
-                # Check if user exists by phone
-                existing = new_db.execute("SELECT id FROM users WHERE phone=?", (user['phone'],)).fetchone()
-                if not existing:
-                    # Also check by ID to avoid UNIQUE constraint
-                    existing_by_id = new_db.execute("SELECT id FROM users WHERE id=?", (user['id'],)).fetchone()
-                    if not existing_by_id:
-                        new_db.execute("INSERT INTO users (id, phone, name, password_hash) VALUES (?,?,?,?)",
-                                       (user['id'], user['phone'], user['name'], user['password_hash']))
-                        users_imported += 1
-                    else:
-                        # ID exists but phone doesn't – insert without ID
-                        new_db.execute("INSERT INTO users (phone, name, password_hash) VALUES (?,?,?)",
-                                       (user['phone'], user['name'], user['password_hash']))
-                        users_imported += 1
-            results['users'] = users_imported
-        except Exception as e:
-            results['users'] = f"Error: {e}"
-        
-        # 2. Import Providers (using direct column access, no .get())
-        try:
-            old_cursor.execute("SELECT * FROM providers")
-            providers = old_cursor.fetchall()
-            providers_imported = 0
-            for p in providers:
-                existing = new_db.execute("SELECT id FROM providers WHERE user_id=?", (p['user_id'],)).fetchone()
-                if not existing:
-                    # Check if ID exists
-                    existing_by_id = new_db.execute("SELECT id FROM providers WHERE id=?", (p['id'],)).fetchone()
-                    if existing_by_id:
-                        # ID exists – insert without ID
-                        new_db.execute("""INSERT INTO providers 
-                                   (user_id, skills, district, village, bio, profile_pic, status, featured, featured_expiry) 
-                                   VALUES (?,?,?,?,?,?,?,?,?)""",
-                                  (p['user_id'], p['skills'] if 'skills' in p.keys() else '',
-                                   p['district'] if 'district' in p.keys() else '',
-                                   p['village'] if 'village' in p.keys() else '',
-                                   p['bio'] if 'bio' in p.keys() else '',
-                                   p['profile_pic'] if 'profile_pic' in p.keys() else '',
-                                   p['status'] if 'status' in p.keys() else 'Available',
-                                   p['featured'] if 'featured' in p.keys() else 0,
-                                   p['featured_expiry'] if 'featured_expiry' in p.keys() else None))
-                    else:
-                        new_db.execute("""INSERT INTO providers 
-                                   (id, user_id, skills, district, village, bio, profile_pic, status, featured, featured_expiry) 
-                                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                                  (p['id'], p['user_id'], p['skills'] if 'skills' in p.keys() else '',
-                                   p['district'] if 'district' in p.keys() else '',
-                                   p['village'] if 'village' in p.keys() else '',
-                                   p['bio'] if 'bio' in p.keys() else '',
-                                   p['profile_pic'] if 'profile_pic' in p.keys() else '',
-                                   p['status'] if 'status' in p.keys() else 'Available',
-                                   p['featured'] if 'featured' in p.keys() else 0,
-                                   p['featured_expiry'] if 'featured_expiry' in p.keys() else None))
-                    providers_imported += 1
-            results['providers'] = providers_imported
-        except Exception as e:
-            results['providers'] = f"Error: {e}"
-        
-        # 3. Import Vendors
-        try:
-            old_cursor.execute("SELECT * FROM vendors")
-            vendors = old_cursor.fetchall()
-            vendors_imported = 0
-            for v in vendors:
-                existing = new_db.execute("SELECT id FROM vendors WHERE user_id=?", (v['user_id'],)).fetchone()
-                if not existing:
-                    existing_by_id = new_db.execute("SELECT id FROM vendors WHERE id=?", (v['id'],)).fetchone()
-                    if existing_by_id:
-                        new_db.execute("""INSERT INTO vendors 
-                                   (user_id, business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, status, featured, featured_expiry) 
-                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                                  (v['user_id'], v['business_name'] if 'business_name' in v.keys() else '',
-                                   v['district'] if 'district' in v.keys() else '',
-                                   v['village'] if 'village' in v.keys() else '',
-                                   v['landmark'] if 'landmark' in v.keys() else '',
-                                   v['bio'] if 'bio' in v.keys() else '',
-                                   v['vendor_image'] if 'vendor_image' in v.keys() else '',
-                                   v['vendor_image2'] if 'vendor_image2' in v.keys() else '',
-                                   v['vendor_image3'] if 'vendor_image3' in v.keys() else '',
-                                   v['status'] if 'status' in v.keys() else 'Open',
-                                   v['featured'] if 'featured' in v.keys() else 0,
-                                   v['featured_expiry'] if 'featured_expiry' in v.keys() else None))
-                    else:
-                        new_db.execute("""INSERT INTO vendors 
-                                   (id, user_id, business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, status, featured, featured_expiry) 
-                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                                  (v['id'], v['user_id'], v['business_name'] if 'business_name' in v.keys() else '',
-                                   v['district'] if 'district' in v.keys() else '',
-                                   v['village'] if 'village' in v.keys() else '',
-                                   v['landmark'] if 'landmark' in v.keys() else '',
-                                   v['bio'] if 'bio' in v.keys() else '',
-                                   v['vendor_image'] if 'vendor_image' in v.keys() else '',
-                                   v['vendor_image2'] if 'vendor_image2' in v.keys() else '',
-                                   v['vendor_image3'] if 'vendor_image3' in v.keys() else '',
-                                   v['status'] if 'status' in v.keys() else 'Open',
-                                   v['featured'] if 'featured' in v.keys() else 0,
-                                   v['featured_expiry'] if 'featured_expiry' in v.keys() else None))
-                    vendors_imported += 1
-            results['vendors'] = vendors_imported
-        except Exception as e:
-            results['vendors'] = f"Error: {e}"
-        
-        # 4. Import Jobs
-        try:
-            old_cursor.execute("SELECT * FROM jobs")
-            jobs = old_cursor.fetchall()
-            jobs_imported = 0
-            for j in jobs:
-                new_db.execute("""INSERT OR IGNORE INTO jobs 
-                           (id, employer_id, title, company, description, location, village, contact, status, posted_date, job_image, featured, featured_expiry) 
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                          (j['id'], j['employer_id'], j['title'] if 'title' in j.keys() else '',
-                           j['company'] if 'company' in j.keys() else '',
-                           j['description'] if 'description' in j.keys() else '',
-                           j['location'] if 'location' in j.keys() else '',
-                           j['village'] if 'village' in j.keys() else '',
-                           j['contact'] if 'contact' in j.keys() else '',
-                           j['status'] if 'status' in j.keys() else 'Open',
-                           j['posted_date'] if 'posted_date' in j.keys() else None,
-                           j['job_image'] if 'job_image' in j.keys() else '',
-                           j['featured'] if 'featured' in j.keys() else 0,
-                           j['featured_expiry'] if 'featured_expiry' in j.keys() else None))
-                jobs_imported += 1
-            results['jobs'] = jobs_imported
-        except Exception as e:
-            results['jobs'] = f"Error: {e}"
-        
-        # 5. Import Reviews
-        try:
-            old_cursor.execute("SELECT * FROM reviews")
-            reviews = old_cursor.fetchall()
-            reviews_imported = 0
-            for r in reviews:
-                new_db.execute("""INSERT OR IGNORE INTO reviews 
-                           (id, provider_id, reviewer_id, rating, comment, created_at) 
-                           VALUES (?,?,?,?,?,?)""",
-                          (r['id'], r['provider_id'], r['reviewer_id'],
-                           r['rating'], r['comment'] if 'comment' in r.keys() else '',
-                           r['created_at'] if 'created_at' in r.keys() else None))
-                reviews_imported += 1
-            results['reviews'] = reviews_imported
-        except Exception as e:
-            results['reviews'] = f"Error: {e}"
-        
-        # 6. Import Boost Requests
-        try:
-            old_cursor.execute("SELECT * FROM boost_requests")
-            boosts = old_cursor.fetchall()
-            boosts_imported = 0
-            for b in boosts:
-                # Map old columns to new
-                plan_days = int(b['plan']) if 'plan' in b.keys() and b['plan'] else 7
-                amount = b['amount'] if 'amount' in b.keys() else 0
-                if amount == 0:
-                    # Calculate amount from plan days
-                    if plan_days == 7:
-                        amount = 5000
-                    elif plan_days == 30:
-                        amount = 15000
-                    else:
-                        amount = 40000
-                new_db.execute("""INSERT OR IGNORE INTO boost_requests 
-                           (id, user_id, boost_type, plan_days, amount, phone_number, transaction_id, raw_sms, status, verified_at, created_at) 
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                          (b['id'], b['user_id'],
-                           b['boost_type'] if 'boost_type' in b.keys() else 'profile',
-                           plan_days, amount,
-                           b['phone_number'] if 'phone_number' in b.keys() else '',
-                           b['transaction_id'] if 'transaction_id' in b.keys() else '',
-                           b['raw_sms'] if 'raw_sms' in b.keys() else '',
-                           b['status'] if 'status' in b.keys() else 'pending',
-                           b['verified_at'] if 'verified_at' in b.keys() else None,
-                           b['created_at'] if 'created_at' in b.keys() else None))
-                boosts_imported += 1
-            results['boosts'] = boosts_imported
-        except Exception as e:
-            results['boosts'] = f"Error: {e}"
-        
-        # 7. Import Notifications
-        try:
-            old_cursor.execute("SELECT * FROM notifications")
-            notifs = old_cursor.fetchall()
-            notifs_imported = 0
-            for n in notifs:
-                new_db.execute("INSERT OR IGNORE INTO notifications (id, user_id, type, message, created_at) VALUES (?,?,?,?,?)",
-                              (n['id'], n['user_id'], n['type'] if 'type' in n.keys() else '',
-                               n['message'] if 'message' in n.keys() else '',
-                               n['created_at'] if 'created_at' in n.keys() else None))
-                notifs_imported += 1
-            results['notifications'] = notifs_imported
-        except Exception as e:
-            results['notifications'] = f"Error: {e}"
-        
-        new_db.commit()
-        old_db.close()
-        
-        # Clean up temp file
-        import os
-        os.remove(temp_path)
-        
-        return f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Import Results</title>
-            <style>
-                body {{ font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }}
-                .container {{ max-width: 600px; margin: 0 auto; }}
-                .card {{ background: white; border-radius: 16px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-                .success {{ color: green; }}
-                .error {{ color: red; }}
-                h2 {{ color: #f5af19; }}
-                ul {{ list-style: none; padding: 0; }}
-                li {{ padding: 8px 0; border-bottom: 1px solid #eee; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="card">
-                    <h2>✅ Data Import Complete!</h2>
-                    <ul>
-                        <li>Users imported: <strong>{results['users']}</strong></li>
-                        <li>Providers imported: <strong>{results['providers']}</strong></li>
-                        <li>Vendors imported: <strong>{results['vendors']}</strong></li>
-                        <li>Jobs imported: <strong>{results['jobs']}</strong></li>
-                        <li>Reviews imported: <strong>{results['reviews']}</strong></li>
-                        <li>Boost requests imported: <strong>{results['boosts']}</strong></li>
-                        <li>Notifications imported: <strong>{results['notifications']}</strong></li>
-                    </ul>
-                    <p style="margin-top: 20px;"><strong>Note:</strong> Profile pictures and images need to be uploaded separately to the static/uploads folder.</p>
-                    <a href="/admin/dashboard" class="btn">Back to Admin Dashboard</a>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-    
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Import Database</title>
-        <style>
-            body { font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }
-            .container { max-width: 500px; margin: 50px auto; }
-            .card { background: white; border-radius: 16px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            input, button { padding: 12px; margin: 10px 0; width: 100%; border-radius: 8px; }
-            input { border: 1px solid #ddd; }
-            button { background: #f5af19; border: none; cursor: pointer; font-weight: bold; font-size: 16px; }
-            button:hover { background: #e09e15; }
-            h2 { color: #333; margin-top: 0; }
-            .note { background: #fff3cd; padding: 10px; border-radius: 8px; margin-top: 20px; font-size: 14px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="card">
-                <h2>📦 Import Old Database</h2>
-                <p>Upload your <strong>providers.db</strong> file from PythonAnywhere.</p>
-                <form method="POST" enctype="multipart/form-data">
-                    <input type="file" name="db_file" accept=".db" required>
-                    <button type="submit">Import Database</button>
-                </form>
-                <div class="note">
-                    <strong>⚠️ Note:</strong>
-                    <ul style="margin-top: 5px; margin-left: 20px;">
-                        <li>Existing records (by phone number) will be skipped</li>
-                        <li>Images need to be uploaded separately to static/uploads</li>
-                    </ul>
-                </div>
-                <a href="/admin/dashboard" style="color: #666; text-decoration: none;">Back to Dashboard</a>
-            </div>
-        </div>
-    </body>
-    </html>
-    '''
-
-import shutil
-import time
-from flask import send_file
-
-# ============================================================
-# DATABASE BACKUP & RESTORE SYSTEM
-# ============================================================
-
-# Create backups directory if it doesn't exist
-BACKUP_DIR = os.path.join(os.getcwd(), 'backups')
-os.makedirs(BACKUP_DIR, exist_ok=True)
-
 @app.route('/admin/backup')
 def admin_backup():
-    """Create a timestamped backup of the current database."""
     if not session.get('admin_logged_in'):
         return redirect('/admin/login')
     
     try:
-        # Ensure database file exists
-        if not os.path.exists(DB_PATH):
-            return "Database file not found.", 404
-        
-        # Create backup filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_filename = f"rockabyconnect_backup_{timestamp}.db"
+        backup_filename = f"backup_{timestamp}.db"
         backup_path = os.path.join(BACKUP_DIR, backup_filename)
-        
-        # Copy database file
         shutil.copy2(DB_PATH, backup_path)
         
-        # Also create a JSON export for easy reading
-        # (we'll just copy the db, that's fine)
-        
-        return f"""
+        return f'''
         <!DOCTYPE html>
         <html>
         <head><title>Backup Created</title></head>
         <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
             <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
                 <h2>✅ Backup Created</h2>
-                <p>Backup saved as: <strong>{backup_filename}</strong></p>
-                <p>Location: {BACKUP_DIR}</p>
-                <p><a href="/admin/download-backup/{backup_filename}" class="btn">Download Backup</a></p>
+                <p>File: <strong>{backup_filename}</strong></p>
+                <p><a href="/admin/download-backup/{backup_filename}" class="btn">Download</a></p>
                 <p><a href="/admin/backups">View All Backups</a></p>
                 <p><a href="/admin/dashboard">Back to Admin</a></p>
             </div>
         </body>
         </html>
-        """
+        '''
     except Exception as e:
         return f"Backup failed: {e}", 500
 
 @app.route('/admin/download-backup/<filename>')
 def admin_download_backup(filename):
-    """Download a specific backup file."""
     if not session.get('admin_logged_in'):
         return redirect('/admin/login')
     
-    # Security: prevent path traversal
     if '..' in filename or '/' in filename:
         return "Invalid filename", 400
     
     backup_path = os.path.join(BACKUP_DIR, filename)
     if not os.path.exists(backup_path):
-        return "Backup file not found.", 404
+        return "Backup not found", 404
     
     return send_file(backup_path, as_attachment=True, download_name=filename)
 
 @app.route('/admin/download-current-db')
 def admin_download_current_db():
-    """Download the current live database."""
     if not session.get('admin_logged_in'):
         return redirect('/admin/login')
     
     if not os.path.exists(DB_PATH):
-        return "Database file not found.", 404
+        return "Database not found", 404
     
     return send_file(DB_PATH, as_attachment=True, download_name='rockabyconnect_current.db')
 
 @app.route('/admin/backups')
 def admin_list_backups():
-    """List all available backups."""
     if not session.get('admin_logged_in'):
         return redirect('/admin/login')
     
@@ -2353,249 +1890,66 @@ def admin_list_backups():
     return f"""
     <!DOCTYPE html>
     <html>
-    <head>
-        <title>Backups</title>
-        <style>
-            body {{ font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }}
-            .container {{ max-width: 800px; margin: 0 auto; }}
-            .card {{ background: white; border-radius: 16px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-            table {{ width: 100%; border-collapse: collapse; }}
-            th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
-            th {{ background: #f5f5f5; }}
-            .btn-small {{ background: #f5af19; padding: 4px 12px; text-decoration: none; border-radius: 4px; color: white; }}
-            .btn {{ display: inline-block; padding: 10px 20px; background: #f5af19; color: white; text-decoration: none; border-radius: 8px; margin-top: 10px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="card">
-                <h2>Database Backups</h2>
-                <a href="/admin/backup" class="btn">Create New Backup</a>
-                <a href="/admin/download-current-db" class="btn" style="background: #28a745;">Download Current DB</a>
-                <table>
-                    <thead><tr><th>Filename</th><th>Modified</th><th>Size</th><th>Action</th></tr></thead>
-                    <tbody>{rows}</tbody>
-                </table>
-                <a href="/admin/dashboard" style="color: #666; text-decoration: none;">Back to Admin</a>
-            </div>
+    <head><title>Backups</title></head>
+    <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
+        <div style="max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
+            <h2>Database Backups</h2>
+            <a href="/admin/backup" class="btn">Create New Backup</a>
+            <a href="/admin/download-current-db" class="btn" style="background: #28a745;">Download Current DB</a>
+            <table style="width: 100%; margin-top: 20px;">
+                <thead><tr><th>Filename</th><th>Modified</th><th>Size</th><th>Action</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+            <p><a href="/admin/dashboard">Back to Admin</a></p>
         </div>
     </body>
     </html>
     """
 
-@app.route('/admin/restore', methods=['GET', 'POST'])
-def admin_restore():
-    """Restore database from a backup file."""
-    if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
-    
-    if request.method == 'POST':
-        if 'backup_file' not in request.files:
-            return "No file uploaded"
-        file = request.files['backup_file']
-        if file.filename == '':
-            return "No file selected"
-        
-        # Save uploaded file temporarily
-        temp_path = '/tmp/restore_temp.db'
-        file.save(temp_path)
-        
-        # Verify it's a valid SQLite database
-        try:
-            test_conn = sqlite3.connect(temp_path)
-            test_conn.execute("SELECT 1")
-            test_conn.close()
-        except Exception as e:
-            return f"Invalid database file: {e}"
-        
-        # Backup current database first (just in case)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_before_restore = os.path.join(BACKUP_DIR, f"pre_restore_{timestamp}.db")
-        if os.path.exists(DB_PATH):
-            shutil.copy2(DB_PATH, backup_before_restore)
-        
-        # Replace current database with restored one
-        shutil.copy2(temp_path, DB_PATH)
-        os.remove(temp_path)
-        
-        return f"""
-        <!DOCTYPE html>
-        <html>
-        <head><title>Restore Complete</title></head>
-        <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
-            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
-                <h2>✅ Database Restored</h2>
-                <p>The database has been replaced with the uploaded backup.</p>
-                <p>A backup of the previous database was saved as: <strong>pre_restore_{timestamp}.db</strong></p>
-                <p><a href="/admin/backups" class="btn">View Backups</a></p>
-                <p><a href="/admin/dashboard" class="btn">Back to Admin</a></p>
-            </div>
-        </body>
-        </html>
-        """
-    
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Restore Database</title>
-        <style>
-            body { font-family: Arial; background: #f0f4f8; margin: 0; padding: 20px; }
-            .container { max-width: 500px; margin: 50px auto; }
-            .card { background: white; border-radius: 16px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            input, button { padding: 12px; margin: 10px 0; width: 100%; border-radius: 8px; }
-            input { border: 1px solid #ddd; }
-            button { background: #f5af19; border: none; cursor: pointer; font-weight: bold; font-size: 16px; }
-            button:hover { background: #e09e15; }
-            .warning { background: #fff3cd; padding: 10px; border-radius: 8px; margin: 15px 0; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="card">
-                <h2>⚠️ Restore Database</h2>
-                <p>Upload a backup file (`.db`) to replace the current database.</p>
-                <div class="warning">
-                    <strong>Warning:</strong> This will overwrite your current database. The current database will be backed up automatically before restoration.
-                </div>
-                <form method="POST" enctype="multipart/form-data">
-                    <input type="file" name="backup_file" accept=".db" required>
-                    <button type="submit">Restore Database</button>
-                </form>
-                <a href="/admin/backups" style="color: #666; text-decoration: none;">Back to Backups</a>
-            </div>
-        </div>
-    </body>
-    </html>
-    '''
+# ============================================================
+# PWA ROUTES
+# ============================================================
+@app.route('/manifest.json')
+def manifest():
+    manifest_content = {
+        "name": "RockabyConnect",
+        "short_name": "RockabyConnect",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#f5af19",
+        "theme_color": "#f5af19",
+        "icons": [
+            {"src": "/static/icon-72.png", "sizes": "72x72", "type": "image/png"},
+            {"src": "/static/icon-96.png", "sizes": "96x96", "type": "image/png"},
+            {"src": "/static/icon-128.png", "sizes": "128x128", "type": "image/png"},
+            {"src": "/static/icon-144.png", "sizes": "144x144", "type": "image/png"},
+            {"src": "/static/icon-152.png", "sizes": "152x152", "type": "image/png"},
+            {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/static/icon-384.png", "sizes": "384x384", "type": "image/png"},
+            {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"}
+        ]
+    }
+    resp = make_response(json.dumps(manifest_content))
+    resp.headers['Content-Type'] = 'application/json'
+    return resp
 
-@app.route('/admin/reset-db')
-def admin_reset_db():
-    """⚠️ WARNING: Deletes all data and resets the database to fresh state."""
-    if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
-    
-    # Confirm via query parameter to prevent accidental clicks
-    confirm = request.args.get('confirm')
-    if confirm != 'yes':
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head><title>Reset Database</title></head>
-        <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
-            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
-                <h2>⚠️ Reset Database</h2>
-                <p style="color: red;"><strong>WARNING:</strong> This will delete ALL data in the database.</p>
-                <p>This cannot be undone.</p>
-                <p><a href="/admin/reset-db?confirm=yes" style="background: red; color: white; padding: 10px 20px; text-decoration: none; border-radius: 8px;">Yes, Reset Database</a></p>
-                <p><a href="/admin/dashboard">Cancel</a></p>
-            </div>
-        </body>
-        </html>
-        '''
-    
-    try:
-        # Backup current DB before resetting
-        if os.path.exists(DB_PATH):
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            backup_filename = f"pre_reset_backup_{timestamp}.db"
-            backup_path = os.path.join(BACKUP_DIR, backup_filename)
-            shutil.copy2(DB_PATH, backup_path)
-            backup_msg = f"Backup saved as: {backup_filename}"
-        else:
-            backup_msg = "No existing database to backup."
-        
-        # Delete the database file if it exists
-        if os.path.exists(DB_PATH):
-            os.remove(DB_PATH)
-        
-        # Re-initialize empty database
-        init_db()
-        
-        return f'''
-        <!DOCTYPE html>
-        <html>
-        <head><title>Database Reset</title></head>
-        <body style="font-family: Arial; background: #f0f4f8; padding: 20px;">
-            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px;">
-                <h2>✅ Database Reset Complete</h2>
-                <p>All data has been cleared and a fresh database initialized.</p>
-                <p>{backup_msg}</p>
-                <p>You can now import your old data using <a href="/admin/import-db">/admin/import-db</a>.</p>
-                <p><a href="/admin/dashboard" class="btn">Back to Admin</a></p>
-            </div>
-        </body>
-        </html>
-        '''
-    except Exception as e:
-        return f"Reset failed: {e}", 500
+@app.route('/service-worker.js')
+def service_worker():
+    sw_content = '''
+const CACHE_NAME = 'rockabyconnect-v1';
+const urlsToCache = ['/', '/static/icon-192.png'];
 
-@app.route('/admin/fix-tables')
-def fix_tables():
-    if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
-    
-    db = get_db()
-    results = {}
-    
-    # Fix providers table
-    db.execute("PRAGMA table_info(providers)")
-    prov_cols = [col[1] for col in db.fetchall()]
-    added = []
-    for col in ['skills', 'village', 'featured_expiry']:
-        if col not in prov_cols:
-            db.execute(f"ALTER TABLE providers ADD COLUMN {col} TEXT")
-            added.append(col)
-    results['providers'] = added if added else 'No changes'
-    
-    # Fix vendors table
-    db.execute("PRAGMA table_info(vendors)")
-    vend_cols = [col[1] for col in db.fetchall()]
-    added = []
-    for col in ['landmark', 'vendor_image2', 'vendor_image3', 'featured_expiry']:
-        if col not in vend_cols:
-            db.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
-            added.append(col)
-    results['vendors'] = added if added else 'No changes'
-    
-    # Fix jobs table
-    db.execute("PRAGMA table_info(jobs)")
-    job_cols = [col[1] for col in db.fetchall()]
-    added = []
-    for col in ['village', 'job_image', 'featured', 'featured_expiry']:
-        if col not in job_cols:
-            db.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
-            added.append(col)
-    results['jobs'] = added if added else 'No changes'
-    
-    # Fix boost_requests table (for old schema compatibility)
-    db.execute("PRAGMA table_info(boost_requests)")
-    boost_cols = [col[1] for col in db.fetchall()]
-    added = []
-    for col in ['phone_number', 'transaction_id', 'raw_sms', 'verified_at']:
-        if col not in boost_cols:
-            db.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
-            added.append(col)
-    results['boost_requests'] = added if added else 'No changes'
-    
-    db.commit()
-    
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head><title>Tables Fixed</title></head>
-    <body style="font-family: Arial; padding: 20px;">
-        <h2>✅ Database Tables Updated</h2>
-        <ul>
-            <li>Providers: {results['providers']}</li>
-            <li>Vendors: {results['vendors']}</li>
-            <li>Jobs: {results['jobs']}</li>
-            <li>Boost Requests: {results['boost_requests']}</li>
-        </ul>
-        <p><a href="/admin/dashboard">Back to Admin</a></p>
-    </body>
-    </html>
-    """
+self.addEventListener('install', event => {
+    event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache)));
+});
+
+self.addEventListener('fetch', event => {
+    event.respondWith(caches.match(event.request).then(response => response || fetch(event.request)));
+});
+'''
+    resp = make_response(sw_content)
+    resp.headers['Content-Type'] = 'application/javascript'
+    return resp
 
 # ============================================================
 # RUN APP
