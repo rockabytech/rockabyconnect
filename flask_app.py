@@ -2493,6 +2493,81 @@ def admin_download_current_db():
     
     return send_file(DB_PATH, as_attachment=True, download_name='rockabyconnect_current.db')
 
+# ============================================================
+# ADMIN RESTORE ROUTE
+# ============================================================
+
+@app.route('/admin/restore', methods=['GET', 'POST'])
+def admin_restore():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    if request.method == 'POST':
+        if 'backup_file' not in request.files:
+            return render_template_string(admin_base_template.replace("{title}", "Restore").replace("{active_page}", "").replace("{content}", """
+            <div class="card"><div class="alert alert-error">No file uploaded.</div><a href="/admin/restore" class="btn">Try again</a></div>
+            """))
+        
+        file = request.files['backup_file']
+        if file.filename == '':
+            return render_template_string(admin_base_template.replace("{title}", "Restore").replace("{active_page}", "").replace("{content}", """
+            <div class="card"><div class="alert alert-error">No file selected.</div><a href="/admin/restore" class="btn">Try again</a></div>
+            """))
+        
+        # Save uploaded file temporarily
+        temp_path = '/tmp/restore_temp.db'
+        file.save(temp_path)
+        
+        # Verify it's a valid SQLite database
+        try:
+            test_conn = sqlite3.connect(temp_path)
+            test_conn.execute("SELECT 1")
+            test_conn.close()
+        except Exception as e:
+            return render_template_string(admin_base_template.replace("{title}", "Restore").replace("{active_page}", "").replace("{content}", f"""
+            <div class="card"><div class="alert alert-error">Invalid database file: {e}</div><a href="/admin/restore" class="btn">Try again</a></div>
+            """))
+        
+        # Backup current database first (just in case)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_before_restore = os.path.join(BACKUP_DIR, f"pre_restore_{timestamp}.db")
+        if os.path.exists(DB_PATH):
+            shutil.copy2(DB_PATH, backup_before_restore)
+        
+        # Replace current database with restored one
+        shutil.copy2(temp_path, DB_PATH)
+        os.remove(temp_path)
+        
+        content = f"""
+        <div class="card" style="text-align:center;">
+            <div class="card-header">✅ Database Restored</div>
+            <p>The database has been replaced with the uploaded backup.</p>
+            <p>A backup of the previous database was saved as: <strong>pre_restore_{timestamp}.db</strong></p>
+            <a href="/admin/backups" class="btn">View Backups</a>
+            <a href="/admin/dashboard" class="btn btn-outline">Back to Dashboard</a>
+        </div>
+        """
+        return render_template_string(admin_base_template.replace("{title}", "Restore Complete").replace("{active_page}", "backups").replace("{content}", content))
+    
+    # GET request – show upload form
+    content = """
+    <div class="card">
+        <div class="card-header">⬆️ Restore Database from Backup</div>
+        <div class="alert alert-error" style="background:rgba(255,193,7,0.15); border-color:rgba(255,193,7,0.3); color:#856404;">
+            <strong>⚠️ Warning:</strong> This will overwrite your current database. The current database will be backed up automatically before restoration.
+        </div>
+        <form method="POST" enctype="multipart/form-data">
+            <label>Select a backup file (.db)</label>
+            <input type="file" name="backup_file" accept=".db" required>
+            <button type="submit" class="btn" style="margin-top:20px;">Restore Database</button>
+        </form>
+        <div style="margin-top:20px;">
+            <a href="/admin/backups" class="btn btn-outline">Back to Backups</a>
+        </div>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Restore Database").replace("{active_page}", "backups").replace("{content}", content))
+
 
 # ---------- Job posting, editing, public job listing, provider detail, reviews ----------
 @app.route('/post-job', methods=['GET', 'POST'])
