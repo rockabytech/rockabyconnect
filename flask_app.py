@@ -1,4 +1,5 @@
 import os, sqlite3, re, random, string, json, shutil
+from flask import Flask, render_template_string, request, redirect, url_for, session, make_response, send_from_directory, send_file
 from datetime import date, timedelta, datetime
 from collections import defaultdict
 from flask import Flask, render_template_string, request, redirect, url_for, session, make_response, send_from_directory
@@ -25,6 +26,10 @@ UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+
+# Backup directory for admin backups
+BACKUP_DIR = os.path.join(BASE_DIR, 'backups')
+os.makedirs(BACKUP_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
