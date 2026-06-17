@@ -2454,8 +2454,11 @@ def admin_backups():
     content = f"""
     <div class="card">
         <div class="card-header">💾 Database Backups</div>
-        <a href="/admin/backup" class="btn" style="margin-bottom:20px;">Create New Backup</a>
-        <a href="/admin/download-current-db" class="btn btn-outline" style="margin-bottom:20px; margin-left:10px;">Download Current DB</a>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
+            <a href="/admin/backup" class="btn">Create New Backup</a>
+            <a href="/admin/download-current-db" class="btn btn-outline">Download Current DB</a>
+            <a href="/admin/restore" class="btn" style="background: #28a745;">📤 Restore from Backup</a>
+        </div>
         <table>
             <thead>
                 <tr><th>Filename</th><th>Modified</th><th>Size</th><th>Action</th></tr>
@@ -2468,7 +2471,6 @@ def admin_backups():
     </div>
     """
     return render_template_string(admin_base_template.replace("{title}", "Backups").replace("{active_page}", "backups").replace("{content}", content))
-
 @app.route('/admin/download-backup/<filename>')
 def admin_download_backup(filename):
     if not session.get('admin'):
