@@ -910,31 +910,43 @@ def create_vendor_profile():
 @app.route('/edit-vendor-profile', methods=['GET', 'POST'])
 @login_required
 def edit_vendor_profile():
+    user_id = session['user_id']
     db = get_db()
-    vendor = db.execute("SELECT * FROM vendors WHERE user_id=?", (session['user_id'],)).fetchone()
+    
+    # Fetch vendor
+    vendor = db.execute("SELECT * FROM vendors WHERE user_id=?", (user_id,)).fetchone()
+    
+    # If no vendor exists, redirect to create one
     if not vendor:
         return redirect('/create-vendor-profile')
     
     if request.method == 'POST':
         business_name = request.form['business_name'].strip()
         district = request.form['district'].strip()
-        village = request.form.get('village', '')
-        landmark = request.form.get('landmark', '')
-        bio = request.form.get('bio', '')
+        village = request.form.get('village', '').strip()
+        landmark = request.form.get('landmark', '').strip()
+        bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Open')
         
         current_images = [vendor['vendor_image'], vendor['vendor_image2'], vendor['vendor_image3']]
         for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
             file = request.files.get(field)
             if file and allowed_file(file.filename):
-                current_images[idx] = save_resized_image(file)
+                current_images[idx] = save_resized_image(file, max_width=800)
         
-        db.execute("UPDATE vendors SET business_name=?, district=?, village=?, landmark=?, bio=?, vendor_image=?, vendor_image2=?, vendor_image3=?, status=? WHERE user_id=?",
-                   (business_name, district, village, landmark, bio, current_images[0], current_images[1], current_images[2], status, session['user_id']))
+        db.execute("""UPDATE vendors SET 
+                   business_name=?, district=?, village=?, landmark=?, bio=?, 
+                   vendor_image=?, vendor_image2=?, vendor_image3=?, status=? 
+                   WHERE user_id=?""",
+                   (business_name, district, village, landmark, bio, 
+                    current_images[0], current_images[1], current_images[2], status, user_id))
         db.commit()
         return redirect('/dashboard')
     
+    # Build status options
     status_options = ''.join([f'<option value="{s}" {"selected" if s==vendor["status"] else ""}>{s}</option>' for s in VENDOR_STATUSES])
+    
+    # Render the form
     content = f'''
     <div class="card">
         <div class="card-header">Edit Vendor Profile</div>
@@ -951,6 +963,9 @@ def edit_vendor_profile():
             <textarea name="bio" rows="3">{vendor['bio'] or ''}</textarea>
             <label>Main Photo</label>
             <input type="file" name="vendor_image" accept="image/*">
+            <label>Additional Photos</label>
+            <input type="file" name="vendor_image2" accept="image/*">
+            <input type="file" name="vendor_image3" accept="image/*">
             <label>Status</label>
             <select name="status">{status_options}</select>
             <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Save Changes</button>
