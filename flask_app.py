@@ -816,6 +816,365 @@ base_template = """
 """
 
 # ============================================================
+# ADMIN BASE TEMPLATE (Glassmorphism + Dark Mode)
+# ============================================================
+admin_base_template = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>RockabyConnect Admin – {title}</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#f5af19">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #f5af19;
+            --primary-dark: #e09e15;
+            --primary-light: #f7c35c;
+            --secondary: #1a73e8;
+            --bg: #f0f4f8;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.3);
+            --text: #1a1a1a;
+            --text-secondary: #666;
+            --border: #e0e0e0;
+            --radius: 20px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            --shadow-hover: 0 12px 48px rgba(0, 0, 0, 0.12);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body.dark-mode {
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(245, 175, 25, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 90% 80%, rgba(26, 115, 232, 0.08) 0%, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
+            transition: var(--transition);
+        }
+
+        .navbar {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 16px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .logo img {
+            height: 45px;
+            width: 45px;
+            border-radius: 12px;
+            object-fit: cover;
+            box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
+        }
+
+        .logo-text {
+            font-size: 1.3rem;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+        .logo-text span { color: var(--primary); }
+        .logo-sub {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            line-height: 1;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 12px;
+            transition: var(--transition);
+            font-size: 0.95rem;
+        }
+        .nav-links a:hover,
+        .nav-links a.active {
+            background: rgba(245, 175, 25, 0.15);
+            color: var(--primary);
+        }
+
+        .theme-toggle {
+            background: rgba(245, 175, 25, 0.1);
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: var(--transition);
+            color: var(--text);
+        }
+        .theme-toggle:hover {
+            background: rgba(245, 175, 25, 0.2);
+            transform: scale(1.05);
+        }
+
+        .hamburger {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.8rem;
+            cursor: pointer;
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 24px auto;
+            padding: 0 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border-radius: var(--radius);
+            padding: 28px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--glass-border);
+            transition: var(--transition);
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-hover);
+        }
+        .card-header {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 28px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: var(--transition);
+            box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 175, 25, 0.4);
+        }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            box-shadow: none;
+        }
+        .btn-outline:hover {
+            background: rgba(245, 175, 25, 0.1);
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+        }
+        .btn-small {
+            padding: 6px 14px;
+            font-size: 0.85rem;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border-radius: var(--radius);
+            padding: 28px 20px;
+            text-align: center;
+            border: 1px solid var(--glass-border);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -30px;
+            right: -30px;
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            opacity: 0.1;
+            border-radius: 50%;
+        }
+        .stat-card h3 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        .stat-card small {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .alert {
+            padding: 14px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .alert-success {
+            background: rgba(40, 167, 69, 0.15);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            color: #28a745;
+        }
+        .alert-error {
+            background: rgba(220, 53, 69, 0.15);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            color: #dc3545;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .navbar { padding: 12px 16px; }
+            .nav-links {
+                display: none;
+                width: 100%;
+                flex-direction: column;
+                gap: 10px;
+                padding-top: 15px;
+            }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .stat-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+            .container { padding: 0 16px; }
+            .card { padding: 20px; }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .card, .stat-card {
+            animation: fadeInUp 0.6s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/admin/dashboard" class="logo">
+            <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
+            <div>
+                <div class="logo-text">ROCKABY<span>CONNECT</span></div>
+                <div class="logo-sub">Admin Panel</div>
+            </div>
+        </a>
+        <button class="hamburger" onclick="toggleMenu()">☰</button>
+        <div class="nav-links" id="navMenu">
+            <a href="/admin/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
+            <a href="/admin/stats" class="{{ 'active' if active_page == 'stats' else '' }}">Statistics</a>
+            <a href="/admin/backups" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
+            <a href="/admin/logout">Logout</a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
+        </div>
+    </nav>
+    <div class="container">
+        {content}
+    </div>
+    <footer>&copy; 2025 RockabyTech – Admin Panel</footer>
+    <script>
+        function toggleMenu() {
+            document.getElementById('navMenu').classList.toggle('open');
+        }
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            const theme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
+            localStorage.setItem('rockabyconnect-admin-theme', theme);
+        }
+        const savedTheme = localStorage.getItem('rockabyconnect-admin-theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+        }
+    </script>
+</body>
+</html>
+"""
+
+# ============================================================
 # PAGE FRAGMENTS (Unchanged from your PythonAnywhere code)
 # ============================================================
 home_page = base_template.replace("{title}", "Home").replace("{active_page}", "home").replace("{content}", """
@@ -1734,73 +2093,77 @@ def boost_job_submit(job_id):
         <div class="card"><h2>Job Boost Submitted</h2><p>We'll verify and activate soon.</p><a href="/dashboard" class="btn">Back</a></div>
     """))
 
-# Admin Panel
-@app.route('/admin', methods=['GET', 'POST'])
-def admin_panel():
+# ============================================================
+# ADMIN ROUTES (using admin_base_template)
+# ============================================================
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
     if request.method == 'POST':
         if request.form.get('password') == ADMIN_PASSWORD:
             session['admin'] = True
-            return redirect('/admin')
+            return redirect('/admin/dashboard')
         else:
-            return render_template_string(base_template.replace("{title}", "Admin Login").replace("{active_page}", "").replace("{content}", """
-                <div class="card"><h2>Admin Login</h2><form method="POST"><label>Password</label><input type="password" name="password" required><button type="submit" class="btn">Login</button></form><p style="color:red;">Wrong password.</p></div>
-            """))
-    if not session.get('admin'):
-        return render_template_string(base_template.replace("{title}", "Admin Login").replace("{active_page}", "").replace("{content}", """
-            <div class="card"><h2>Admin Login</h2><form method="POST"><label>Password</label><input type="password" name="password" required><button type="submit" class="btn">Login</button></form></div>
-        """))
+            content = """
+            <div class="card" style="max-width: 500px; margin: 0 auto;">
+                <div class="card-header">🔐 Admin Login</div>
+                <div class="alert alert-error">Wrong password. Please try again.</div>
+                <form method="POST">
+                    <label>Password</label>
+                    <input type="password" name="password" required>
+                    <button type="submit" class="btn" style="width:100%; margin-top:20px;">Login</button>
+                </form>
+            </div>
+            """
+            return render_template_string(admin_base_template.replace("{title}", "Login").replace("{active_page}", "").replace("{content}", content))
+    
+    content = """
+    <div class="card" style="max-width: 500px; margin: 0 auto;">
+        <div class="card-header">🔐 Admin Login</div>
+        <form method="POST">
+            <label>Password</label>
+            <input type="password" name="password" required>
+            <button type="submit" class="btn" style="width:100%; margin-top:20px;">Login</button>
+        </form>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Login").replace("{active_page}", "").replace("{content}", content))
 
+@app.route('/admin')
+def admin_panel_redirect():
+    if session.get('admin'):
+        return redirect('/admin/dashboard')
+    return redirect('/admin/login')
+
+@app.route('/admin/dashboard')
+def admin_dashboard():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
 
-    action = request.args.get('action')
-    req_id = request.args.get('req_id')
-    if action == 'approve' and req_id:
-        req_id = int(req_id)
-        c.execute("SELECT user_id, plan, boost_type, item_id FROM boost_requests WHERE id=?", (req_id,))
-        req = c.fetchone()
-        if req:
-            user_id, plan, btype, item_id = req
-            days = int(plan)
-            expiry = date.today() + timedelta(days=days)
-            if btype == 'profile':
-                c.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
-            elif btype == 'job':
-                c.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, item_id))
-            elif btype == 'vendor':
-                c.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
-            c.execute("UPDATE boost_requests SET status='approved' WHERE id=?", (req_id,))
-            conn.commit()
-            conn.close()
-            add_notification(user_id, 'sms', 'Your boost has been approved and is now live!')
-        else:
-            conn.close()
-        return redirect('/admin')
-
-    if action == 'reject' and req_id:
-        req_id = int(req_id)
-        c.execute("UPDATE boost_requests SET status='rejected' WHERE id=?", (req_id,))
-        conn.commit()
-        conn.close()
-        return redirect('/admin')
-
-    today = date.today().isoformat()
-    c.execute("UPDATE providers SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
-    c.execute("UPDATE jobs SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
-    c.execute("UPDATE vendors SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
-    conn.commit()
-
+    # Stats
     c.execute("SELECT COUNT(*) FROM users")
     total_users = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM providers")
     total_providers = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM vendors")
+    total_vendors = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM jobs")
+    total_jobs = c.fetchone()[0]
     c.execute("SELECT status, COUNT(*) FROM jobs GROUP BY status")
     job_stats = dict(c.fetchall())
     c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'")
     pending_boosts = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='approved'")
+    approved_boosts = c.fetchone()[0]
+    c.execute("SELECT COALESCE(SUM(amount), 0) FROM boost_requests WHERE status='approved'")
+    total_revenue = c.fetchone()[0]
     conn.close()
 
+    # Pending boost requests
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
@@ -1816,41 +2179,194 @@ def admin_panel():
     for req in pending:
         rid, phone, name, trans, plan, btype, item_id, rdate = req
         rows += f"""
-        <tr><td>{rid}</td><td>{name}<br><small>{phone}</small></td><td>{trans}</td><td>{plan} days</td><td>{btype}</td><td>{rdate[:16] if rdate else ''}</td>
-        <td><a href="/admin?action=approve&req_id={rid}" class="btn btn-small" style="background:var(--primary);">Approve</a> <a href="/admin?action=reject&req_id={rid}" class="btn btn-small btn-danger">Reject</a></td></tr>"""
+        <tr>
+            <td>{name}<br><small>{phone}</small></td>
+            <td>{trans}</td>
+            <td>{plan} days</td>
+            <td><span class="badge" style="background:var(--primary); color:white; padding:2px 10px; border-radius:12px;">{btype}</span></td>
+            <td><small>{rdate[:16] if rdate else ''}</small></td>
+            <td>
+                <a href="/admin/approve-boost/{rid}" class="btn btn-small" style="background:#28a745;">Approve</a>
+                <a href="/admin/reject-boost/{rid}" class="btn btn-small btn-danger">Reject</a>
+            </td>
+        </tr>"""
     if not rows:
-        rows = "<tr><td colspan='7'>No pending requests.</td></tr>"
+        rows = "<tr><td colspan='6' style='text-align:center;'>No pending boost requests.</td></tr>"
 
-    admin_content = f"""
-        <div class="card">
-            <h3>Dashboard Stats</h3>
-            <table>
-                <tr><td>Total Users</td><td>{total_users}</td></tr>
-                <tr><td>Total Providers</td><td>{total_providers}</td></tr>
-                <tr><td>Open Jobs</td><td>{job_stats.get('Open', 0)}</td></tr>
-                <tr><td>Taken Jobs</td><td>{job_stats.get('Taken', 0)}</td></tr>
-                <tr><td>Closed Jobs</td><td>{job_stats.get('Closed', 0)}</td></tr>
-                <tr><td>Pending Boosts</td><td>{pending_boosts}</td></tr>
-            </table>
+    content = f"""
+    <div class="card">
+        <div class="card-header">📊 Platform Statistics</div>
+        <div class="stat-grid">
+            <div class="stat-card"><h3>{total_users}</h3><small>Total Users</small></div>
+            <div class="stat-card"><h3>{total_providers}</h3><small>Freelancers</small></div>
+            <div class="stat-card"><h3>{total_vendors}</h3><small>Vendors</small></div>
+            <div class="stat-card"><h3>{total_jobs}</h3><small>Total Jobs</small></div>
+            <div class="stat-card"><h3>{job_stats.get('Open', 0)}</h3><small>Open Jobs</small></div>
+            <div class="stat-card"><h3>{pending_boosts}</h3><small>Pending Boosts</small></div>
+            <div class="stat-card"><h3>{approved_boosts}</h3><small>Approved Boosts</small></div>
+            <div class="stat-card"><h3>UGX {total_revenue:,}</h3><small>Total Revenue</small></div>
         </div>
-        <div class="card">
-            <div class="card-header">Pending Boost Requests</div>
-            <table>
-                <tr><th>ID</th><th>User</th><th>Transaction</th><th>Plan</th><th>Type</th><th>Date</th><th>Action</th></tr>
-                {rows}
-            </table>
-            <p style="margin-top:15px;">
-                <a href="/admin/stats" class="btn btn-outline">📊 Statistics</a>
-                <a href="/admin/logout">Logout</a>
-            </p>
+    </div>
+
+    <div class="card">
+        <div class="card-header">⏳ Pending Boost Requests</div>
+        <table>
+            <thead>
+                <tr><th>User</th><th>Transaction</th><th>Plan</th><th>Type</th><th>Date</th><th>Action</th></tr>
+            </thead>
+            <tbody>{rows}</tbody>
+        </table>
+        <div style="margin-top:20px;">
+            <a href="/admin/stats" class="btn btn-outline">📊 Detailed Statistics</a>
         </div>
+    </div>
     """
-    return render_template_string(base_template.replace("{title}", "Admin").replace("{active_page}", "").replace("{content}", admin_content))
+    return render_template_string(admin_base_template.replace("{title}", "Dashboard").replace("{active_page}", "dashboard").replace("{content}", content))
+
+@app.route('/admin/stats')
+def admin_stats():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+
+    # Basic stats (same as dashboard but more detail)
+    c.execute("SELECT COUNT(*) FROM users")
+    total_users = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM providers")
+    total_providers = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM vendors")
+    total_vendors = c.fetchone()[0]
+    c.execute("SELECT status, COUNT(*) FROM jobs GROUP BY status")
+    job_counts = dict(c.fetchall())
+    open_jobs = job_counts.get('Open', 0)
+    taken_jobs = job_counts.get('Taken', 0)
+    closed_jobs = job_counts.get('Closed', 0)
+    c.execute("SELECT status, COUNT(*) FROM vendors GROUP BY status")
+    vendor_counts = dict(c.fetchall())
+    open_vendors = vendor_counts.get('Open', 0)
+    closed_vendors = vendor_counts.get('Closed', 0)
+    away_vendors = vendor_counts.get('Away', 0)
+    c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'")
+    pending_boosts = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='approved'")
+    approved_boosts = c.fetchone()[0]
+    c.execute("SELECT COALESCE(SUM(amount), 0) FROM boost_requests WHERE status='approved'")
+    total_revenue = c.fetchone()[0]
+
+    # Revenue breakdown by plan
+    c.execute("SELECT plan, COUNT(*) FROM boost_requests WHERE status='approved' GROUP BY plan")
+    plan_breakdown = c.fetchall()
+
+    # Top 5 skills
+    c.execute("SELECT skills FROM providers WHERE skills IS NOT NULL AND skills != ''")
+    skill_rows = c.fetchall()
+    skill_counter = defaultdict(int)
+    for (skills_str,) in skill_rows:
+        for skill in skills_str.split(','):
+            skill = skill.strip().title()
+            if skill:
+                skill_counter[skill] += 1
+    top_skills = sorted(skill_counter.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_skills_html = "".join(f"<tr><td>{skill}</td><td>{cnt}</td></tr>" for skill, cnt in top_skills) or "<tr><td colspan='2'>No skills yet.</td></tr>"
+
+    # Recent activity
+    recent = []
+    conn.close()
+
+    content = f"""
+    <div class="card">
+        <div class="card-header">📊 Detailed Statistics</div>
+        <div class="stat-grid">
+            <div class="stat-card"><h3>{total_users}</h3><small>Total Users</small></div>
+            <div class="stat-card"><h3>{total_providers}</h3><small>Freelancers</small></div>
+            <div class="stat-card"><h3>{total_vendors}</h3><small>Vendors</small></div>
+            <div class="stat-card"><h3>{open_jobs}</h3><small>Open Jobs</small></div>
+            <div class="stat-card"><h3>{taken_jobs}</h3><small>Taken Jobs</small></div>
+            <div class="stat-card"><h3>{closed_jobs}</h3><small>Closed Jobs</small></div>
+            <div class="stat-card"><h3>{open_vendors}</h3><small>Open Vendors</small></div>
+            <div class="stat-card"><h3>{closed_vendors}</h3><small>Closed Vendors</small></div>
+            <div class="stat-card"><h3>{away_vendors}</h3><small>Away Vendors</small></div>
+            <div class="stat-card"><h3>{pending_boosts}</h3><small>Pending Boosts</small></div>
+            <div class="stat-card"><h3>{approved_boosts}</h3><small>Approved Boosts</small></div>
+            <div class="stat-card"><h3>UGX {total_revenue:,}</h3><small>Total Revenue</small></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">💪 Top 5 Skills</div>
+        <table>
+            <thead><tr><th>Skill</th><th>Freelancers</th></tr></thead>
+            <tbody>{top_skills_html}</tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <div class="card-header">📈 Revenue by Plan</div>
+        <ul>
+    """
+    for plan, count in plan_breakdown:
+        price = 5000 if plan == '7' else 15000 if plan == '30' else 40000
+        content += f"<li>{plan} days: {count} boosts = UGX {count * price:,}</li>"
+    if not plan_breakdown:
+        content += "<li>No approved boosts yet.</li>"
+    content += """
+        </ul>
+        <div style="margin-top:20px;">
+            <a href="/admin/dashboard" class="btn btn-outline">Back to Dashboard</a>
+        </div>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Statistics").replace("{active_page}", "stats").replace("{content}", content))
+
+# --- Boost approval/rejection routes (unchanged logic, just redirect) ---
+@app.route('/admin/approve-boost/<int:req_id>')
+def admin_approve_boost(req_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    
+    c.execute("SELECT user_id, plan, boost_type, item_id FROM boost_requests WHERE id=?", (req_id,))
+    req = c.fetchone()
+    if req:
+        user_id, plan, btype, item_id = req
+        days = int(plan)
+        expiry = date.today() + timedelta(days=days)
+        if btype == 'profile':
+            c.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
+        elif btype == 'job':
+            c.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, item_id))
+        elif btype == 'vendor':
+            c.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
+        c.execute("UPDATE boost_requests SET status='approved' WHERE id=?", (req_id,))
+        conn.commit()
+        add_notification(user_id, 'sms', 'Your boost has been approved and is now live!')
+    
+    conn.close()
+    return redirect('/admin/dashboard')
+
+@app.route('/admin/reject-boost/<int:req_id>')
+def admin_reject_boost(req_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    c.execute("UPDATE boost_requests SET status='rejected' WHERE id=?", (req_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/dashboard')
 
 @app.route('/admin/logout')
 def admin_logout():
     session.pop('admin', None)
-    return redirect('/admin')
+    return redirect('/admin/login')
 
 # Admin stats
 @app.route('/admin/stats')
