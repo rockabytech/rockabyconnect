@@ -1815,34 +1815,30 @@ def admin_logout():
     return redirect('/admin/login')
 
 # ============================================================
-# PWA ROUTES (File-based - like the old working code)
+# PWA ROUTES (Using send_from_directory)
 # ============================================================
+from flask import send_from_directory
+
 @app.route('/manifest.json')
 def manifest():
-    import os
-    manifest_path = os.path.join(os.getcwd(), 'manifest.json')
-    if os.path.exists(manifest_path):
-        with open(manifest_path, 'r') as f:
-            content = f.read()
-    else:
-        # Fallback if file doesn't exist
-        content = '{"name":"RockabyConnect","short_name":"RockabyConnect"}'
-    resp = make_response(content)
-    resp.headers['Content-Type'] = 'application/json'
-    return resp
+    try:
+        return send_from_directory(os.getcwd(), 'manifest.json', mimetype='application/json')
+    except Exception as e:
+        return f"Error: {e}", 404
 
 @app.route('/service-worker.js')
 def service_worker():
-    import os
-    sw_path = os.path.join(os.getcwd(), 'service-worker.js')
-    if os.path.exists(sw_path):
-        with open(sw_path, 'r') as f:
-            content = f.read()
-    else:
-        content = '// Service worker not found'
-    resp = make_response(content)
-    resp.headers['Content-Type'] = 'application/javascript'
-    return resp
+    try:
+        return send_from_directory(os.getcwd(), 'service-worker.js', mimetype='application/javascript')
+    except Exception as e:
+        return f"Error: {e}", 404
+
+@app.route('/debug-routes')
+def debug_routes():
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append(str(rule))
+    return "<br>".join(routes)
 
 @app.route('/debug')
 def debug():
