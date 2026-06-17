@@ -511,9 +511,10 @@ def fix_tables():
     db = get_db()
     results = {}
     
+    # Fix providers table
     try:
-        db.execute("PRAGMA table_info(providers)")
-        prov_cols = [col[1] for col in db.fetchall()]
+        c = db.execute("PRAGMA table_info(providers)")
+        prov_cols = [col[1] for col in c.fetchall()]  # ✅ Now using cursor 'c'
         added = []
         for col in ['skills', 'village', 'featured_expiry']:
             if col not in prov_cols:
@@ -523,9 +524,10 @@ def fix_tables():
     except Exception as e:
         results['providers'] = f"Error: {e}"
     
+    # Fix vendors table
     try:
-        db.execute("PRAGMA table_info(vendors)")
-        vend_cols = [col[1] for col in db.fetchall()]
+        c = db.execute("PRAGMA table_info(vendors)")
+        vend_cols = [col[1] for col in c.fetchall()]  # ✅ Using cursor
         added = []
         for col in ['landmark', 'vendor_image2', 'vendor_image3', 'featured_expiry']:
             if col not in vend_cols:
@@ -535,9 +537,10 @@ def fix_tables():
     except Exception as e:
         results['vendors'] = f"Error: {e}"
     
+    # Fix jobs table
     try:
-        db.execute("PRAGMA table_info(jobs)")
-        job_cols = [col[1] for col in db.fetchall()]
+        c = db.execute("PRAGMA table_info(jobs)")
+        job_cols = [col[1] for col in c.fetchall()]  # ✅ Using cursor
         added = []
         for col in ['village', 'job_image', 'featured', 'featured_expiry']:
             if col not in job_cols:
