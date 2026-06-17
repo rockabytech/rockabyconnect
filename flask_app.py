@@ -1869,7 +1869,6 @@ def import_db():
             users = old_cursor.fetchall()
             users_imported = 0
             for user in users:
-                # Check if user exists by phone
                 existing = new_db.execute("SELECT id FROM users WHERE phone=?", (user['phone'],)).fetchone()
                 if not existing:
                     new_db.execute("INSERT INTO users (id, phone, name, password_hash) VALUES (?,?,?,?)",
@@ -1958,7 +1957,6 @@ def import_db():
             boosts = old_cursor.fetchall()
             boosts_imported = 0
             for b in boosts:
-                # Map old columns to new (if different)
                 new_db.execute("""INSERT INTO boost_requests 
                            (id, user_id, boost_type, plan_days, amount, phone_number, transaction_id, raw_sms, status, verified_at, created_at) 
                            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
@@ -1973,7 +1971,7 @@ def import_db():
         except Exception as e:
             results['boosts'] = f"Error: {e}"
         
-        # 7. Import Notifications (optional)
+        # 7. Import Notifications
         try:
             old_cursor.execute("SELECT * FROM notifications")
             notifs = old_cursor.fetchall()
