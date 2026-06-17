@@ -765,20 +765,27 @@ def dashboard():
 @app.route('/create-profile', methods=['GET', 'POST'])
 @login_required
 def create_profile():
+    user_id = session['user_id']
+    db = get_db()
+    
+    # Check if profile already exists
+    existing = db.execute("SELECT id FROM providers WHERE user_id=?", (user_id,)).fetchone()
+    if existing:
+        return redirect('/edit-profile')
+    
     if request.method == 'POST':
         skills = request.form['skills'].strip()
         district = request.form['district'].strip()
-        village = request.form.get('village', '')
-        bio = request.form.get('bio', '')
+        village = request.form.get('village', '').strip()
+        bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Available')
         file = request.files.get('profile_pic')
         filename = None
         if file and allowed_file(file.filename):
-            filename = save_resized_image(file)
+            filename = save_resized_image(file, max_width=800)
         
-        db = get_db()
         db.execute("INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, status) VALUES (?,?,?,?,?,?,?)",
-                   (session['user_id'], skills, district, village, bio, filename, status))
+                   (user_id, skills, district, village, bio, filename, status))
         db.commit()
         return redirect('/dashboard')
     
@@ -859,23 +866,31 @@ def edit_profile():
 @app.route('/create-vendor-profile', methods=['GET', 'POST'])
 @login_required
 def create_vendor_profile():
+    user_id = session['user_id']
+    db = get_db()
+    
+    existing = db.execute("SELECT id FROM vendors WHERE user_id=?", (user_id,)).fetchone()
+    if existing:
+        return redirect('/edit-vendor-profile')
+    
     if request.method == 'POST':
         business_name = request.form['business_name'].strip()
         district = request.form['district'].strip()
-        village = request.form.get('village', '')
-        landmark = request.form.get('landmark', '')
-        bio = request.form.get('bio', '')
+        village = request.form.get('village', '').strip()
+        landmark = request.form.get('landmark', '').strip()
+        bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Open')
         
         filenames = [None, None, None]
         for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
             file = request.files.get(field)
             if file and allowed_file(file.filename):
-                filenames[idx] = save_resized_image(file)
+                filenames[idx] = save_resized_image(file, max_width=800)
         
-        db = get_db()
-        db.execute("INSERT INTO vendors (user_id, business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, status) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                   (session['user_id'], business_name, district, village, landmark, bio, filenames[0], filenames[1], filenames[2], status))
+        db.execute("""INSERT INTO vendors 
+                   (user_id, business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, status) 
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                   (user_id, business_name, district, village, landmark, bio, filenames[0], filenames[1], filenames[2], status))
         db.commit()
         return redirect('/dashboard')
     
@@ -1224,17 +1239,21 @@ def post_job():
         location = request.form['location']
         village = request.form.get('village', '')
         contact = request.form.get('contact', '')
+        file = request.files.get('job_image')
+        filename = None
+        if file and allowed_file(file.filename):
+            filename = save_resized_image(file, max_width=800)
         
         db = get_db()
-        db.execute("INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status) VALUES (?,?,?,?,?,?,?,'Open')",
-                   (session['user_id'], title, company, description, location, village, contact))
+        db.execute("INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image) VALUES (?,?,?,?,?,?,?,'Open',?)",
+                   (session['user_id'], title, company, description, location, village, contact, filename))
         db.commit()
         return redirect('/dashboard')
     
     content = '''
     <div class="card">
         <div class="card-header">Post a Job</div>
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
             <label>Job Title *</label>
             <input type="text" name="title" required>
             <label>Company Name</label>
@@ -1247,6 +1266,8 @@ def post_job():
             <input type="text" name="village">
             <label>Contact Info</label>
             <input type="text" name="contact">
+            <label>Job Image (optional)</label>
+            <input type="file" name="job_image" accept="image/*">
             <button type="submit" class="btn" style="width: 100%; margin-top: 20px;">Post Job</button>
         </form>
     </div>
@@ -2449,6 +2470,73 @@ def admin_reset_db():
         '''
     except Exception as e:
         return f"Reset failed: {e}", 500
+
+@app.route('/admin/fix-tables')
+def fix_tables():
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
+    
+    db = get_db()
+    results = {}
+    
+    # Fix providers table
+    db.execute("PRAGMA table_info(providers)")
+    prov_cols = [col[1] for col in db.fetchall()]
+    added = []
+    for col in ['skills', 'village', 'featured_expiry']:
+        if col not in prov_cols:
+            db.execute(f"ALTER TABLE providers ADD COLUMN {col} TEXT")
+            added.append(col)
+    results['providers'] = added if added else 'No changes'
+    
+    # Fix vendors table
+    db.execute("PRAGMA table_info(vendors)")
+    vend_cols = [col[1] for col in db.fetchall()]
+    added = []
+    for col in ['landmark', 'vendor_image2', 'vendor_image3', 'featured_expiry']:
+        if col not in vend_cols:
+            db.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
+            added.append(col)
+    results['vendors'] = added if added else 'No changes'
+    
+    # Fix jobs table
+    db.execute("PRAGMA table_info(jobs)")
+    job_cols = [col[1] for col in db.fetchall()]
+    added = []
+    for col in ['village', 'job_image', 'featured', 'featured_expiry']:
+        if col not in job_cols:
+            db.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
+            added.append(col)
+    results['jobs'] = added if added else 'No changes'
+    
+    # Fix boost_requests table (for old schema compatibility)
+    db.execute("PRAGMA table_info(boost_requests)")
+    boost_cols = [col[1] for col in db.fetchall()]
+    added = []
+    for col in ['phone_number', 'transaction_id', 'raw_sms', 'verified_at']:
+        if col not in boost_cols:
+            db.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
+            added.append(col)
+    results['boost_requests'] = added if added else 'No changes'
+    
+    db.commit()
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Tables Fixed</title></head>
+    <body style="font-family: Arial; padding: 20px;">
+        <h2>✅ Database Tables Updated</h2>
+        <ul>
+            <li>Providers: {results['providers']}</li>
+            <li>Vendors: {results['vendors']}</li>
+            <li>Jobs: {results['jobs']}</li>
+            <li>Boost Requests: {results['boost_requests']}</li>
+        </ul>
+        <p><a href="/admin/dashboard">Back to Admin</a></p>
+    </body>
+    </html>
+    """
 
 # ============================================================
 # RUN APP
