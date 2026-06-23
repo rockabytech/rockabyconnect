@@ -80,6 +80,7 @@ def init_db():
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
 
+    # ---- USERS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         phone TEXT UNIQUE NOT NULL,
@@ -87,6 +88,7 @@ def init_db():
         password_hash TEXT NOT NULL
     )''')
 
+    # ---- PROVIDERS TABLE (Freelancers) ----
     c.execute('''CREATE TABLE IF NOT EXISTS providers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER UNIQUE NOT NULL,
@@ -101,6 +103,7 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+    # ---- VENDORS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS vendors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER UNIQUE NOT NULL,
@@ -118,6 +121,7 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+    # ---- JOBS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS jobs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         employer_id INTEGER NOT NULL,
@@ -135,6 +139,7 @@ def init_db():
         FOREIGN KEY(employer_id) REFERENCES users(id)
     )''')
 
+    # ---- BOOST REQUESTS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS boost_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -147,6 +152,7 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+    # ---- REVIEWS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         provider_id INTEGER NOT NULL,
@@ -158,6 +164,7 @@ def init_db():
         FOREIGN KEY(reviewer_id) REFERENCES users(id)
     )''')
 
+    # ---- NOTIFICATIONS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -166,6 +173,53 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
+
+    # ============================================================
+    # REFERRAL TABLES (NEW)
+    # ============================================================
+
+    # ---- REFERRAL CODES TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS referral_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL UNIQUE,
+        code TEXT NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
+    # ---- REFERRAL TRACKING TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS referrals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        referrer_id INTEGER NOT NULL,
+        referred_user_id INTEGER,
+        referred_phone TEXT,
+        status TEXT DEFAULT 'pending',
+        reward_amount REAL DEFAULT 0,
+        reward_type TEXT DEFAULT 'discount',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP,
+        FOREIGN KEY(referrer_id) REFERENCES users(id),
+        FOREIGN KEY(referred_user_id) REFERENCES users(id)
+    )''')
+
+    # ---- REFERRAL SETTINGS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS referral_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reward_percentage INTEGER DEFAULT 10,
+        reward_fixed_amount REAL DEFAULT 0,
+        reward_type TEXT DEFAULT 'discount',
+        max_referrals INTEGER DEFAULT 10,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # Insert default referral settings if empty
+    c.execute("SELECT COUNT(*) FROM referral_settings")
+    if c.fetchone()[0] == 0:
+        c.execute("""
+            INSERT INTO referral_settings (reward_percentage, reward_fixed_amount, reward_type, max_referrals, is_active)
+            VALUES (10, 0, 'discount', 10, 1)
+        """)
 
     conn.commit()
     conn.close()
@@ -224,6 +278,108 @@ def add_notification(user_id, type, message):
         conn.close()
     except sqlite3.OperationalError as e:
         print(f"Notification failed: {e}")
+
+def generate_referral_code(user_id):
+    """Generate a unique referral code for a user"""
+    import hashlib
+    code = f"REF-{hashlib.md5(f'{user_id}{datetime.now().timestamp()}'.encode()).hexdigest()[:6].upper()}"
+    return code
+
+def get_referral_code(user_id):
+    """Get or create referral code for a user"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    c.execute("SELECT code FROM referral_codes WHERE user_id=?", (user_id,))
+    row = c.fetchone()
+    if row:
+        conn.close()
+        return row[0]
+    # Generate new code
+    code = generate_referral_code(user_id)
+    c.execute("INSERT INTO referral_codes (user_id, code) VALUES (?,?)", (user_id, code))
+    conn.commit()
+    conn.close()
+    return code
+
+def get_referral_stats(user_id):
+    """Get referral statistics for a user"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    total = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (user_id,)).fetchone()[0]
+    pending = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status='pending'", (user_id,)).fetchone()[0]
+    completed = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status='completed'", (user_id,)).fetchone()[0]
+    rewarded = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status='rewarded'", (user_id,)).fetchone()[0]
+    total_rewards = c.execute("SELECT COALESCE(SUM(reward_amount),0) FROM referrals WHERE referrer_id=? AND status='rewarded'", (user_id,)).fetchone()[0]
+    conn.close()
+    return {
+        'total': total,
+        'pending': pending,
+        'completed': completed,
+        'rewarded': rewarded,
+        'total_rewards': total_rewards
+    }
+
+def process_referral(user_id, phone):
+    """
+    Check if there's a referral code in session, and if so,
+    create a referral record for the new user signing up.
+    """
+    if 'referral_code' not in session:
+        return False
+    
+    ref_code = session['referral_code']
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    
+    # Find the referrer (user who owns this referral code)
+    c.execute("SELECT user_id FROM referral_codes WHERE code = ?", (ref_code,))
+    referrer = c.fetchone()
+    if not referrer:
+        conn.close()
+        return False
+    
+    referrer_id = referrer[0]
+    
+    # Prevent self-referral
+    if referrer_id == user_id:
+        conn.close()
+        return False
+    
+    # Check if this user has already been referred by this referrer
+    c.execute("SELECT id FROM referrals WHERE referrer_id = ? AND referred_user_id = ?", (referrer_id, user_id))
+    if c.fetchone():
+        conn.close()
+        return False
+    
+    # Get referral settings
+    c.execute("SELECT reward_percentage, reward_type, max_referrals FROM referral_settings WHERE is_active=1 LIMIT 1")
+    settings = c.fetchone()
+    if not settings:
+        settings = (10, 'discount', 10)  # Default: 10%, discount, max 10 referrals
+    
+    reward_percentage, reward_type, max_referrals = settings
+    
+    # Count completed referrals for this referrer
+    count = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status IN ('completed', 'rewarded')", (referrer_id,)).fetchone()[0]
+    if count >= max_referrals:
+        conn.close()
+        return False
+    
+    # Insert pending referral
+    c.execute("""
+        INSERT INTO referrals (referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type)
+        VALUES (?, ?, ?, 'pending', 0, ?)
+    """, (referrer_id, user_id, phone, reward_type))
+    conn.commit()
+    conn.close()
+    
+    # Clear the session so we don't track again
+    session.pop('referral_code', None)
+    
+    return True
 
 # ============================================================
 # BASE TEMPLATE (UNCHANGED)
@@ -1485,6 +1641,14 @@ edit_name_page = base_template.replace("{title}", "Edit Name").replace("{content
 
 @app.route('/')
 def home():
+    # ===== REFERRAL CODE DETECTION =====
+    ref_code = request.args.get('ref', '')
+    if ref_code:
+        session['referral_code'] = ref_code
+    # ===== END REFERRAL CODE =====
+    
+    conn = sqlite3.connect(DB_PATH)
+    # ... rest of your home route
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM providers")
@@ -1603,7 +1767,7 @@ def dashboard():
                 <p><strong>Skills:</strong> {skills}</p>
                 <p><strong>Location:</strong> {location}</p>
                 <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span></p>
-                <div style="display:flex; gap:10px; margin-top:15px;">
+                <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
                     <a href="/edit-profile" class="btn btn-small">Edit Profile</a>
                     <a href="/boost" class="btn btn-small" style="background:var(--primary-dark);">Boost Profile</a>
                 </div>
@@ -1628,7 +1792,7 @@ def dashboard():
                 <p><strong>Business:</strong> {bname}</p>
                 <p><strong>Location:</strong> {location}</p>
                 <p><strong>Status:</strong> <span class="badge badge-{vstatus_class}">{vstatus}</span></p>
-                <div style="display:flex; gap:10px; margin-top:15px;">
+                <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
                     <a href="/edit-vendor-profile" class="btn btn-small">Edit Vendor Profile</a>
                     <a href="/boost-vendor" class="btn btn-small" style="background:var(--primary-dark);">Boost Vendor</a>
                 </div>
@@ -1650,7 +1814,7 @@ def dashboard():
             jobs_html += f"""
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
                     <span>{title} <span class="badge badge-{badge_class}">{status}</span></span>
-                    <div style="display:flex; gap:5px;">
+                    <div style="display:flex; gap:5px; flex-wrap:wrap;">
                         <a href="/edit-job/{jid}" class="btn btn-small btn-outline">Edit</a>
                         <a href="/boost-job/{jid}" class="btn btn-small" style="background:var(--primary-dark);">Boost</a>
                     </div>
@@ -1659,14 +1823,31 @@ def dashboard():
     else:
         jobs_html = "<p>No jobs posted yet.</p>"
 
+    # ===== REFERRAL LINK ADDED HERE =====
     dashboard_content = f"""
         <div class="card">
-            <h2>Welcome, {session['user_name']}!</h2>
-            <p><a href="/edit-name" style="font-size:0.85rem; color:var(--primary-dark);">Edit my name</a></p>
+            <div class="card-header">Welcome, {session['user_name']}!</div>
+            <p style="color:var(--text-secondary);"><a href="/edit-name" style="font-size:0.85rem; color:var(--primary-dark);">Edit my name</a></p>
             <p style="color:#666;">Manage your freelance presence, vendor profile, and job postings.</p>
+            
+            <!-- REFERRAL SECTION -->
+            <div style="margin-top:15px; padding:15px; background:linear-gradient(135deg, rgba(245,175,25,0.1), rgba(245,175,25,0.05)); border-radius:12px; border:1px solid var(--glass-border);">
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <span style="font-size:1.8rem;">🎁</span>
+                    <div style="flex:1;">
+                        <h4 style="margin:0;">Refer a Friend & Earn Rewards!</h4>
+                        <p style="margin:0; font-size:0.9rem; color:var(--text-secondary);">Share your referral link and earn rewards when your friends sign up.</p>
+                    </div>
+                    <a href="/refer" class="btn" style="background:var(--primary-dark); white-space:nowrap;">
+                        <i class="fas fa-share-alt"></i> Refer Now
+                    </a>
+                </div>
+            </div>
         </div>
+        
         {profile_section}
         {vendor_section}
+        
         <div class="card">
             <div class="card-header">My Job Postings</div>
             {jobs_html}
@@ -2098,6 +2279,148 @@ def boost_job_submit(job_id):
         <div class="card"><h2>Job Boost Submitted</h2><p>We'll verify and activate soon.</p><a href="/dashboard" class="btn">Back</a></div>
     """))
 
+@app.route('/refer')
+@login_required
+def refer():
+    user_id = session['user_id']
+    
+    # Get or create referral code
+    referral_code = get_referral_code(user_id)
+    
+    # Get stats
+    stats = get_referral_stats(user_id)
+    
+    # Get referral history
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    referrals = c.execute("""
+        SELECT r.*, u.name as referred_name 
+        FROM referrals r 
+        LEFT JOIN users u ON r.referred_user_id = u.id 
+        WHERE r.referrer_id = ? 
+        ORDER BY r.created_at DESC LIMIT 20
+    """, (user_id,)).fetchall()
+    conn.close()
+    
+    # Build referral history rows
+    referral_rows = ''
+    if referrals:
+        for r in referrals:
+            # r structure: id, referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type, created_at, completed_at, referred_name
+            status_badge = {
+                'pending': '<span class="badge" style="background:#ffc107;color:#000;">Pending</span>',
+                'completed': '<span class="badge" style="background:#17a2b8;color:#fff;">Completed</span>',
+                'rewarded': '<span class="badge" style="background:#28a745;color:#fff;">Rewarded</span>'
+            }.get(r[4], r[4])
+            
+            referred_display = r[9] if r[9] else (r[3] if r[3] else 'Unknown')
+            
+            referral_rows += f'''
+            <tr>
+                <td>{referred_display}</td>
+                <td>{r[7][:16] if r[7] else '-'}</td>
+                <td>{r[8][:16] if r[8] else '-'}</td>
+                <td>{status_badge}</td>
+                <td>UGX {r[5] or 0:,}</td>
+            </tr>
+            '''
+    else:
+        referral_rows = '<tr><td colspan="5" style="text-align:center;padding:20px;">No referrals yet. Share your link to get started!</td></tr>'
+    
+    # Build referral link
+    base_url = request.base_url.replace('/refer', '')
+    referral_link = f"{base_url}/?ref={referral_code}"
+    
+    content = f'''
+    <!-- Referral Stats -->
+    <div class="stat-grid" style="margin-bottom:20px;">
+        <div class="stat-card">
+            <h3>{stats['total']}</h3>
+            <small>Total Referrals</small>
+        </div>
+        <div class="stat-card">
+            <h3>{stats['pending']}</h3>
+            <small>Pending</small>
+        </div>
+        <div class="stat-card">
+            <h3>{stats['completed']}</h3>
+            <small>Completed</small>
+        </div>
+        <div class="stat-card">
+            <h3>UGX {stats['total_rewards']:,}</h3>
+            <small>Total Rewards Earned</small>
+        </div>
+    </div>
+    
+    <!-- Referral Link Card -->
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-share-alt"></i> Your Referral Link
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <input type="text" id="referralLink" value="{referral_link}" readonly 
+                   style="flex:1; min-width:200px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <button class="btn btn-success" onclick="copyReferralLink()">
+                <i class="fas fa-copy"></i> Copy Link
+            </button>
+            <a href="https://wa.me/?text=Join%20RockabyConnect%20using%20my%20referral%20link%3A%20{referral_link}" 
+               target="_blank" class="btn" style="background:#25D366; color:white;">
+                <i class="fab fa-whatsapp"></i> Share
+            </a>
+            <a href="https://www.facebook.com/sharer/sharer.php?u={referral_link}" 
+               target="_blank" class="btn" style="background:#1877f2; color:white;">
+                <i class="fab fa-facebook"></i> Share
+            </a>
+        </div>
+        <div style="margin-top:15px; padding:15px; background:var(--bg); border-radius:8px;">
+            <p><strong>Referral Code:</strong> <code style="font-size:1.2rem; background:var(--card-bg); padding:4px 12px; border-radius:6px;">{referral_code}</code></p>
+            <p style="color:var(--text-secondary); font-size:0.9rem;">
+                <i class="fas fa-info-circle"></i> 
+                Share your referral link with friends. When they sign up and become active, you earn rewards!
+            </p>
+        </div>
+    </div>
+    
+    <!-- Referral History -->
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-history"></i> Referral History
+        </div>
+        <div class="table-responsive" style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Referred User</th>
+                        <th>Date</th>
+                        <th>Completed</th>
+                        <th>Status</th>
+                        <th>Reward</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {referral_rows}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        function copyReferralLink() {{
+            var link = document.getElementById('referralLink');
+            link.select();
+            document.execCommand('copy');
+            var btn = event.target.closest('button');
+            var originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            setTimeout(function() {{
+                btn.innerHTML = originalText;
+            }}, 2000);
+        }}
+    </script>
+    '''
+    return render_template_string(base_template.replace("{title}", "Refer a Friend").replace("{active_page}", "").replace("{content}", content))
+
 # ============================================================
 # ADMIN ROUTES (using admin_base_template)
 # ============================================================
@@ -2394,6 +2717,73 @@ def admin_reject_boost(req_id):
 def admin_logout():
     session.pop('admin', None)
     return redirect('/admin/login')
+
+@app.route('/admin/referral-settings', methods=['GET', 'POST'])
+def admin_referral_settings():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    
+    # Get current settings
+    c.execute("SELECT id, reward_percentage, reward_fixed_amount, reward_type, max_referrals, is_active FROM referral_settings LIMIT 1")
+    settings = c.fetchone()
+    if not settings:
+        c.execute("INSERT INTO referral_settings (reward_percentage, reward_fixed_amount, reward_type, max_referrals) VALUES (10, 0, 'discount', 10)")
+        conn.commit()
+        c.execute("SELECT id, reward_percentage, reward_fixed_amount, reward_type, max_referrals, is_active FROM referral_settings LIMIT 1")
+        settings = c.fetchone()
+    
+    if request.method == 'POST':
+        c.execute("""
+            UPDATE referral_settings SET
+                reward_percentage=?, reward_fixed_amount=?, reward_type=?, max_referrals=?, is_active=?
+            WHERE id=?
+        """, (
+            int(request.form.get('reward_percentage', 10)),
+            float(request.form.get('reward_fixed_amount', 0)),
+            request.form.get('reward_type', 'discount'),
+            int(request.form.get('max_referrals', 10)),
+            1 if request.form.get('is_active') else 0,
+            settings[0]
+        ))
+        conn.commit()
+        conn.close()
+        return redirect('/admin/referral-settings')
+    
+    conn.close()
+    
+    sid, reward_percentage, reward_fixed_amount, reward_type, max_referrals, is_active = settings
+    
+    content = f'''
+    <div class="card">
+        <div class="card-header">🎁 Referral Program Settings</div>
+        <form method="POST">
+            <label>Reward Type</label>
+            <select name="reward_type">
+                <option value="discount" {"selected" if reward_type == 'discount' else ""}>Discount</option>
+                <option value="credit" {"selected" if reward_type == 'credit' else ""}>Credit</option>
+            </select>
+            <label>Reward Percentage (%) of referred user's first payment</label>
+            <input type="number" name="reward_percentage" value="{reward_percentage}" min="0" max="100">
+            <label>Fixed Reward Amount (UGX) – leave 0 if using percentage</label>
+            <input type="number" name="reward_fixed_amount" value="{reward_fixed_amount}" step="100" min="0">
+            <label>Max Referrals per user</label>
+            <input type="number" name="max_referrals" value="{max_referrals}" min="1" max="100">
+            <label>
+                <input type="checkbox" name="is_active" {"checked" if is_active else ""}>
+                Active (allow referrals)
+            </label>
+            <button type="submit" class="btn" style="margin-top:20px;">Save Settings</button>
+        </form>
+        <div style="margin-top:20px;">
+            <a href="/admin/dashboard" class="btn btn-outline">Back to Dashboard</a>
+        </div>
+    </div>
+    '''
+    return render_template_string(admin_base_template.replace("{title}", "Referral Settings").replace("{active_page}", "stats").replace("{content}", content))
 
 # ============================================================
 # ADMIN BACKUP ROUTES
