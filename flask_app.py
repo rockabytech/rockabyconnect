@@ -406,16 +406,15 @@ def set_user_theme(user_id, theme):
     conn.close()
 
 def render_user_template(template, title="", active_page="", **kwargs):
-    """
-    Render a template with the user's theme preference.
-    All placeholders in the template must be replaced here.
-    """
     # Get user's theme if logged in
     theme_class = ''
     if 'user_id' in session:
         theme = get_user_theme(session['user_id'])
         if theme and theme != 'default':
             theme_class = f"theme-{theme}"
+    
+    # DEBUG: uncomment to see theme in logs
+    # print(f"Theme class: '{theme_class}'")
     
     # Replace theme class
     if '{theme_class}' in template:
