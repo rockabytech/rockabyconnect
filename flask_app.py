@@ -406,26 +406,33 @@ def set_user_theme(user_id, theme):
     conn.close()
 
 def render_user_template(template, title="", active_page="", **kwargs):
-    # Get theme
+    # Get user's theme if logged in
     theme_class = ''
     if 'user_id' in session:
         theme = get_user_theme(session['user_id'])
-        print(f"[DEBUG] User {session['user_id']} theme = '{theme}'")  # ← CHECK LOGS
+        print(f"[DEBUG] User {session['user_id']} theme = '{theme}'")
         if theme and theme != 'default':
             theme_class = f"theme-{theme}"
     
-    # Replace {theme_class}
-    if '{theme_class}' in template:
-        template = template.replace('{theme_class}', theme_class)
+    print(f"[DEBUG] theme_class = '{theme_class}'")
+    
+    # ===== DIRECTLY INJECT THEME CLASS INTO <body> TAG =====
+    if theme_class:
+        template = template.replace('<body>', f'<body class="{theme_class}">')
+        template = template.replace('<body class="">', f'<body class="{theme_class}">')
+        template = template.replace('<body class="{theme_class}">', f'<body class="{theme_class}">')
     else:
-        print("[WARN] {theme_class} not found in template")  # ← CHECK LOGS
-
-    # Replace title, active_page
+        template = template.replace('<body class="theme-neon">', '<body>')
+        template = template.replace('<body class="{theme_class}">', '<body>')
+    # ===== END INJECTION =====
+    
+    # Replace title and active_page
     if '{title}' in template:
         template = template.replace('{title}', title)
     if '{active_page}' in template:
         template = template.replace('{active_page}', active_page)
     
+    # Replace any additional placeholders
     for key, value in kwargs.items():
         template = template.replace(f'{{{key}}}', str(value))
     
@@ -1305,7 +1312,7 @@ base_template = """
         }
     </style>
 </head>
-<body class="{theme_class}">
+<body>
     <nav class="navbar">
         <a href="/" class="logo">
             <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
