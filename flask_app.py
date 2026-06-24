@@ -397,36 +397,47 @@ def get_user_theme(user_id):
     return row[0] if row else 'default'
 
 def set_user_theme(user_id, theme):
-    """Set the user's theme preference"""
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
+    # First, ensure the column exists (just in case)
+    c.execute("PRAGMA table_info(users)")
+    if 'theme' not in [col[1] for col in c.fetchall()]:
+        c.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'default'")
+    # Now update
     c.execute("UPDATE users SET theme=? WHERE id=?", (theme, user_id))
     conn.commit()
     conn.close()
+    print(f"[DEBUG] set_user_theme: user {user_id} theme set to '{theme}'")
 
 def render_user_template(template, title="", active_page="", **kwargs):
-    # Get user's theme if logged in
+    """
+    Render a template with the user's theme preference.
+    Uses session first, then falls back to database.
+    """
     theme_class = ''
     if 'user_id' in session:
-        theme = get_user_theme(session['user_id'])
-        print(f"[DEBUG] User {session['user_id']} theme = '{theme}'")
+        # 1. Check session first
+        if 'user_theme' in session:
+            theme = session['user_theme']
+        else:
+            theme = get_user_theme(session['user_id'])
+            # Store in session for next time
+            session['user_theme'] = theme
+        
         if theme and theme != 'default':
             theme_class = f"theme-{theme}"
-    
-    print(f"[DEBUG] theme_class = '{theme_class}'")
     
     # ===== DIRECTLY INJECT THEME CLASS INTO <body> TAG =====
     if theme_class:
         template = template.replace('<body>', f'<body class="{theme_class}">')
         template = template.replace('<body class="">', f'<body class="{theme_class}">')
-        template = template.replace('<body class="{theme_class}">', f'<body class="{theme_class}">')
     else:
         template = template.replace('<body class="theme-neon">', '<body>')
         template = template.replace('<body class="{theme_class}">', '<body>')
     # ===== END INJECTION =====
     
-    # Replace title and active_page
+    # Replace title and active_page if they exist
     if '{title}' in template:
         template = template.replace('{title}', title)
     if '{active_page}' in template:
@@ -2753,15 +2764,20 @@ def settings():
     user_id = session['user_id']
     current_theme = get_user_theme(user_id)
     
+    # If session has theme, use it (faster)
+    if 'user_theme' in session:
+        current_theme = session['user_theme']
+    
     if request.method == 'POST':
         theme = request.form.get('theme', 'default')
         if theme in ['default', 'neon']:
             set_user_theme(user_id, theme)
-            session['theme'] = theme  # optional, for immediate UI
+            session['user_theme'] = theme  # Store in session for immediate effect
             return redirect('/settings')
         else:
             return "Invalid theme", 400
     
+    # Build theme dropdown
     theme_options = f'''
     <select name="theme" style="width:auto; min-width:200px; padding:10px; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
         <option value="default" {"selected" if current_theme == 'default' else ""}>Default – Original Design</option>
