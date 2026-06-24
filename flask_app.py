@@ -543,7 +543,7 @@ def process_referral(user_id, phone):
 # ADMIN REFERRAL SETTINGS
 # ============================================================
 @app.route('/admin/referral-settings', methods=['GET', 'POST'])
-def admin_referral_settings():
+def admin_referral_settings_page():  # ← Renamed to avoid conflict
     if not session.get('admin'):
         return redirect('/admin/login')
     
