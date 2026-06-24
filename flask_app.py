@@ -406,27 +406,26 @@ def set_user_theme(user_id, theme):
     conn.close()
 
 def render_user_template(template, title="", active_page="", **kwargs):
-    # Get user's theme if logged in
+    # Get theme
     theme_class = ''
     if 'user_id' in session:
         theme = get_user_theme(session['user_id'])
+        print(f"[DEBUG] User {session['user_id']} theme = '{theme}'")  # ← CHECK LOGS
         if theme and theme != 'default':
             theme_class = f"theme-{theme}"
     
-    # DEBUG: uncomment to see theme in logs
-    # print(f"Theme class: '{theme_class}'")
-    
-    # Replace theme class
+    # Replace {theme_class}
     if '{theme_class}' in template:
         template = template.replace('{theme_class}', theme_class)
-    
-    # Replace title and active_page if they exist
+    else:
+        print("[WARN] {theme_class} not found in template")  # ← CHECK LOGS
+
+    # Replace title, active_page
     if '{title}' in template:
         template = template.replace('{title}', title)
     if '{active_page}' in template:
         template = template.replace('{active_page}', active_page)
     
-    # Replace any additional placeholders
     for key, value in kwargs.items():
         template = template.replace(f'{{{key}}}', str(value))
     
@@ -611,9 +610,8 @@ def admin_referral_settings_page():  # ← Renamed to avoid conflict
 # ============================================================
 # BASE TEMPLATE (UNCHANGED)
 # ============================================================
-base_template = """
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"> """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -622,6 +620,9 @@ base_template = """
     <meta name="theme-color" content="#f5af19">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
+        /* ================================================
+           DEFAULT STYLES (YOUR ORIGINAL DESIGN)
+           ================================================ */
         * {
             margin: 0;
             padding: 0;
@@ -1090,6 +1091,188 @@ base_template = """
         }
         .install-btn:hover { transform: scale(1.05); }
 
+        /* ================================================
+           NEON THEME (Applied via body.theme-neon)
+           ================================================ */
+        body.theme-neon {
+            --primary: #00d4ff !important;
+            --primary-dark: #0099cc !important;
+            --bg: #0a0a1a !important;
+            --card-bg: rgba(20, 20, 40, 0.85) !important;
+            --text: #e0e0ff !important;
+            --text-secondary: #a0a0cc !important;
+            --border: rgba(0, 212, 255, 0.3) !important;
+            --shadow: 0 8px 32px rgba(0, 212, 255, 0.2) !important;
+            --glass-border: rgba(0, 212, 255, 0.15) !important;
+        }
+
+        body.theme-neon {
+            background: #0a0a1a !important;
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(255, 0, 150, 0.1) 0%, transparent 50%) !important;
+        }
+
+        body.theme-neon .hero {
+            background: rgba(0, 212, 255, 0.05) !important;
+            border: 1px solid rgba(0, 212, 255, 0.2) !important;
+        }
+
+        body.theme-neon .hero h1 {
+            background: linear-gradient(135deg, #00d4ff, #ff00a0) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            background-clip: text !important;
+        }
+
+        body.theme-neon .btn {
+            background: linear-gradient(135deg, #00d4ff, #0099cc) !important;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.4) !important;
+        }
+        body.theme-neon .btn:hover {
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.6) !important;
+            transform: translateY(-2px) !important;
+        }
+        body.theme-neon .btn-outline {
+            border-color: #00d4ff !important;
+            color: #00d4ff !important;
+        }
+        body.theme-neon .btn-outline:hover {
+            background: rgba(0, 212, 255, 0.15) !important;
+        }
+
+        body.theme-neon .card {
+            background: rgba(20, 20, 40, 0.85) !important;
+            border: 1px solid rgba(0, 212, 255, 0.2) !important;
+        }
+        body.theme-neon .card:hover {
+            border-color: rgba(0, 212, 255, 0.4) !important;
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.1) !important;
+        }
+        body.theme-neon .card-header {
+            border-bottom-color: rgba(0, 212, 255, 0.2) !important;
+        }
+
+        body.theme-neon .stat-card {
+            background: rgba(20, 20, 40, 0.7) !important;
+            border: 1px solid rgba(0, 212, 255, 0.15) !important;
+        }
+        body.theme-neon .stat-card h3 {
+            color: #00d4ff !important;
+        }
+        body.theme-neon .stat-card::before {
+            background: linear-gradient(135deg, #00d4ff, #ff00a0) !important;
+            opacity: 0.2 !important;
+        }
+
+        body.theme-neon .navbar {
+            background: rgba(20, 20, 40, 0.9) !important;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.2) !important;
+        }
+        body.theme-neon .logo-text span {
+            color: #00d4ff !important;
+        }
+        body.theme-neon .nav-links a:hover,
+        body.theme-neon .nav-links a.active {
+            background: rgba(0, 212, 255, 0.15) !important;
+            color: #00d4ff !important;
+        }
+
+        body.theme-neon .chip {
+            background: rgba(0, 212, 255, 0.15) !important;
+            border-color: rgba(0, 212, 255, 0.2) !important;
+        }
+        body.theme-neon .chip:hover {
+            background: #00d4ff !important;
+            color: #0a0a1a !important;
+        }
+
+        body.theme-neon .badge-available { 
+            background: #00d4ff !important; 
+            color: #0a0a1a !important; 
+        }
+        body.theme-neon .badge-open { 
+            background: #00d4ff !important; 
+            color: #0a0a1a !important; 
+        }
+        body.theme-neon .badge-occupied { 
+            background: #ff00a0 !important; 
+            color: #fff !important; 
+        }
+        body.theme-neon .badge-closed { 
+            background: #ff0040 !important; 
+            color: #fff !important; 
+        }
+        body.theme-neon .badge-taken { 
+            background: #ff00a0 !important; 
+            color: #fff !important; 
+        }
+        body.theme-neon .badge-leave { 
+            background: #666 !important; 
+            color: #fff !important; 
+        }
+
+        body.theme-neon .theme-toggle {
+            background: rgba(0, 212, 255, 0.15) !important;
+            border-color: rgba(0, 212, 255, 0.3) !important;
+        }
+        body.theme-neon .theme-toggle:hover {
+            background: rgba(0, 212, 255, 0.3) !important;
+        }
+
+        body.theme-neon .whatsapp-float {
+            background: linear-gradient(135deg, #00d4ff, #0099cc) !important;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.5) !important;
+        }
+        body.theme-neon .whatsapp-float:hover {
+            box-shadow: 0 0 50px rgba(0, 212, 255, 0.7) !important;
+        }
+
+        body.theme-neon footer {
+            border-top: 1px solid rgba(0, 212, 255, 0.2) !important;
+        }
+
+        body.theme-neon .provider-card:hover,
+        body.theme-neon .job-card:hover,
+        body.theme-neon .vendor-card:hover {
+            background: rgba(0, 212, 255, 0.05) !important;
+        }
+
+        body.theme-neon input:focus,
+        body.theme-neon textarea:focus,
+        body.theme-neon select:focus {
+            border-color: #00d4ff !important;
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.3) !important;
+        }
+        body.theme-neon input,
+        body.theme-neon textarea,
+        body.theme-neon select {
+            background: rgba(20, 20, 40, 0.6) !important;
+            border-color: rgba(0, 212, 255, 0.2) !important;
+            color: #e0e0ff !important;
+        }
+
+        body.theme-neon th {
+            color: #00d4ff !important;
+        }
+        body.theme-neon td {
+            border-bottom-color: rgba(0, 212, 255, 0.1) !important;
+        }
+
+        body.theme-neon .alert-success {
+            background: rgba(0, 212, 255, 0.1) !important;
+            border-color: rgba(0, 212, 255, 0.3) !important;
+            color: #00d4ff !important;
+        }
+        body.theme-neon .alert-error {
+            background: rgba(255, 0, 100, 0.1) !important;
+            border-color: rgba(255, 0, 100, 0.3) !important;
+            color: #ff0064 !important;
+        }
+
+        /* ================================================
+           RESPONSIVE STYLES
+           ================================================ */
         @media (max-width: 768px) {
             .navbar { padding: 12px 16px; }
             .nav-links {
@@ -1140,6 +1323,8 @@ base_template = """
             <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">Jobs</a>
             <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">Vendors</a>
             {% if session.user_id %}
+                <a href="/refer" class="{{ 'active' if active_page == 'refer' else '' }}">🎁 Refer</a>
+                <a href="/settings" class="{{ 'active' if active_page == 'settings' else '' }}">⚙️ Settings</a>
                 <a href="/logout">Logout</a>
             {% else %}
                 <a href="/login" class="{{ 'active' if active_page == 'login' else '' }}">Login</a>
