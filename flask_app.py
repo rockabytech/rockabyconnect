@@ -88,7 +88,13 @@ def init_db():
         password_hash TEXT NOT NULL
     )''')
 
-    # ---- PROVIDERS TABLE (Freelancers) ----
+    # Add theme column if missing
+    c.execute("PRAGMA table_info(users)")
+    columns = [col[1] for col in c.fetchall()]
+    if 'theme' not in columns:
+        c.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'default'")
+
+    # ---- PROVIDERS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS providers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER UNIQUE NOT NULL,
@@ -175,10 +181,8 @@ def init_db():
     )''')
 
     # ============================================================
-    # REFERRAL TABLES (NEW)
+    # REFERRAL TABLES
     # ============================================================
-
-    # ---- REFERRAL CODES TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS referral_codes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL UNIQUE,
@@ -187,7 +191,6 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
-    # ---- REFERRAL TRACKING TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS referrals (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         referrer_id INTEGER NOT NULL,
@@ -202,7 +205,6 @@ def init_db():
         FOREIGN KEY(referred_user_id) REFERENCES users(id)
     )''')
 
-    # ---- REFERRAL SETTINGS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS referral_settings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         reward_percentage INTEGER DEFAULT 10,
@@ -380,6 +382,232 @@ def process_referral(user_id, phone):
     session.pop('referral_code', None)
     
     return True
+
+# ============================================================
+# THEME HELPERS
+# ============================================================
+def get_user_theme(user_id):
+    """Get the user's theme preference (default: 'default')"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    c.execute("SELECT theme FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else 'default'
+
+def set_user_theme(user_id, theme):
+    """Set the user's theme preference"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    c.execute("UPDATE users SET theme=? WHERE id=?", (theme, user_id))
+    conn.commit()
+    conn.close()
+
+def render_user_template(template, title="", active_page="", **kwargs):
+    """
+    Render a template with the user's theme preference.
+    All placeholders in the template must be replaced here.
+    """
+    # Get user's theme if logged in
+    theme_class = ''
+    if 'user_id' in session:
+        theme = get_user_theme(session['user_id'])
+        if theme and theme != 'default':
+            theme_class = f"theme-{theme}"
+    
+    # Replace theme class
+    if '{theme_class}' in template:
+        template = template.replace('{theme_class}', theme_class)
+    
+    # Replace title and active_page if they exist
+    if '{title}' in template:
+        template = template.replace('{title}', title)
+    if '{active_page}' in template:
+        template = template.replace('{active_page}', active_page)
+    
+    # Replace any additional placeholders
+    for key, value in kwargs.items():
+        template = template.replace(f'{{{key}}}', str(value))
+    
+    return render_template_string(template)
+
+# ============================================================
+# REFERRAL HELPERS
+# ============================================================
+import hashlib
+
+def generate_referral_code(user_id):
+    """Generate a unique referral code for a user"""
+    code = f"REF-{hashlib.md5(f'{user_id}{datetime.now().timestamp()}'.encode()).hexdigest()[:6].upper()}"
+    return code
+
+def get_referral_code(user_id):
+    """Get or create referral code for a user"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    c.execute("SELECT code FROM referral_codes WHERE user_id=?", (user_id,))
+    row = c.fetchone()
+    if row:
+        conn.close()
+        return row[0]
+    # Generate new code
+    code = generate_referral_code(user_id)
+    c.execute("INSERT INTO referral_codes (user_id, code) VALUES (?,?)", (user_id, code))
+    conn.commit()
+    conn.close()
+    return code
+
+def get_referral_stats(user_id):
+    """Get referral statistics for a user"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    total = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (user_id,)).fetchone()[0]
+    pending = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status='pending'", (user_id,)).fetchone()[0]
+    completed = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status='completed'", (user_id,)).fetchone()[0]
+    rewarded = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status='rewarded'", (user_id,)).fetchone()[0]
+    total_rewards = c.execute("SELECT COALESCE(SUM(reward_amount),0) FROM referrals WHERE referrer_id=? AND status='rewarded'", (user_id,)).fetchone()[0]
+    conn.close()
+    return {
+        'total': total,
+        'pending': pending,
+        'completed': completed,
+        'rewarded': rewarded,
+        'total_rewards': total_rewards
+    }
+
+def process_referral(user_id, phone):
+    """
+    Check if there's a referral code in session, and if so,
+    create a referral record for the new user signing up.
+    """
+    if 'referral_code' not in session:
+        return False
+    
+    ref_code = session['referral_code']
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    
+    # Find the referrer (user who owns this referral code)
+    c.execute("SELECT user_id FROM referral_codes WHERE code = ?", (ref_code,))
+    referrer = c.fetchone()
+    if not referrer:
+        conn.close()
+        return False
+    
+    referrer_id = referrer[0]
+    
+    # Prevent self-referral
+    if referrer_id == user_id:
+        conn.close()
+        return False
+    
+    # Check if this user has already been referred by this referrer
+    c.execute("SELECT id FROM referrals WHERE referrer_id = ? AND referred_user_id = ?", (referrer_id, user_id))
+    if c.fetchone():
+        conn.close()
+        return False
+    
+    # Get referral settings
+    c.execute("SELECT reward_percentage, reward_type, max_referrals FROM referral_settings WHERE is_active=1 LIMIT 1")
+    settings = c.fetchone()
+    if not settings:
+        settings = (10, 'discount', 10)  # Default
+    
+    reward_percentage, reward_type, max_referrals = settings
+    
+    # Count completed referrals for this referrer
+    count = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status IN ('completed', 'rewarded')", (referrer_id,)).fetchone()[0]
+    if count >= max_referrals:
+        conn.close()
+        return False
+    
+    # Insert pending referral
+    c.execute("""
+        INSERT INTO referrals (referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type)
+        VALUES (?, ?, ?, 'pending', 0, ?)
+    """, (referrer_id, user_id, phone, reward_type))
+    conn.commit()
+    conn.close()
+    
+    # Clear the session
+    session.pop('referral_code', None)
+    
+    return True
+
+# ============================================================
+# ADMIN REFERRAL SETTINGS
+# ============================================================
+@app.route('/admin/referral-settings', methods=['GET', 'POST'])
+def admin_referral_settings():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    
+    # Get current settings
+    c.execute("SELECT id, reward_percentage, reward_fixed_amount, reward_type, max_referrals, is_active FROM referral_settings LIMIT 1")
+    settings = c.fetchone()
+    if not settings:
+        c.execute("INSERT INTO referral_settings (reward_percentage, reward_fixed_amount, reward_type, max_referrals) VALUES (10, 0, 'discount', 10)")
+        conn.commit()
+        c.execute("SELECT id, reward_percentage, reward_fixed_amount, reward_type, max_referrals, is_active FROM referral_settings LIMIT 1")
+        settings = c.fetchone()
+    
+    if request.method == 'POST':
+        c.execute("""
+            UPDATE referral_settings SET
+                reward_percentage=?, reward_fixed_amount=?, reward_type=?, max_referrals=?, is_active=?
+            WHERE id=?
+        """, (
+            int(request.form.get('reward_percentage', 10)),
+            float(request.form.get('reward_fixed_amount', 0)),
+            request.form.get('reward_type', 'discount'),
+            int(request.form.get('max_referrals', 10)),
+            1 if request.form.get('is_active') else 0,
+            settings[0]
+        ))
+        conn.commit()
+        conn.close()
+        return redirect('/admin/referral-settings')
+    
+    conn.close()
+    
+    sid, reward_percentage, reward_fixed_amount, reward_type, max_referrals, is_active = settings
+    
+    content = f'''
+    <div class="card">
+        <div class="card-header">🎁 Referral Program Settings</div>
+        <form method="POST">
+            <label>Reward Type</label>
+            <select name="reward_type">
+                <option value="discount" {"selected" if reward_type == 'discount' else ""}>Discount</option>
+                <option value="credit" {"selected" if reward_type == 'credit' else ""}>Credit</option>
+            </select>
+            <label>Reward Percentage (%) of referred user's first payment</label>
+            <input type="number" name="reward_percentage" value="{reward_percentage}" min="0" max="100">
+            <label>Fixed Reward Amount (UGX) – leave 0 if using percentage</label>
+            <input type="number" name="reward_fixed_amount" value="{reward_fixed_amount}" step="100" min="0">
+            <label>Max Referrals per user</label>
+            <input type="number" name="max_referrals" value="{max_referrals}" min="1" max="100">
+            <label>
+                <input type="checkbox" name="is_active" {"checked" if is_active else ""}>
+                Active (allow referrals)
+            </label>
+            <button type="submit" class="btn" style="margin-top:20px;">Save Settings</button>
+        </form>
+        <div style="margin-top:20px;">
+            <a href="/admin/dashboard" class="btn btn-outline">Back to Dashboard</a>
+        </div>
+    </div>
+    '''
+    return render_template_string(admin_base_template.replace("{title}", "Referral Settings").replace("{active_page}", "stats").replace("{content}", content))
 
 # ============================================================
 # BASE TEMPLATE (UNCHANGED)
@@ -894,7 +1122,7 @@ base_template = """
         }
     </style>
 </head>
-<body>
+<body class="{theme_class}">
     <nav class="navbar">
         <a href="/" class="logo">
             <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
@@ -1295,7 +1523,7 @@ admin_base_template = """
         }
     </style>
 </head>
-<body>
+<body class="{theme_class}">
     <nav class="navbar">
         <a href="/admin/dashboard" class="logo">
             <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
@@ -1688,12 +1916,17 @@ def signup():
             c.execute("INSERT INTO users (phone, name, password_hash) VALUES (?, ?, ?)", (phone, name, hashed))
             user_id = c.lastrowid
             conn.commit()
+            
+            # ---- PROCESS REFERRAL ----
+            process_referral(user_id, phone)
+            # ---- END REFERRAL ----
+            
             conn.close()
             add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready.')
             return redirect(url_for('login'))
         except sqlite3.IntegrityError:
             return "Phone number already registered. <a href='/login'>Login</a>"
-    return render_template_string(signup_page)
+    return render_user_template(signup_page, title="Sign Up", active_page="signup")
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1712,7 +1945,7 @@ def login():
             return redirect(url_for('dashboard'))
         else:
             return "Invalid credentials. <a href='/login'>Try again</a>"
-    return render_template_string(login_page)
+    return render_user_template(login_page, title="Login", active_page="login")
 
 @app.route('/logout')
 def logout():
@@ -1722,7 +1955,8 @@ def logout():
 @app.route('/edit-name')
 @login_required
 def edit_name():
-    return render_template_string(edit_name_page.replace("{current_name}", session['user_name']))
+    content = edit_name_page.replace("{current_name}", session['user_name'])
+    return render_user_template(content, title="Edit Name", active_page="")
 
 @app.route('/update-name', methods=['POST'])
 @login_required
@@ -1823,14 +2057,19 @@ def dashboard():
     else:
         jobs_html = "<p>No jobs posted yet.</p>"
 
-    # ===== REFERRAL LINK ADDED HERE =====
     dashboard_content = f"""
         <div class="card">
             <div class="card-header">Welcome, {session['user_name']}!</div>
             <p style="color:var(--text-secondary);"><a href="/edit-name" style="font-size:0.85rem; color:var(--primary-dark);">Edit my name</a></p>
             <p style="color:#666;">Manage your freelance presence, vendor profile, and job postings.</p>
             
-            <!-- REFERRAL SECTION -->
+            <!-- Quick Actions -->
+            <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
+                <a href="/settings" class="btn btn-small" style="background:var(--primary-dark);">⚙️ Settings</a>
+                <a href="/refer" class="btn btn-small" style="background:var(--primary);">🎁 Refer a Friend</a>
+            </div>
+            
+            <!-- Referral Banner -->
             <div style="margin-top:15px; padding:15px; background:linear-gradient(135deg, rgba(245,175,25,0.1), rgba(245,175,25,0.05)); border-radius:12px; border:1px solid var(--glass-border);">
                 <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                     <span style="font-size:1.8rem;">🎁</span>
@@ -1854,7 +2093,10 @@ def dashboard():
             <a href="/post-job" class="btn" style="margin-top:10px;">Post a New Job</a>
         </div>
     """
-    return render_template_string(dashboard_template.replace("{dashboard_content}", dashboard_content))
+    return render_user_template(dashboard_template, 
+                                title="Dashboard", 
+                                active_page="dashboard", 
+                                dashboard_content=dashboard_content)
 
 # ---------- Freelancer Profile (create/edit) ----------
 @app.route('/create-profile', methods=['GET', 'POST'])
@@ -1893,7 +2135,7 @@ def create_profile():
     form_html = form_html.replace("{district}", "").replace("{village}", "").replace("{bio}", "")
     status_options = ''.join([f'<option value="{s}">{s}</option>' for s in FREELANCER_STATUSES])
     form_html = form_html.replace("{status_options}", status_options)
-    return render_template_string(form_html)
+    return render_user_template(form_html, title="Create Profile", active_page="dashboard")
 
 @app.route('/edit-profile', methods=['GET', 'POST'])
 @login_required
@@ -1934,7 +2176,7 @@ def edit_profile():
     status_options = ''.join([f'<option value="{s}" {"selected" if s==status else ""}>{s}</option>' for s in FREELANCER_STATUSES])
     form_html = form_html.replace("{status_options}", status_options)
     conn.close()
-    return render_template_string(form_html)
+    return render_user_template(form_html, title="Edit Profile", active_page="dashboard")
 
 # ---------- Vendor Profile (create/edit) ----------
 @app.route('/create-vendor-profile', methods=['GET', 'POST'])
@@ -1976,7 +2218,7 @@ def create_vendor_profile():
     form = form.replace("{landmark}", "").replace("{bio}", "")
     status_options = ''.join([f'<option value="{s}">{s}</option>' for s in VENDOR_STATUSES])
     form = form.replace("{status_options}", status_options)
-    return render_template_string(form)
+    return render_user_template(form, title="Create Vendor Profile", active_page="dashboard")
 
 @app.route('/edit-vendor-profile', methods=['GET', 'POST'])
 @login_required
@@ -2019,7 +2261,7 @@ def edit_vendor_profile():
     status_options = ''.join([f'<option value="{s}" {"selected" if s==status else ""}>{s}</option>' for s in VENDOR_STATUSES])
     form = form.replace("{status_options}", status_options)
     conn.close()
-    return render_template_string(form)
+    return render_user_template(form, title="Edit Vendor Profile", active_page="dashboard")
 
 # ---------- Boost Vendor ----------
 @app.route('/boost-vendor')
@@ -2033,7 +2275,7 @@ def boost_vendor():
     conn.close()
     if not vendor:
         return redirect('/create-vendor-profile')
-    return render_template_string(base_template.replace("{title}", "Boost Vendor").replace("{active_page}", "dashboard").replace("{content}", """
+    content = """
         <div class="card">
             <div class="card-header">Boost Your Vendor Profile</div>
             <p>Get your shop at the top of the vendor list!</p>
@@ -2060,7 +2302,8 @@ def boost_vendor():
                 <button type="submit" class="btn" style="margin-top:20px;">Submit for Verification</button>
             </form>
         </div>
-    """))
+    """
+    return render_user_template(base_template, title="Boost Vendor", active_page="dashboard", content=content)
 
 @app.route('/boost-vendor-submit', methods=['POST'])
 @login_required
@@ -2073,9 +2316,10 @@ def boost_vendor_submit():
               (session['user_id'], trans_id, plan))
     conn.commit()
     conn.close()
-    return render_template_string(base_template.replace("{title}", "Boost Submitted").replace("{active_page}", "dashboard").replace("{content}", """
+    content = """
         <div class="card"><h2>Vendor Boost Submitted</h2><p>We'll verify and activate soon.</p><a href="/dashboard" class="btn">Back</a></div>
-    """))
+    """
+    return render_user_template(base_template, title="Boost Submitted", active_page="dashboard", content=content)
 
 # ---------- Vendor Public Listing & Detail ----------
 @app.route('/vendors')
@@ -2118,7 +2362,8 @@ def list_vendors():
         </div>"""
     if not cards:
         cards = "<p>No vendors yet.</p>"
-    return render_template_string(vendor_list_page.replace("{cards}", cards))
+    # Use vendor_list_page template from earlier – it already has {cards}
+    return render_user_template(vendor_list_page, title="Vendors", active_page="vendors", cards=cards)
 
 @app.route('/vendor/<int:vendor_id>')
 def vendor_detail(vendor_id):
@@ -2167,7 +2412,7 @@ def vendor_detail(vendor_id):
     detail_html = detail_html.replace("{feat}", feat)
     detail_html = detail_html.replace("{contact_display}", contact_display)
     conn.close()
-    return render_template_string(detail_html)
+    return render_user_template(detail_html, title=f"Vendor: {bname}", active_page="vendors")
 
 # ---------- Boost & Admin ----------
 @app.route('/boost')
@@ -2181,7 +2426,7 @@ def boost_profile():
     conn.close()
     if not provider:
         return redirect('/create-profile')
-    return render_template_string(base_template.replace("{title}", "Boost Your Profile").replace("{active_page}", "dashboard").replace("{content}", """
+    content = """
         <div class="card">
             <div class="card-header">Boost Your Profile</div>
             <p>Get featured at the top of the search results and attract more customers!</p>
@@ -2208,7 +2453,8 @@ def boost_profile():
                 <button type="submit" class="btn" style="margin-top:20px;">Submit for Verification</button>
             </form>
         </div>
-    """))
+    """
+    return render_user_template(base_template, title="Boost Profile", active_page="dashboard", content=content)
 
 @app.route('/boost-submit', methods=['POST'])
 @login_required
@@ -2222,9 +2468,10 @@ def boost_submit():
     conn.commit()
     conn.close()
     add_notification(session['user_id'], 'sms', f'Boost request received (ID {trans_id}). We will verify shortly.')
-    return render_template_string(base_template.replace("{title}", "Boost Submitted").replace("{active_page}", "dashboard").replace("{content}", """
+    content = """
         <div class="card"><h2>Boost Request Submitted</h2><p>We'll verify and activate soon.</p><a href="/dashboard" class="btn">Back</a></div>
-    """))
+    """
+    return render_user_template(base_template, title="Boost Submitted", active_page="dashboard", content=content)
 
 @app.route('/boost-job/<int:job_id>')
 @login_required
@@ -2236,7 +2483,7 @@ def boost_job(job_id):
     conn.close()
     if not job or job[1] != session['user_id']:
         return "Job not found or unauthorized.", 404
-    return render_template_string(base_template.replace("{title}", "Boost Job").replace("{active_page}", "dashboard").replace("{content}", f"""
+    content = f"""
         <div class="card">
             <div class="card-header">Boost Job: {job[2]}</div>
             <p>Make your job listing stand out!</p>
@@ -2262,7 +2509,35 @@ def boost_job(job_id):
                 <button type="submit" class="btn" style="margin-top:20px;">Submit</button>
             </form>
         </div>
-    """))
+    """
+    return render_user_template(base_template, title="Boost Job", active_page="dashboard", content=content)
+
+@app.route('/post-job', methods=['GET', 'POST'])
+@login_required
+def post_job():
+    if request.method == 'POST':
+        title = request.form['title']
+        company = request.form.get('company', '')
+        description = request.form['description']
+        location = request.form['location']
+        village = request.form.get('village', '')
+        contact = request.form.get('contact', '')
+        file = request.files.get('job_image')
+        filename = None
+        if file and allowed_file(file.filename):
+            filename = save_resized_image(file, max_width=800)
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image) VALUES (?,?,?,?,?,?,?,'Open',?)",
+                  (session['user_id'], title, company, description, location, village, contact, filename))
+        conn.commit()
+        conn.close()
+        return redirect('/dashboard')
+    form = job_form_template.replace("{job_form_title}", "Post a Job").replace("{form_header}", "Post a New Job")
+    form = form.replace("{title_val}", "").replace("{company_val}", "").replace("{description_val}", "")
+    form = form.replace("{location_val}", "").replace("{village_val}", "").replace("{contact_val}", "")
+    form = form.replace("{submit_button}", "Post Job")
+    return render_user_template(form, title="Post a Job", active_page="jobs")
 
 @app.route('/boost-job-submit/<int:job_id>', methods=['POST'])
 @login_required
@@ -2275,22 +2550,53 @@ def boost_job_submit(job_id):
               (session['user_id'], trans_id, plan, job_id))
     conn.commit()
     conn.close()
-    return render_template_string(base_template.replace("{title}", "Boost Submitted").replace("{active_page}", "dashboard").replace("{content}", """
+    content = """
         <div class="card"><h2>Job Boost Submitted</h2><p>We'll verify and activate soon.</p><a href="/dashboard" class="btn">Back</a></div>
-    """))
+    """
+    return render_user_template(base_template, title="Boost Submitted", active_page="dashboard", content=content)
+
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    user_id = session['user_id']
+    current_theme = get_user_theme(user_id)
+    
+    if request.method == 'POST':
+        theme = request.form.get('theme', 'default')
+        if theme in ['default', 'neon']:
+            set_user_theme(user_id, theme)
+            session['theme'] = theme  # optional, for immediate UI
+            return redirect('/settings')
+        else:
+            return "Invalid theme", 400
+    
+    theme_options = f'''
+    <select name="theme" style="width:auto; min-width:200px; padding:10px; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+        <option value="default" {"selected" if current_theme == 'default' else ""}>Default – Original Design</option>
+        <option value="neon" {"selected" if current_theme == 'neon' else ""}>Neon – Vibrant & Glowing</option>
+    </select>
+    '''
+    
+    content = f'''
+    <div class="card">
+        <div class="card-header">⚙️ Settings</div>
+        <form method="POST">
+            <label>Theme Preference</label>
+            {theme_options}
+            <small style="display:block; color:var(--text-secondary); margin-top:5px;">Choose the look of your RockabyConnect experience.</small>
+            <button type="submit" class="btn" style="margin-top:20px;">Save Settings</button>
+        </form>
+    </div>
+    '''
+    return render_user_template(base_template, title="Settings", active_page="settings", content=content)
 
 @app.route('/refer')
 @login_required
 def refer():
     user_id = session['user_id']
-    
-    # Get or create referral code
     referral_code = get_referral_code(user_id)
-    
-    # Get stats
     stats = get_referral_stats(user_id)
     
-    # Get referral history
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
@@ -2303,19 +2609,16 @@ def refer():
     """, (user_id,)).fetchall()
     conn.close()
     
-    # Build referral history rows
     referral_rows = ''
     if referrals:
         for r in referrals:
-            # r structure: id, referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type, created_at, completed_at, referred_name
+            # r: id, referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type, created_at, completed_at, referred_name
             status_badge = {
                 'pending': '<span class="badge" style="background:#ffc107;color:#000;">Pending</span>',
                 'completed': '<span class="badge" style="background:#17a2b8;color:#fff;">Completed</span>',
                 'rewarded': '<span class="badge" style="background:#28a745;color:#fff;">Rewarded</span>'
             }.get(r[4], r[4])
-            
             referred_display = r[9] if r[9] else (r[3] if r[3] else 'Unknown')
-            
             referral_rows += f'''
             <tr>
                 <td>{referred_display}</td>
@@ -2328,12 +2631,10 @@ def refer():
     else:
         referral_rows = '<tr><td colspan="5" style="text-align:center;padding:20px;">No referrals yet. Share your link to get started!</td></tr>'
     
-    # Build referral link
     base_url = request.base_url.replace('/refer', '')
     referral_link = f"{base_url}/?ref={referral_code}"
     
     content = f'''
-    <!-- Referral Stats -->
     <div class="stat-grid" style="margin-bottom:20px;">
         <div class="stat-card">
             <h3>{stats['total']}</h3>
@@ -2353,11 +2654,8 @@ def refer():
         </div>
     </div>
     
-    <!-- Referral Link Card -->
     <div class="card">
-        <div class="card-header">
-            <i class="fas fa-share-alt"></i> Your Referral Link
-        </div>
+        <div class="card-header"><i class="fas fa-share-alt"></i> Your Referral Link</div>
         <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
             <input type="text" id="referralLink" value="{referral_link}" readonly 
                    style="flex:1; min-width:200px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
@@ -2376,31 +2674,19 @@ def refer():
         <div style="margin-top:15px; padding:15px; background:var(--bg); border-radius:8px;">
             <p><strong>Referral Code:</strong> <code style="font-size:1.2rem; background:var(--card-bg); padding:4px 12px; border-radius:6px;">{referral_code}</code></p>
             <p style="color:var(--text-secondary); font-size:0.9rem;">
-                <i class="fas fa-info-circle"></i> 
-                Share your referral link with friends. When they sign up and become active, you earn rewards!
+                <i class="fas fa-info-circle"></i> Share your referral link with friends. When they sign up, you earn rewards!
             </p>
         </div>
     </div>
     
-    <!-- Referral History -->
     <div class="card">
-        <div class="card-header">
-            <i class="fas fa-history"></i> Referral History
-        </div>
+        <div class="card-header"><i class="fas fa-history"></i> Referral History</div>
         <div class="table-responsive" style="overflow-x:auto;">
             <table>
                 <thead>
-                    <tr>
-                        <th>Referred User</th>
-                        <th>Date</th>
-                        <th>Completed</th>
-                        <th>Status</th>
-                        <th>Reward</th>
-                    </tr>
+                    <tr><th>Referred User</th><th>Date</th><th>Completed</th><th>Status</th><th>Reward</th></tr>
                 </thead>
-                <tbody>
-                    {referral_rows}
-                </tbody>
+                <tbody>{referral_rows}</tbody>
             </table>
         </div>
     </div>
@@ -2419,7 +2705,7 @@ def refer():
         }}
     </script>
     '''
-    return render_template_string(base_template.replace("{title}", "Refer a Friend").replace("{active_page}", "").replace("{content}", content))
+    return render_user_template(base_template, title="Refer a Friend", active_page="", content=content)
 
 # ============================================================
 # ADMIN ROUTES (using admin_base_template)
@@ -2962,32 +3248,7 @@ def admin_restore():
 
 
 # ---------- Job posting, editing, public job listing, provider detail, reviews ----------
-@app.route('/post-job', methods=['GET', 'POST'])
-@login_required
-def post_job():
-    if request.method == 'POST':
-        title = request.form['title']
-        company = request.form.get('company', '')
-        description = request.form['description']
-        location = request.form['location']
-        village = request.form.get('village', '')
-        contact = request.form.get('contact', '')
-        file = request.files.get('job_image')
-        filename = None
-        if file and allowed_file(file.filename):
-            filename = save_resized_image(file, max_width=800)
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image) VALUES (?,?,?,?,?,?,?,'Open',?)",
-                  (session['user_id'], title, company, description, location, village, contact, filename))
-        conn.commit()
-        conn.close()
-        return redirect('/dashboard')
-    form = job_form_template.replace("{job_form_title}", "Post a Job").replace("{form_header}", "Post a New Job")
-    form = form.replace("{title_val}", "").replace("{company_val}", "").replace("{description_val}", "")
-    form = form.replace("{location_val}", "").replace("{village_val}", "").replace("{contact_val}", "")
-    form = form.replace("{submit_button}", "Post Job")
-    return render_template_string(form)
+
 
 @app.route('/edit-job/<int:job_id>', methods=['GET', 'POST'])
 @login_required
@@ -3030,7 +3291,7 @@ def edit_job(job_id):
     """
     form = form.replace('</form>', f'{status_dropdown}\n</form>')
     conn.close()
-    return render_template_string(form)
+    return render_user_template(form, title="Edit Job", active_page="jobs")
 
 @app.route('/list')
 def list_providers():
@@ -3075,7 +3336,7 @@ def list_providers():
         </div>"""
     if not cards_html:
         cards_html = "<p>No providers yet.</p>"
-    return render_template_string(list_page.replace("{cards}", cards_html))
+    return render_user_template(list_page, title="Find Skills", active_page="list", cards=cards_html)
 
 @app.route('/jobs')
 def list_jobs():
@@ -3119,7 +3380,7 @@ def list_jobs():
         </div>"""
     if not jobs_html:
         jobs_html = "<p>No jobs yet.</p>"
-    return render_template_string(job_list_page.replace("{jobs_html}", jobs_html))
+    return render_user_template(job_list_page, title="Jobs", active_page="jobs", jobs_html=jobs_html)
 
 @app.route('/provider/<int:provider_id>')
 def provider_detail(provider_id):
@@ -3193,7 +3454,7 @@ def provider_detail(provider_id):
     detail_html = detail_html.replace("{reviews_html}", reviews_html)
     detail_html = detail_html.replace("{review_form}", review_form)
     conn.close()
-    return render_template_string(detail_html)
+    return render_user_template(detail_html, title=f"Provider: {name}", active_page="list")
 
 @app.route('/review/<int:provider_id>', methods=['POST'])
 @login_required
