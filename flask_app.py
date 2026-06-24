@@ -3066,7 +3066,7 @@ def admin_dashboard():
         </div>
     </div>
     """
-    return render_template_string(admin_base_template.replace("{title}", "Dashboard").replace("{active_page}", "dashboard").replace("{content}", content))
+    return render_user_template(admin_base_template, title="Dashboard", active_page="dashboard", content=content)
 
 @app.route('/admin/stats')
 def admin_stats():
@@ -3163,7 +3163,7 @@ def admin_stats():
         </div>
     </div>
     """
-    return render_template_string(admin_base_template.replace("{title}", "Statistics").replace("{active_page}", "stats").replace("{content}", content))
+    return render_user_template(admin_base_template, title="Statistics", active_page="stats", content=content)
 
 # --- Boost approval/rejection routes (unchanged logic, just redirect) ---
 @app.route('/admin/approve-boost/<int:req_id>')
@@ -3354,7 +3354,7 @@ def admin_backups():
         </div>
     </div>
     """
-    return render_template_string(admin_base_template.replace("{title}", "Backups").replace("{active_page}", "backups").replace("{content}", content))
+    return render_user_template(admin_base_template, title="Backups", active_page="backups", content=content)
 @app.route('/admin/download-backup/<filename>')
 def admin_download_backup(filename):
     if not session.get('admin'):
@@ -3452,7 +3452,7 @@ def admin_restore():
         </div>
     </div>
     """
-    return render_template_string(admin_base_template.replace("{title}", "Restore Database").replace("{active_page}", "backups").replace("{content}", content))
+    return render_user_template(admin_base_template, title="Restore Database", active_page="backups", content=content)
 
 
 # ---------- Job posting, editing, public job listing, provider detail, reviews ----------
