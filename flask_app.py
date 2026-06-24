@@ -397,53 +397,48 @@ def get_user_theme(user_id):
     return row[0] if row else 'default'
 
 def set_user_theme(user_id, theme):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
-    c = conn.cursor()
-    # First, ensure the column exists (just in case)
-    c.execute("PRAGMA table_info(users)")
-    if 'theme' not in [col[1] for col in c.fetchall()]:
-        c.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'default'")
-    # Now update
-    c.execute("UPDATE users SET theme=? WHERE id=?", (theme, user_id))
-    conn.commit()
-    conn.close()
-    print(f"[DEBUG] set_user_theme: user {user_id} theme set to '{theme}'")
+    """Set the user's theme preference with proper connection handling"""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10)  # 10-second timeout
+        conn.execute("PRAGMA busy_timeout = 10000;")
+        c = conn.cursor()
+        # Ensure column exists
+        c.execute("PRAGMA table_info(users)")
+        columns = [col[1] for col in c.fetchall()]
+        if 'theme' not in columns:
+            c.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'default'")
+        # Update
+        c.execute("UPDATE users SET theme=? WHERE id=?", (theme, user_id))
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[ERROR] set_user_theme failed: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 def render_user_template(template, title="", active_page="", **kwargs):
-    """
-    Render a template with the user's theme preference.
-    Uses session first, then falls back to database.
-    """
     theme_class = ''
     if 'user_id' in session:
-        # 1. Check session first
         if 'user_theme' in session:
             theme = session['user_theme']
         else:
             theme = get_user_theme(session['user_id'])
-            # Store in session for next time
             session['user_theme'] = theme
-        
         if theme and theme != 'default':
             theme_class = f"theme-{theme}"
     
-    # ===== DIRECTLY INJECT THEME CLASS INTO <body> TAG =====
     if theme_class:
         template = template.replace('<body>', f'<body class="{theme_class}">')
         template = template.replace('<body class="">', f'<body class="{theme_class}">')
     else:
         template = template.replace('<body class="theme-neon">', '<body>')
         template = template.replace('<body class="{theme_class}">', '<body>')
-    # ===== END INJECTION =====
     
-    # Replace title and active_page if they exist
     if '{title}' in template:
         template = template.replace('{title}', title)
     if '{active_page}' in template:
         template = template.replace('{active_page}', active_page)
-    
-    # Replace any additional placeholders
     for key, value in kwargs.items():
         template = template.replace(f'{{{key}}}', str(value))
     
@@ -2072,14 +2067,11 @@ edit_name_page = base_template.replace("{title}", "Edit Name").replace("{content
 
 @app.route('/')
 def home():
-    # ===== REFERRAL CODE DETECTION =====
+    # ---- REFERRAL CODE DETECTION ----
     ref_code = request.args.get('ref', '')
     if ref_code:
         session['referral_code'] = ref_code
-    # ===== END REFERRAL CODE =====
     
-    conn = sqlite3.connect(DB_PATH)
-    # ... rest of your home route
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM providers")
@@ -2087,7 +2079,13 @@ def home():
     c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'")
     open_jobs = c.fetchone()[0]
     conn.close()
-    return render_template_string(home_page.replace("{provider_count}", str(provider_count)).replace("{open_jobs}", str(open_jobs)))
+    
+    # Use render_user_template (even for public pages – if not logged in, no theme)
+    return render_user_template(home_page, 
+                                provider_count=str(provider_count), 
+                                open_jobs=str(open_jobs),
+                                title="Home", 
+                                active_page="home")
 
 @app.route('/offer-skill')
 def offer_skill():
