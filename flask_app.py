@@ -12,7 +12,7 @@ from PIL import Image
 # APP CONFIGURATION (DYNAMIC FOR RENDER)
 # ============================================================
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB
 app.secret_key = 'rockabytech-secret-key-change-in-production-2025'
 app.permanent_session_lifetime = timedelta(days=30)
 
@@ -3123,7 +3123,12 @@ def debug_info():
 
 @app.route('/debug-config')
 def debug_config():
-    return f"MAX_CONTENT_LENGTH = {app.config.get('MAX_CONTENT_LENGTH')}"
+    max_size = app.config.get('MAX_CONTENT_LENGTH')
+    return f"MAX_CONTENT_LENGTH = {max_size} bytes ({max_size // (1024*1024)} MB)"
+
+@app.errorhandler(413)
+def too_large(e):
+    return "File too large. Maximum size is 1 GB.", 413
 
 # ============================================================
 # RUN APP
