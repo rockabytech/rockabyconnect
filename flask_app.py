@@ -12,7 +12,7 @@ from PIL import Image
 # APP CONFIGURATION (DYNAMIC FOR RENDER)
 # ============================================================
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200 MB
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB
 app.secret_key = 'rockabytech-secret-key-change-in-production-2025'
 app.permanent_session_lifetime = timedelta(days=30)
 
@@ -4010,6 +4010,10 @@ def debug_info():
         """
     except Exception as e:
         return f"<h2>Error</h2><pre>{traceback.format_exc()}</pre>"
+
+@app.route('/debug-config')
+def debug_config():
+    return f"MAX_CONTENT_LENGTH = {app.config.get('MAX_CONTENT_LENGTH')}"
 
 # ============================================================
 # RUN APP
