@@ -2728,67 +2728,6 @@ def edit_vendor_profile():
     return render_user_template(form, title="Edit Vendor Profile", active_page="dashboard")
 
 
-@app.route('/edit-vendor-profile', methods=['GET', 'POST'])
-@login_required
-def edit_vendor_profile():
-    user_id = session['user_id']
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
-    c = conn.cursor()
-    c.execute("SELECT business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, video, status FROM vendors WHERE user_id=?", (user_id,))
-    vendor = c.fetchone()
-    if not vendor:
-        conn.close()
-        return redirect('/create-vendor-profile')
-    
-    if request.method == 'POST':
-        business_name = request.form['business_name'].strip()
-        district = request.form['district'].strip()
-        village = request.form.get('village', '').strip()
-        landmark = request.form.get('landmark', '').strip()
-        bio = request.form.get('bio', '').strip()
-        status = request.form.get('status', 'Open')
-
-        # Handle images (keep existing if no new file)
-        current_images = [vendor[5], vendor[6], vendor[7]]  # image, image2, image3
-        for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
-            file = request.files.get(field)
-            if file and allowed_file(file.filename):
-                current_images[idx] = save_resized_image(file, max_width=800, max_height=600)
-
-        # ===== Handle VIDEO =====
-        video_file = request.files.get('video')
-        video_filename = vendor[8]  # keep existing if no new video
-        if video_file and allowed_video(video_file.filename):
-            video_filename = secure_filename(video_file.filename)
-            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
-            video_file.save(video_path)
-        # ===== END VIDEO =====
-
-        c.execute("""
-            UPDATE vendors SET 
-                business_name=?, district=?, village=?, landmark=?, bio=?, 
-                vendor_image=?, vendor_image2=?, vendor_image3=?, video=?, status=?
-            WHERE user_id=?
-        """, (business_name, district, village, landmark, bio, 
-              current_images[0], current_images[1], current_images[2], video_filename, status, user_id))
-        conn.commit()
-        conn.close()
-        return redirect('/dashboard')
-
-    # GET – show form
-    bname, district, village, landmark, bio, img, img2, img3, video, status = vendor
-    form = vendor_form_template.replace("{form_title}", "Edit Your Vendor Profile")
-    form = form.replace("{business_name}", bname or '')
-    form = form.replace("{district}", district or '')
-    form = form.replace("{village}", village or '')
-    form = form.replace("{landmark}", landmark or '')
-    form = form.replace("{bio}", bio or '')
-    status_options = ''.join([f'<option value="{s}" {"selected" if s==status else ""}>{s}</option>' for s in VENDOR_STATUSES])
-    form = form.replace("{status_options}", status_options)
-    conn.close()
-    return render_user_template(form, title="Edit Vendor Profile", active_page="dashboard")
-
 # ---------- Boost Vendor ----------
 @app.route('/boost-vendor')
 @login_required
