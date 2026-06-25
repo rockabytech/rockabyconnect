@@ -2971,50 +2971,6 @@ def list_vendors():
     return render_user_template(vendor_list_page, title="Vendors", active_page="vendors", cards=cards)
 
 
-@app.route('/jobs')
-def list_jobs():
-    logged_in = 'user_id' in session
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
-    c = conn.cursor()
-    today = date.today().isoformat()
-    c.execute("UPDATE jobs SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
-    conn.commit()
-    c.execute("""
-        SELECT j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.featured, j.featured_expiry
-        FROM jobs j ORDER BY CASE WHEN j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= date('now')) THEN 0 ELSE 1 END, j.id DESC
-    """)
-    jobs = c.fetchall()
-    conn.close()
-    jobs_html = ""
-    for j in jobs:
-        title, company, desc, loc, village, contact, status, posted_date, image, featured, expiry = j
-        badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
-        if logged_in:
-            contact_display = f'<p>Contact: {contact}'
-            if is_phone_number(contact):
-                contact_display += f' <a href="{whatsapp_link(contact)}" target="_blank" class="btn btn-whatsapp btn-small">Chat on WhatsApp</a>'
-            contact_display += '</p>'
-        else:
-            contact_display = '<p style="color:var(--text-secondary);">Contact: <a href="/login">Sign in to view</a></p>'
-        active_featured = is_featured_now(featured, expiry)
-        feat_badge = '<span class="badge badge-available" style="background:var(--primary);">FEATURED</span>' if active_featured else ''
-        location_display = f"{loc}{', ' + village if village else ''}"
-        img_tag = f'<img src="/static/uploads/{image}" class="profile-pic" style="border-radius:8px;" alt="{title}">' if image else ''
-        jobs_html += f"""
-        <div class="job-card">
-            {img_tag}
-            <div class="job-info">
-                <h3>{title} <span class="badge badge-{badge_class}">{status}</span> {feat_badge}</h3>
-                <p class="meta">{company or 'N/A'} · {location_display} · {posted_date[:10] if posted_date else ''}</p>
-                <p>{desc}</p>
-                {contact_display}
-            </div>
-        </div>"""
-    if not jobs_html:
-        jobs_html = "<p>No jobs yet.</p>"
-    return render_user_template(job_list_page, title="Jobs", active_page="jobs", jobs_html=jobs_html)
-
 @app.route('/provider/<int:provider_id>')
 def provider_detail(provider_id):
     logged_in = 'user_id' in session
