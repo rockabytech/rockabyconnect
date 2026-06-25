@@ -103,6 +103,7 @@ def init_db():
         village TEXT,
         bio TEXT,
         profile_pic TEXT,
+        video TEXT,
         status TEXT DEFAULT 'Available',
         featured INTEGER DEFAULT 0,
         featured_expiry DATE,
@@ -121,6 +122,7 @@ def init_db():
         vendor_image TEXT,
         vendor_image2 TEXT,
         vendor_image3 TEXT,
+        video TEXT,
         status TEXT DEFAULT 'Open',
         featured INTEGER DEFAULT 0,
         featured_expiry DATE,
@@ -140,6 +142,7 @@ def init_db():
         status TEXT DEFAULT 'Open',
         posted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         job_image TEXT,
+        video TEXT,
         featured INTEGER DEFAULT 0,
         featured_expiry DATE,
         FOREIGN KEY(employer_id) REFERENCES users(id)
@@ -222,6 +225,13 @@ def init_db():
             INSERT INTO referral_settings (reward_percentage, reward_fixed_amount, reward_type, max_referrals, is_active)
             VALUES (10, 0, 'discount', 10, 1)
         """)
+
+    # For existing tables, add video column if missing
+    for table in ['providers', 'vendors', 'jobs']:
+        c.execute(f"PRAGMA table_info({table})")
+        existing = [row[1] for row in c.fetchall()]
+        if 'video' not in existing:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
 
     conn.commit()
     conn.close()
@@ -382,6 +392,50 @@ def process_referral(user_id, phone):
     session.pop('referral_code', None)
     
     return True
+
+def save_resized_image(file, max_width=800, max_height=600, quality=85):
+    """Resize image to uniform 800x600 cover (crop to fit) and save."""
+    if not file or not file.filename:
+        return None
+    filename = secure_filename(file.filename)
+    base, ext = os.path.splitext(filename)
+    ext = ext.lower()
+    if ext not in ('.png', '.jpg', '.jpeg', '.gif'):
+        ext = '.jpg'
+    new_filename = f"{base}_{os.urandom(4).hex()}{ext}"
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+    try:
+        img = Image.open(file.stream)
+        # Convert to RGB if needed
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        # Resize to cover the target dimensions (crop)
+        target_ratio = max_width / max_height
+        img_ratio = img.width / img.height
+        if img_ratio > target_ratio:
+            # Image is wider – crop width
+            new_height = max_height
+            new_width = int(max_height * img_ratio)
+            img = img.resize((new_width, new_height), Image.LANCZOS)
+            left = (new_width - max_width) // 2
+            img = img.crop((left, 0, left + max_width, max_height))
+        else:
+            # Image is taller – crop height
+            new_width = max_width
+            new_height = int(max_width / img_ratio)
+            img = img.resize((new_width, new_height), Image.LANCZOS)
+            top = (new_height - max_height) // 2
+            img = img.crop((0, top, max_width, top + max_height))
+        img.save(filepath, quality=quality, optimize=True)
+        return new_filename
+    except Exception as e:
+        print(f"Image resize error: {e}")
+        return None
+
+ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'}
+
+def allowed_video(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_VIDEO_EXTENSIONS
 
 # ============================================================
 # THEME HELPERS
@@ -1848,6 +1902,11 @@ profile_form_template = base_template.replace("{title}", "My Freelancer Profile"
             <label>Profile Picture</label>
             <input type="file" name="profile_pic" accept="image/*">
             <p style="font-size:0.8rem;">Leave blank to keep current picture.</p>
+            <!-- ===== VIDEO UPLOAD ===== -->
+            <label>Upload a Video (optional)</label>
+            <input type="file" name="video" accept="video/*">
+            <p style="font-size:0.8rem;">MP4, WebM, OGG, MOV, AVI, MKV (max 50MB recommended)</p>
+            <!-- ===== END VIDEO ===== -->
             <label>Availability Status</label>
             <select name="status">
                 {status_options}
@@ -1877,6 +1936,11 @@ vendor_form_template = base_template.replace("{title}", "My Vendor Profile").rep
             <input type="file" name="vendor_image2" accept="image/*">
             <label>Additional Photo 2</label>
             <input type="file" name="vendor_image3" accept="image/*">
+            <!-- ===== VIDEO UPLOAD ===== -->
+            <label>Upload a Video (optional)</label>
+            <input type="file" name="video" accept="video/*">
+            <p style="font-size:0.8rem;">MP4, WebM, OGG, MOV, AVI, MKV (max 50MB recommended)</p>
+            <!-- ===== END VIDEO ===== -->
             <label>Status</label>
             <select name="status">
                 {status_options}
@@ -1885,7 +1949,7 @@ vendor_form_template = base_template.replace("{title}", "My Vendor Profile").rep
         </form>
     </div>
     <script>
-    // Client‑side image resizer – compresses images before upload for lightning speed
+    // Client-side image resizer – compresses images before upload for lightning speed
     document.getElementById('vendorForm').addEventListener('submit', function(e) {
         const fileInputs = document.querySelectorAll('#vendorForm input[type=file]');
         const promises = [];
@@ -1952,6 +2016,11 @@ job_form_template = base_template.replace("{title}", "{job_form_title}").replace
             <input type="text" name="contact" value="{contact_val}">
             <label>Job Image (optional)</label>
             <input type="file" name="job_image" accept="image/*">
+            <!-- ===== VIDEO UPLOAD ===== -->
+            <label>Upload a Video (optional)</label>
+            <input type="file" name="video" accept="video/*">
+            <p style="font-size:0.8rem;">MP4, WebM, OGG, MOV, AVI, MKV (max 50MB recommended)</p>
+            <!-- ===== END VIDEO ===== -->
             <button type="submit" class="btn" style="margin-top:20px; width:100%;">{submit_button}</button>
         </form>
     </div>
@@ -2027,6 +2096,9 @@ vendor_detail_template = base_template.replace("{title}", "Vendor Detail").repla
         <div class="card-header">{business_name}</div>
         <img src="{img_url}" class="vendor-img" style="width:100%; max-height:300px; object-fit:cover; border-radius:8px; margin-bottom:15px;">
         {extra_images}
+        <!-- ===== VIDEO DISPLAY ===== -->
+        {video_display}
+        <!-- ===== END VIDEO ===== -->
         <p><strong>Location:</strong> {district}{village_display}{landmark_display}</p>
         <p><strong>Description:</strong> {bio}</p>
         <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
@@ -2038,6 +2110,9 @@ provider_detail_template = base_template.replace("{title}", "Provider Detail").r
     <div class="card">
         <div class="card-header">{provider_name}</div>
         <img src="{img_url}" class="profile-pic" style="width:120px; height:120px; margin-bottom:15px;">
+        <!-- ===== VIDEO DISPLAY ===== -->
+        {video_display}
+        <!-- ===== END VIDEO ===== -->
         <p><strong>Skills:</strong> {skills}</p>
         <p><strong>Location:</strong> {district}{village_display}</p>
         <p><strong>Bio:</strong> {bio}</p>
@@ -2078,14 +2153,123 @@ def home():
     provider_count = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'")
     open_jobs = c.fetchone()[0]
-    conn.close()
     
-    # Use render_user_template (even for public pages – if not logged in, no theme)
-    return render_user_template(home_page, 
-                                provider_count=str(provider_count), 
-                                open_jobs=str(open_jobs),
-                                title="Home", 
-                                active_page="home")
+    # ---- FETCH BOOSTED ITEMS (Ad carousel) ----
+    today = date.today().isoformat()
+    ads = []
+    # Providers
+    c.execute("""
+        SELECT p.id, u.name, p.profile_pic, p.video, p.featured_expiry, 'provider' as type
+        FROM providers p JOIN users u ON p.user_id = u.id
+        WHERE p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= ?)
+    """, (today,))
+    for row in c.fetchall():
+        ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
+    # Vendors
+    c.execute("""
+        SELECT v.id, v.business_name, v.vendor_image, v.video, v.featured_expiry, 'vendor' as type
+        FROM vendors v
+        WHERE v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= ?)
+    """, (today,))
+    for row in c.fetchall():
+        ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
+    # Jobs
+    c.execute("""
+        SELECT j.id, j.title, j.job_image, j.video, j.featured_expiry, 'job' as type
+        FROM jobs j
+        WHERE j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?)
+    """, (today,))
+    for row in c.fetchall():
+        ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
+    conn.close()
+
+    # ---- Build carousel HTML ----
+    carousel_html = ""
+    if ads:
+        carousel_html = """
+        <div class="ad-carousel" style="position:relative; overflow:hidden; border-radius:var(--radius); margin-bottom:30px; background:#000; min-height:200px;">
+            <div class="carousel-track" style="display:flex; transition: transform 0.5s ease;">
+        """
+        for ad in ads:
+            media = ""
+            if ad['video']:
+                media = f'<video src="/static/uploads/{ad["video"]}" autoplay muted loop playsinline style="width:100%; max-height:400px; object-fit:cover;"></video>'
+            elif ad['image']:
+                media = f'<img src="/static/uploads/{ad["image"]}" alt="{ad["name"]}" style="width:100%; max-height:400px; object-fit:cover;">'
+            else:
+                media = f'<div style="width:100%; max-height:400px; background:var(--primary); display:flex; align-items:center; justify-content:center; color:white; font-size:1.5rem;">{ad["name"]}</div>'
+            label = f'<div style="position:absolute; bottom:10px; left:10px; background:rgba(0,0,0,0.6); color:white; padding:4px 12px; border-radius:20px; font-size:0.8rem;">{ad["type"].title()}</div>'
+            carousel_html += f"""
+                <div class="carousel-slide" style="min-width:100%; position:relative;">
+                    {media}
+                    {label}
+                </div>
+            """
+        carousel_html += """
+            </div>
+            <button class="carousel-prev" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer; z-index:2; font-size:1.5rem;">‹</button>
+            <button class="carousel-next" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer; z-index:2; font-size:1.5rem;">›</button>
+            <div class="carousel-dots" style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%); display:flex; gap:8px; z-index:2;"></div>
+        </div>
+        <script>
+            (function() {
+                const track = document.querySelector('.carousel-track');
+                const slides = track.querySelectorAll('.carousel-slide');
+                const prev = document.querySelector('.carousel-prev');
+                const next = document.querySelector('.carousel-next');
+                const dotsContainer = document.querySelector('.carousel-dots');
+                let current = 0;
+                const total = slides.length;
+                let interval;
+
+                for (let i = 0; i < total; i++) {
+                    const dot = document.createElement('span');
+                    dot.style.width = '10px';
+                    dot.style.height = '10px';
+                    dot.style.borderRadius = '50%';
+                    dot.style.background = i === 0 ? 'white' : 'rgba(255,255,255,0.4)';
+                    dot.style.cursor = 'pointer';
+                    dot.dataset.index = i;
+                    dot.addEventListener('click', () => goTo(i));
+                    dotsContainer.appendChild(dot);
+                }
+                const dots = dotsContainer.querySelectorAll('span');
+
+                function goTo(index) {
+                    current = (index + total) % total;
+                    track.style.transform = `translateX(-${current * 100}%)`;
+                    dots.forEach((d, i) => d.style.background = i === current ? 'white' : 'rgba(255,255,255,0.4)');
+                }
+
+                function nextSlide() { goTo(current + 1); }
+                function prevSlide() { goTo(current - 1); }
+
+                next.addEventListener('click', () => { clearInterval(interval); nextSlide(); startAutoPlay(); });
+                prev.addEventListener('click', () => { clearInterval(interval); prevSlide(); startAutoPlay(); });
+
+                function startAutoPlay() {
+                    interval = setInterval(nextSlide, 5000);
+                }
+                startAutoPlay();
+
+                const carousel = document.querySelector('.ad-carousel');
+                carousel.addEventListener('mouseenter', () => clearInterval(interval));
+                carousel.addEventListener('mouseleave', startAutoPlay);
+            })();
+        </script>
+        """
+    
+    # ---- Prepare page content ----
+    content = home_page.replace("{provider_count}", str(provider_count)).replace("{open_jobs}", str(open_jobs))
+    # Insert carousel after hero
+    if '{carousel}' in content:
+        content = content.replace("{carousel}", carousel_html)
+    else:
+        # If no placeholder, insert after hero
+        hero_end = content.find('</div>', content.find('class="hero"')) + 6
+        content = content[:hero_end] + carousel_html + content[hero_end:]
+
+    return render_user_template(content, title="Home", active_page="home")
 
 @app.route('/offer-skill')
 def offer_skill():
@@ -2319,13 +2503,21 @@ def create_profile():
         bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Available')
         file = request.files.get('profile_pic')
+        video_file = request.files.get('video')
         filename = None
+        video_filename = None
         if file and allowed_file(file.filename):
-            filename = save_resized_image(file, max_width=800)
+            filename = save_resized_image(file, max_width=800, max_height=600)
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, status) VALUES (?,?,?,?,?,?,?)",
-                  (user_id, skills, district, village, bio, filename, status))
+        c.execute("""
+            INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, video, status)
+            VALUES (?,?,?,?,?,?,?,?)
+        """, (user_id, skills, district, village, bio, filename, video_filename, status))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
@@ -2571,15 +2763,19 @@ def vendor_detail(vendor_id):
     logged_in = 'user_id' in session
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    # Make sure the SELECT includes the video column
     c.execute("""
-        SELECT v.business_name, v.district, v.village, v.landmark, v.bio, v.vendor_image, v.vendor_image2, v.vendor_image3, v.status, v.featured, v.featured_expiry, u.phone
+        SELECT v.business_name, v.district, v.village, v.landmark, v.bio, 
+               v.vendor_image, v.vendor_image2, v.vendor_image3, v.video,
+               v.status, v.featured, v.featured_expiry, u.phone
         FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
     """, (vendor_id,))
     v = c.fetchone()
     if not v:
         conn.close()
         return "Vendor not found.", 404
-    bname, district, village, landmark, bio, img, img2, img3, status, featured, expiry, phone = v
+    # Unpack carefully – adjust indices if your column order is different
+    bname, district, village, landmark, bio, img, img2, img3, video, status, featured, expiry, phone = v
     status_class = status.lower()
     img_url = f"/static/uploads/{img}" if img else ""
     active_feat = is_featured_now(featured, expiry)
@@ -2591,19 +2787,27 @@ def vendor_detail(vendor_id):
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
+    # ---- Build video HTML ----
+    video_display = ""
+    if video:
+        video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
+
+    # ---- Build extra images ----
     extra_images = ""
     if img2 or img3:
-        extra_images = '<div class="vendor-img-gallery">'
+        extra_images = '<div class="vendor-img-gallery" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">'
         if img2:
-            extra_images += f'<img src="/static/uploads/{img2}" alt="Additional photo">'
+            extra_images += f'<img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px;">'
         if img3:
-            extra_images += f'<img src="/static/uploads/{img3}" alt="Additional photo">'
+            extra_images += f'<img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px;">'
         extra_images += '</div>'
 
+    # Replace placeholders in template
     detail_html = vendor_detail_template
     detail_html = detail_html.replace("{business_name}", bname)
     detail_html = detail_html.replace("{img_url}", img_url)
     detail_html = detail_html.replace("{extra_images}", extra_images)
+    detail_html = detail_html.replace("{video_display}", video_display)   # <-- important
     detail_html = detail_html.replace("{district}", district)
     detail_html = detail_html.replace("{village_display}", village_display)
     detail_html = detail_html.replace("{landmark_display}", landmark_display)
@@ -3593,15 +3797,17 @@ def provider_detail(provider_id):
     logged_in = 'user_id' in session
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    # Make sure the SELECT includes the video column
     c.execute("""
-        SELECT p.id, u.name, p.skills, p.district, p.village, p.bio, p.profile_pic, p.status, p.featured, p.featured_expiry, u.phone
+        SELECT p.id, u.name, p.skills, p.district, p.village, p.bio, 
+               p.profile_pic, p.video, p.status, p.featured, p.featured_expiry, u.phone
         FROM providers p JOIN users u ON p.user_id = u.id WHERE p.id=?
     """, (provider_id,))
     provider = c.fetchone()
     if not provider:
         conn.close()
         return "Provider not found.", 404
-    pid, name, skills, district, village, bio, pic, status, featured, expiry, phone = provider
+    pid, name, skills, district, village, bio, pic, video, status, featured, expiry, phone = provider
     status_class = status.lower().replace(' ', '-')
     village_display = f", {village}" if village else ""
     img_url = f"/static/uploads/{pic}" if pic else "https://via.placeholder.com/120"
@@ -3611,6 +3817,13 @@ def provider_detail(provider_id):
         contact_display = f'<p><strong>Contact:</strong> {phone} <a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">WhatsApp</a></p>'
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
+
+    # ---- Build video HTML ----
+    video_display = ""
+    if video:
+        video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
+
+    # ---- Reviews ----
     c.execute("""
         SELECT u.name, r.rating, r.comment, r.created_at FROM reviews r JOIN users u ON r.reviewer_id = u.id
         WHERE r.provider_id=? ORDER BY r.created_at DESC
@@ -3645,9 +3858,11 @@ def provider_detail(provider_id):
         """
     else:
         review_form = "<p><a href='/login'>Login</a> to leave a review.</p>"
+
     detail_html = provider_detail_template
     detail_html = detail_html.replace("{provider_name}", name)
     detail_html = detail_html.replace("{img_url}", img_url)
+    detail_html = detail_html.replace("{video_display}", video_display)   # <-- important
     detail_html = detail_html.replace("{skills}", skills)
     detail_html = detail_html.replace("{district}", district)
     detail_html = detail_html.replace("{village_display}", village_display)
@@ -3661,7 +3876,6 @@ def provider_detail(provider_id):
     detail_html = detail_html.replace("{review_form}", review_form)
     conn.close()
     return render_user_template(detail_html, title=f"Provider: {name}", active_page="list")
-
 @app.route('/review/<int:provider_id>', methods=['POST'])
 @login_required
 def add_review(provider_id):
@@ -3692,5 +3906,5 @@ def service_worker():
 # RUN APP
 # ============================================================
 if __name__ == '__main__':
-    init_db()
+    
     app.run(host='0.0.0.0', port=5000, debug=True)
