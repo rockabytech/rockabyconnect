@@ -2760,26 +2760,19 @@ def list_vendors():
 
 @app.route('/vendor/<int:vendor_id>')
 def vendor_detail(vendor_id):
-    try:
-        logged_in = 'user_id' in session
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("""
-            SELECT v.business_name, v.district, v.village, v.landmark, v.bio, 
-                   v.vendor_image, v.vendor_image2, v.vendor_image3, v.video,
-                   v.status, v.featured, v.featured_expiry, u.phone
-            FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
-        """, (vendor_id,))
-        v = c.fetchone()
-        if not v:
-            conn.close()
-            return "Vendor not found.", 404
-        # ... rest of your code ...
-    except Exception as e:
-        import traceback
-        print(f"VENDOR DETAIL ERROR: {traceback.format_exc()}")
-        return f"Error: {str(e)}", 500
-    # Unpack carefully – adjust indices if your column order is different
+    logged_in = 'user_id' in session
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT v.business_name, v.district, v.village, v.landmark, v.bio, 
+               v.vendor_image, v.vendor_image2, v.vendor_image3, v.video,
+               v.status, v.featured, v.featured_expiry, u.phone
+        FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
+    """, (vendor_id,))
+    v = c.fetchone()
+    if not v:
+        conn.close()
+        return "Vendor not found.", 404
     bname, district, village, landmark, bio, img, img2, img3, video, status, featured, expiry, phone = v
     status_class = status.lower()
     img_url = f"/static/uploads/{img}" if img else ""
@@ -2793,12 +2786,9 @@ def vendor_detail(vendor_id):
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
     # ---- Build video HTML ----
-video_display = ""
-if video:
-    video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
-else:
-    video_display = ""  # Important: define it even if no video
-    detail_html = detail_html.replace("{video_display}", video_display)
+    video_display = ""
+    if video:
+        video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
     # ---- Build extra images ----
     extra_images = ""
@@ -2810,12 +2800,11 @@ else:
             extra_images += f'<img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px;">'
         extra_images += '</div>'
 
-    # Replace placeholders in template
     detail_html = vendor_detail_template
     detail_html = detail_html.replace("{business_name}", bname)
     detail_html = detail_html.replace("{img_url}", img_url)
     detail_html = detail_html.replace("{extra_images}", extra_images)
-    detail_html = detail_html.replace("{video_display}", video_display)   # <-- important
+    detail_html = detail_html.replace("{video_display}", video_display)
     detail_html = detail_html.replace("{district}", district)
     detail_html = detail_html.replace("{village_display}", village_display)
     detail_html = detail_html.replace("{landmark_display}", landmark_display)
@@ -3802,24 +3791,18 @@ def list_jobs():
 
 @app.route('/provider/<int:provider_id>')
 def provider_detail(provider_id):
-    try:
-        logged_in = 'user_id' in session
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("""
-            SELECT p.id, u.name, p.skills, p.district, p.village, p.bio, 
-                   p.profile_pic, p.video, p.status, p.featured, p.featured_expiry, u.phone
-            FROM providers p JOIN users u ON p.user_id = u.id WHERE p.id=?
-        """, (provider_id,))
-        provider = c.fetchone()
-        if not provider:
-            conn.close()
-            return "Provider not found.", 404
-        # ... rest of your code ...
-    except Exception as e:
-        import traceback
-        print(f"PROVIDER DETAIL ERROR: {traceback.format_exc()}")
-        return f"Error: {str(e)}", 500
+    logged_in = 'user_id' in session
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT p.id, u.name, p.skills, p.district, p.village, p.bio, 
+               p.profile_pic, p.video, p.status, p.featured, p.featured_expiry, u.phone
+        FROM providers p JOIN users u ON p.user_id = u.id WHERE p.id=?
+    """, (provider_id,))
+    provider = c.fetchone()
+    if not provider:
+        conn.close()
+        return "Provider not found.", 404
     pid, name, skills, district, village, bio, pic, video, status, featured, expiry, phone = provider
     status_class = status.lower().replace(' ', '-')
     village_display = f", {village}" if village else ""
@@ -3831,13 +3814,10 @@ def provider_detail(provider_id):
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
-   # ---- Build video HTML ----
-video_display = ""
-if video:
-    video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
-else:
-    video_display = ""  # Important: define it even if no video
-    detail_html = detail_html.replace("{video_display}", video_display)
+    # ---- Build video HTML ----
+    video_display = ""
+    if video:
+        video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
     # ---- Reviews ----
     c.execute("""
@@ -3878,7 +3858,7 @@ else:
     detail_html = provider_detail_template
     detail_html = detail_html.replace("{provider_name}", name)
     detail_html = detail_html.replace("{img_url}", img_url)
-    detail_html = detail_html.replace("{video_display}", video_display)   # <-- important
+    detail_html = detail_html.replace("{video_display}", video_display)
     detail_html = detail_html.replace("{skills}", skills)
     detail_html = detail_html.replace("{district}", district)
     detail_html = detail_html.replace("{village_display}", village_display)
