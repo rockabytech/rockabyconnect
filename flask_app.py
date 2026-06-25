@@ -2597,7 +2597,10 @@ def edit_profile():
 @login_required
 def create_vendor_profile():
     user_id = session['user_id']
+    
+    # Check if vendor already exists
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
     c.execute("SELECT id FROM vendors WHERE user_id=?", (user_id,))
     if c.fetchone():
@@ -2613,20 +2616,41 @@ def create_vendor_profile():
         bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Open')
 
+        # Handle images
         filenames = [None, None, None]
         for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
             file = request.files.get(field)
             if file and allowed_file(file.filename):
-                filenames[idx] = save_resized_image(file, max_width=800)
+                filenames[idx] = save_resized_image(file, max_width=800, max_height=600)
 
+        # ===== Handle VIDEO =====
+        video_file = request.files.get('video')
+        video_filename = None
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
+        # ===== END VIDEO =====
+
+        # Insert into database
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout = 5000;")
         c = conn.cursor()
-        c.execute("INSERT INTO vendors (user_id, business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, status) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                  (user_id, business_name, district, village, landmark, bio, filenames[0], filenames[1], filenames[2], status))
+        c.execute("""
+            INSERT INTO vendors (
+                user_id, business_name, district, village, landmark, bio, 
+                vendor_image, vendor_image2, vendor_image3, video, status
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """, (user_id, business_name, district, village, landmark, bio, 
+              filenames[0], filenames[1], filenames[2], video_filename, status))
         conn.commit()
         conn.close()
+        
+        # Add notification
+        add_notification(user_id, 'sms', 'Your vendor profile has been created!')
         return redirect('/dashboard')
 
+    # GET – show form
     form = vendor_form_template.replace("{form_title}", "Create Your Vendor Profile")
     form = form.replace("{business_name}", "").replace("{district}", "").replace("{village}", "")
     form = form.replace("{landmark}", "").replace("{bio}", "")
@@ -2634,17 +2658,24 @@ def create_vendor_profile():
     form = form.replace("{status_options}", status_options)
     return render_user_template(form, title="Create Vendor Profile", active_page="dashboard")
 
+
 @app.route('/edit-vendor-profile', methods=['GET', 'POST'])
 @login_required
 def edit_vendor_profile():
     user_id = session['user_id']
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
-    c.execute("SELECT business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, status FROM vendors WHERE user_id=?", (user_id,))
+    c.execute("""
+        SELECT business_name, district, village, landmark, bio, 
+               vendor_image, vendor_image2, vendor_image3, video, status 
+        FROM vendors WHERE user_id=?
+    """, (user_id,))
     vendor = c.fetchone()
     if not vendor:
         conn.close()
         return redirect('/create-vendor-profile')
+    
     if request.method == 'POST':
         business_name = request.form['business_name'].strip()
         district = request.form['district'].strip()
@@ -2653,19 +2684,99 @@ def edit_vendor_profile():
         bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Open')
 
-        current_images = [vendor[5], vendor[6], vendor[7]]
+        # Handle images
+        current_images = [vendor[5], vendor[6], vendor[7]]  # image, image2, image3
         for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
             file = request.files.get(field)
             if file and allowed_file(file.filename):
-                current_images[idx] = save_resized_image(file, max_width=800)
+                current_images[idx] = save_resized_image(file, max_width=800, max_height=600)
 
-        c.execute("UPDATE vendors SET business_name=?, district=?, village=?, landmark=?, bio=?, vendor_image=?, vendor_image2=?, vendor_image3=?, status=? WHERE user_id=?",
-                  (business_name, district, village, landmark, bio, current_images[0], current_images[1], current_images[2], status, user_id))
+        # ===== Handle VIDEO =====
+        video_file = request.files.get('video')
+        video_filename = vendor[8]  # keep existing if no new video
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
+        # ===== END VIDEO =====
+
+        # Update database
+        c.execute("""
+            UPDATE vendors SET 
+                business_name=?, district=?, village=?, landmark=?, bio=?, 
+                vendor_image=?, vendor_image2=?, vendor_image3=?, video=?, status=?
+            WHERE user_id=?
+        """, (business_name, district, village, landmark, bio, 
+              current_images[0], current_images[1], current_images[2], video_filename, status, user_id))
+        conn.commit()
+        conn.close()
+        
+        add_notification(user_id, 'sms', 'Your vendor profile has been updated!')
+        return redirect('/dashboard')
+
+    # GET – show form with current values
+    bname, district, village, landmark, bio, img, img2, img3, video, status = vendor
+    form = vendor_form_template.replace("{form_title}", "Edit Your Vendor Profile")
+    form = form.replace("{business_name}", bname or '')
+    form = form.replace("{district}", district or '')
+    form = form.replace("{village}", village or '')
+    form = form.replace("{landmark}", landmark or '')
+    form = form.replace("{bio}", bio or '')
+    status_options = ''.join([f'<option value="{s}" {"selected" if s==status else ""}>{s}</option>' for s in VENDOR_STATUSES])
+    form = form.replace("{status_options}", status_options)
+    conn.close()
+    return render_user_template(form, title="Edit Vendor Profile", active_page="dashboard")
+
+@app.route('/edit-vendor-profile', methods=['GET', 'POST'])
+@login_required
+def edit_vendor_profile():
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    c.execute("SELECT business_name, district, village, landmark, bio, vendor_image, vendor_image2, vendor_image3, video, status FROM vendors WHERE user_id=?", (user_id,))
+    vendor = c.fetchone()
+    if not vendor:
+        conn.close()
+        return redirect('/create-vendor-profile')
+    
+    if request.method == 'POST':
+        business_name = request.form['business_name'].strip()
+        district = request.form['district'].strip()
+        village = request.form.get('village', '').strip()
+        landmark = request.form.get('landmark', '').strip()
+        bio = request.form.get('bio', '').strip()
+        status = request.form.get('status', 'Open')
+
+        # Handle images (keep existing if no new file)
+        current_images = [vendor[5], vendor[6], vendor[7]]  # image, image2, image3
+        for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
+            file = request.files.get(field)
+            if file and allowed_file(file.filename):
+                current_images[idx] = save_resized_image(file, max_width=800, max_height=600)
+
+        # ===== Handle VIDEO =====
+        video_file = request.files.get('video')
+        video_filename = vendor[8]  # keep existing if no new video
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
+        # ===== END VIDEO =====
+
+        c.execute("""
+            UPDATE vendors SET 
+                business_name=?, district=?, village=?, landmark=?, bio=?, 
+                vendor_image=?, vendor_image2=?, vendor_image3=?, video=?, status=?
+            WHERE user_id=?
+        """, (business_name, district, village, landmark, bio, 
+              current_images[0], current_images[1], current_images[2], video_filename, status, user_id))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
 
-    bname, district, village, landmark, bio, img, img2, img3, status = vendor
+    # GET – show form
+    bname, district, village, landmark, bio, img, img2, img3, video, status = vendor
     form = vendor_form_template.replace("{form_title}", "Edit Your Vendor Profile")
     form = form.replace("{business_name}", bname or '')
     form = form.replace("{district}", district or '')
