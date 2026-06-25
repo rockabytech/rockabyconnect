@@ -233,6 +233,42 @@ def init_db():
         existing = [row[1] for row in c.fetchall()]
         if 'video' not in existing:
             c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
+            # ---- JOB APPLICATIONS TABLE ----
+c.execute('''CREATE TABLE IF NOT EXISTS job_applications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL,
+    applicant_id INTEGER NOT NULL,
+    message TEXT,
+    attachment TEXT,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(job_id) REFERENCES jobs(id),
+    FOREIGN KEY(applicant_id) REFERENCES users(id)
+)''')
+
+# ---- APPLICATION NOTES TABLE ----
+c.execute('''CREATE TABLE IF NOT EXISTS application_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id INTEGER NOT NULL,
+    note TEXT NOT NULL,
+    created_by INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(application_id) REFERENCES job_applications(id),
+    FOREIGN KEY(created_by) REFERENCES users(id)
+)''')
+
+# ---- MESSAGES TABLE ----
+c.execute('''CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_id INTEGER NOT NULL,
+    receiver_id INTEGER NOT NULL,
+    message TEXT NOT NULL,
+    is_read INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(sender_id) REFERENCES users(id),
+    FOREIGN KEY(receiver_id) REFERENCES users(id)
+)''')
 
     conn.commit()
     conn.close()
@@ -604,6 +640,32 @@ def process_referral(user_id, phone):
     session.pop('referral_code', None)
     
     return True
+
+def get_application_status_badge(status):
+    colors = {
+        'pending': '#ffc107',
+        'reviewed': '#17a2b8',
+        'shortlisted': '#28a745',
+        'rejected': '#dc3545',
+        'hired': '#6f42c1'
+    }
+    return f'<span class="badge" style="background:{colors.get(status, "#6c757d")}; color:white;">{status.title()}</span>'
+
+def get_user_name(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT name FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else 'Unknown'
+
+def get_unread_count(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM messages WHERE receiver_id=? AND is_read=0", (user_id,))
+    count = c.fetchone()[0]
+    conn.close()
+    return count
 
 # ============================================================
 # ADMIN REFERRAL SETTINGS
@@ -4006,6 +4068,417 @@ def debug_config():
 @app.errorhandler(413)
 def too_large(e):
     return "File too large. Maximum size is 1 GB.", 413
+
+@app.route('/apply/<int:job_id>', methods=['GET', 'POST'])
+@login_required
+def apply_job(job_id):
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    # Check job exists and is open
+    c.execute("SELECT title, employer_id FROM jobs WHERE id=? AND status='Open'", (job_id,))
+    job = c.fetchone()
+    if not job:
+        conn.close()
+        return "Job not available for applications.", 404
+    # Prevent applying to own job
+    if job[1] == user_id:
+        conn.close()
+        return "You cannot apply to your own job.", 400
+    # Check if already applied
+    c.execute("SELECT id FROM job_applications WHERE job_id=? AND applicant_id=?", (job_id, user_id))
+    if c.fetchone():
+        conn.close()
+        return "You have already applied to this job.", 400
+
+    if request.method == 'POST':
+        message = request.form.get('message', '').strip()
+        attachment = request.files.get('attachment')
+        filename = None
+        if attachment and allowed_file(attachment.filename):
+            filename = secure_filename(attachment.filename)
+            attachment.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        c.execute("""
+            INSERT INTO job_applications (job_id, applicant_id, message, attachment)
+            VALUES (?,?,?,?)
+        """, (job_id, user_id, message, filename))
+        conn.commit()
+        # Notify employer
+        add_notification(job[1], 'job_application', f'New application for "{job[0]}" from {session["user_name"]}')
+        conn.close()
+        return redirect(url_for('my_applications'))
+
+    # GET – show form
+    content = f'''
+    <div class="card">
+        <div class="card-header">Apply for: {job[0]}</div>
+        <form method="POST" enctype="multipart/form-data">
+            <label>Message (optional)</label>
+            <textarea name="message" rows="4" placeholder="Why are you the right person for this job?"></textarea>
+            <label>Attachment (optional – resume, portfolio)</label>
+            <input type="file" name="attachment" accept=".pdf,.doc,.docx,.txt,.jpg,.png">
+            <button type="submit" class="btn" style="margin-top:20px;">Submit Application</button>
+        </form>
+    </div>
+    '''
+    conn.close()
+    return render_user_template(base_template, title="Apply to Job", active_page="jobs", content=content)
+
+@app.route('/my-applications')
+@login_required
+def my_applications():
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT a.id, j.title, a.status, a.created_at, a.updated_at, j.id as job_id
+        FROM job_applications a
+        JOIN jobs j ON a.job_id = j.id
+        WHERE a.applicant_id = ?
+        ORDER BY a.created_at DESC
+    """, (user_id,))
+    apps = c.fetchall()
+    conn.close()
+
+    rows = ""
+    for app in apps:
+        status_badge = get_application_status_badge(app[2])
+        rows += f"""
+        <tr>
+            <td><a href="/job/{app[5]}">{app[1]}</a></td>
+            <td>{status_badge}</td>
+            <td>{app[3][:16] if app[3] else '-'}</td>
+            <td>{app[4][:16] if app[4] else '-'}</td>
+            <td><a href="/application/{app[0]}" class="btn btn-small">View</a></td>
+        </tr>
+        """
+    if not rows:
+        rows = '<tr><td colspan="5">You have not applied to any jobs yet.</td></tr>'
+
+    content = f'''
+    <div class="card">
+        <div class="card-header">My Applications</div>
+        <table>
+            <thead><tr><th>Job</th><th>Status</th><th>Applied</th><th>Updated</th><th>Action</th></tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+    </div>
+    '''
+    return render_user_template(base_template, title="My Applications", active_page="jobs", content=content)
+
+@app.route('/application/<int:app_id>')
+@login_required
+def view_application(app_id):
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT a.id, a.job_id, a.applicant_id, a.message, a.attachment, a.status, a.created_at, a.updated_at,
+               j.title, j.employer_id
+        FROM job_applications a
+        JOIN jobs j ON a.job_id = j.id
+        WHERE a.id = ?
+    """, (app_id,))
+    app = c.fetchone()
+    if not app:
+        conn.close()
+        return "Application not found.", 404
+    # Check permission: either the applicant or the employer
+    if app[2] != user_id and app[9] != user_id:
+        conn.close()
+        return "You do not have permission to view this application.", 403
+
+    # Get applicant name and employer name
+    applicant_name = get_user_name(app[2])
+    employer_name = get_user_name(app[9])
+
+    # Get notes (only visible to employer, but show to both)
+    c.execute("""
+        SELECT note, created_by, created_at
+        FROM application_notes
+        WHERE application_id = ?
+        ORDER BY created_at DESC
+    """, (app_id,))
+    notes = c.fetchall()
+    notes_html = ""
+    for note in notes:
+        by = get_user_name(note[1])
+        notes_html += f"""
+        <div class="review-card" style="border-left-color:var(--primary);">
+            <p>{note[0]}</p>
+            <small>— {by} at {note[2][:16]}</small>
+        </div>
+        """
+    if not notes:
+        notes_html = "<p>No notes yet.</p>"
+
+    # Status update form (only for employer)
+    status_form = ""
+    if app[9] == user_id:
+        status_form = f"""
+        <form method="POST" action="/application/{app_id}/status" style="display:inline;">
+            <select name="status" class="btn-small">
+                <option value="pending" {'selected' if app[5]=='pending' else ''}>Pending</option>
+                <option value="reviewed" {'selected' if app[5]=='reviewed' else ''}>Reviewed</option>
+                <option value="shortlisted" {'selected' if app[5]=='shortlisted' else ''}>Shortlisted</option>
+                <option value="rejected" {'selected' if app[5]=='rejected' else ''}>Rejected</option>
+                <option value="hired" {'selected' if app[5]=='hired' else ''}>Hired</option>
+            </select>
+            <button type="submit" class="btn btn-small">Update</button>
+        </form>
+        <form method="POST" action="/application/{app_id}/note" style="display:inline;">
+            <input type="text" name="note" placeholder="Add a note..." style="width:200px;">
+            <button type="submit" class="btn btn-small">Add Note</button>
+        </form>
+        """
+
+    content = f'''
+    <div class="card">
+        <div class="card-header">Application #{app[0]} – {app[1]}</div>
+        <p><strong>Job:</strong> {app[8]}</p>
+        <p><strong>Applicant:</strong> {applicant_name}</p>
+        <p><strong>Message:</strong> {app[3] or 'No message'}</p>
+        <p><strong>Attachment:</strong> {app[4] if app[4] else 'None'}</p>
+        <p><strong>Status:</strong> {get_application_status_badge(app[5])}</p>
+        <p><strong>Applied:</strong> {app[6][:16]} <strong>Updated:</strong> {app[7][:16]}</p>
+        {status_form}
+        <hr>
+        <h4>Notes</h4>
+        {notes_html}
+        <p><a href="/my-applications" class="btn btn-outline">Back</a></p>
+    </div>
+    '''
+    conn.close()
+    return render_user_template(base_template, title="Application Details", active_page="jobs", content=content)
+
+@app.route('/application/<int:app_id>/status', methods=['POST'])
+@login_required
+def update_application_status(app_id):
+    new_status = request.form.get('status')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT job_id, applicant_id FROM job_applications WHERE id=?
+    """, (app_id,))
+    app = c.fetchone()
+    if not app:
+        conn.close()
+        return "Application not found.", 404
+    # Check employer
+    c.execute("SELECT employer_id FROM jobs WHERE id=?", (app[0],))
+    job = c.fetchone()
+    if not job or job[0] != session['user_id']:
+        conn.close()
+        return "Unauthorized.", 403
+    c.execute("UPDATE job_applications SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (new_status, app_id))
+    conn.commit()
+    # Notify applicant
+    add_notification(app[1], 'application_status', f'Your application status for job ID {app[0]} is now {new_status}')
+    conn.close()
+    return redirect(url_for('view_application', app_id=app_id))
+
+@app.route('/application/<int:app_id>/note', methods=['POST'])
+@login_required
+def add_application_note(app_id):
+    note = request.form.get('note', '').strip()
+    if not note:
+        return "Note cannot be empty.", 400
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    # Permission check
+    c.execute("""
+        SELECT a.job_id, j.employer_id
+        FROM job_applications a
+        JOIN jobs j ON a.job_id = j.id
+        WHERE a.id = ?
+    """, (app_id,))
+    result = c.fetchone()
+    if not result or result[1] != session['user_id']:
+        conn.close()
+        return "Unauthorized.", 403
+    c.execute("INSERT INTO application_notes (application_id, note, created_by) VALUES (?,?,?)", (app_id, note, session['user_id']))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('view_application', app_id=app_id))
+
+@app.route('/job/<int:job_id>/applicants')
+@login_required
+def job_applicants(job_id):
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT title, employer_id FROM jobs WHERE id=?", (job_id,))
+    job = c.fetchone()
+    if not job or job[1] != user_id:
+        conn.close()
+        return "You are not the employer of this job.", 403
+    c.execute("""
+        SELECT a.id, u.name, a.message, a.status, a.created_at
+        FROM job_applications a
+        JOIN users u ON a.applicant_id = u.id
+        WHERE a.job_id = ?
+        ORDER BY a.created_at DESC
+    """, (job_id,))
+    applicants = c.fetchall()
+    conn.close()
+
+    rows = ""
+    for app in applicants:
+        status_badge = get_application_status_badge(app[3])
+        rows += f"""
+        <tr>
+            <td>{app[1]}</td>
+            <td>{app[2] or '-'}</td>
+            <td>{status_badge}</td>
+            <td>{app[4][:16]}</td>
+            <td><a href="/application/{app[0]}" class="btn btn-small">View</a></td>
+        </tr>
+        """
+    if not rows:
+        rows = '<tr><td colspan="5">No applications yet.</td></tr>'
+
+    content = f'''
+    <div class="card">
+        <div class="card-header">Applicants for: {job[0]}</div>
+        <table>
+            <thead><tr><th>Applicant</th><th>Message</th><th>Status</th><th>Applied</th><th>Action</th></tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+        <a href="/jobs" class="btn btn-outline">Back to Jobs</a>
+    </div>
+    '''
+    return render_user_template(base_template, title="Job Applicants", active_page="jobs", content=content)
+
+@app.route('/messages')
+@login_required
+def messages_inbox():
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    # Get all unique conversation partners
+    c.execute("""
+        SELECT DISTINCT
+            CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END as partner_id
+        FROM messages
+        WHERE sender_id = ? OR receiver_id = ?
+    """, (user_id, user_id, user_id))
+    partners = [row[0] for row in c.fetchall()]
+    convos = []
+    for partner in partners:
+        c.execute("""
+            SELECT sender_id, receiver_id, message, is_read, created_at
+            FROM messages
+            WHERE (sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)
+            ORDER BY created_at DESC LIMIT 1
+        """, (partner, user_id, user_id, partner))
+        last_msg = c.fetchone()
+        if last_msg:
+            name = get_user_name(partner)
+            unread = 0
+            if last_msg[2] == 0 and last_msg[1] == user_id:  # unread and received by user
+                unread = 1
+            convos.append({
+                'partner_id': partner,
+                'name': name,
+                'last_message': last_msg[2],
+                'is_read': last_msg[3],
+                'created_at': last_msg[4],
+                'unread': unread
+            })
+    # Sort by latest message
+    convos.sort(key=lambda x: x['created_at'], reverse=True)
+    conn.close()
+
+    rows = ""
+    for c in convos:
+        unread_badge = '<span class="badge badge-available" style="background:#dc3545;">New</span>' if c['unread'] else ''
+        rows += f"""
+        <div class="provider-card" onclick="window.location='/messages/{c['partner_id']}'" style="cursor:pointer;">
+            <div class="provider-info">
+                <h3>{c['name']} {unread_badge}</h3>
+                <p>{c['last_message'][:100]}</p>
+                <small>{c['created_at'][:16]}</small>
+            </div>
+        </div>
+        """
+    if not rows:
+        rows = "<p>No messages yet.</p>"
+
+    content = f'''
+    <div class="card">
+        <div class="card-header">📨 Inbox <span class="badge badge-available" style="background:#28a745;">{len([c for c in convos if c['unread']])} unread</span></div>
+        {rows}
+    </div>
+    '''
+    return render_user_template(base_template, title="Messages", active_page="messages", content=content)
+
+@app.route('/messages/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def message_conversation(user_id):
+    current_user = session['user_id']
+    if current_user == user_id:
+        return "You cannot message yourself.", 400
+
+    # Mark messages as read
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        UPDATE messages SET is_read = 1
+        WHERE sender_id = ? AND receiver_id = ?
+    """, (user_id, current_user))
+    conn.commit()
+
+    if request.method == 'POST':
+        message = request.form.get('message', '').strip()
+        if message:
+            c.execute("""
+                INSERT INTO messages (sender_id, receiver_id, message)
+                VALUES (?,?,?)
+            """, (current_user, user_id, message))
+            conn.commit()
+            add_notification(user_id, 'message', f'New message from {session["user_name"]}')
+        return redirect(url_for('message_conversation', user_id=user_id))
+
+    # Fetch conversation
+    c.execute("""
+        SELECT sender_id, message, created_at
+        FROM messages
+        WHERE (sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)
+        ORDER BY created_at ASC
+    """, (current_user, user_id, user_id, current_user))
+    msgs = c.fetchall()
+    conn.close()
+
+    # Build chat HTML
+    chat_html = ""
+    for msg in msgs:
+        align = 'right' if msg[0] == current_user else 'left'
+        bg = '#f5af19' if msg[0] == current_user else 'var(--card-bg)'
+        color = 'white' if msg[0] == current_user else 'var(--text)'
+        chat_html += f"""
+        <div style="text-align:{align}; margin:5px 0;">
+            <div style="display:inline-block; background:{bg}; color:{color}; padding:10px 15px; border-radius:15px; max-width:70%;">
+                {msg[1]}
+                <div style="font-size:0.7rem; opacity:0.7;">{msg[2][:16]}</div>
+            </div>
+        </div>
+        """
+
+    partner_name = get_user_name(user_id)
+
+    content = f'''
+    <div class="card">
+        <div class="card-header">💬 {partner_name} <a href="/messages" class="btn btn-small btn-outline">← Back</a></div>
+        <div style="height:400px; overflow-y:auto; padding:10px; background:var(--bg); border-radius:8px; margin-bottom:15px;">
+            {chat_html}
+        </div>
+        <form method="POST" style="display:flex; gap:10px;">
+            <input type="text" name="message" placeholder="Type a message..." required style="flex:1;">
+            <button type="submit" class="btn">Send</button>
+        </form>
+    </div>
+    '''
+    return render_user_template(base_template, title=f"Chat with {partner_name}", active_page="messages", content=content)
 
 # ============================================================
 # PWA ROUTES
