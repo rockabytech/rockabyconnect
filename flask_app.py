@@ -2760,20 +2760,25 @@ def list_vendors():
 
 @app.route('/vendor/<int:vendor_id>')
 def vendor_detail(vendor_id):
-    logged_in = 'user_id' in session
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    # Make sure the SELECT includes the video column
-    c.execute("""
-        SELECT v.business_name, v.district, v.village, v.landmark, v.bio, 
-               v.vendor_image, v.vendor_image2, v.vendor_image3, v.video,
-               v.status, v.featured, v.featured_expiry, u.phone
-        FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
-    """, (vendor_id,))
-    v = c.fetchone()
-    if not v:
-        conn.close()
-        return "Vendor not found.", 404
+    try:
+        logged_in = 'user_id' in session
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT v.business_name, v.district, v.village, v.landmark, v.bio, 
+                   v.vendor_image, v.vendor_image2, v.vendor_image3, v.video,
+                   v.status, v.featured, v.featured_expiry, u.phone
+            FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
+        """, (vendor_id,))
+        v = c.fetchone()
+        if not v:
+            conn.close()
+            return "Vendor not found.", 404
+        # ... rest of your code ...
+    except Exception as e:
+        import traceback
+        print(f"VENDOR DETAIL ERROR: {traceback.format_exc()}")
+        return f"Error: {str(e)}", 500
     # Unpack carefully – adjust indices if your column order is different
     bname, district, village, landmark, bio, img, img2, img3, video, status, featured, expiry, phone = v
     status_class = status.lower()
@@ -2788,9 +2793,12 @@ def vendor_detail(vendor_id):
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
     # ---- Build video HTML ----
-    video_display = ""
-    if video:
-        video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
+video_display = ""
+if video:
+    video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
+else:
+    video_display = ""  # Important: define it even if no video
+    detail_html = detail_html.replace("{video_display}", video_display)
 
     # ---- Build extra images ----
     extra_images = ""
@@ -3794,19 +3802,24 @@ def list_jobs():
 
 @app.route('/provider/<int:provider_id>')
 def provider_detail(provider_id):
-    logged_in = 'user_id' in session
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    # Make sure the SELECT includes the video column
-    c.execute("""
-        SELECT p.id, u.name, p.skills, p.district, p.village, p.bio, 
-               p.profile_pic, p.video, p.status, p.featured, p.featured_expiry, u.phone
-        FROM providers p JOIN users u ON p.user_id = u.id WHERE p.id=?
-    """, (provider_id,))
-    provider = c.fetchone()
-    if not provider:
-        conn.close()
-        return "Provider not found.", 404
+    try:
+        logged_in = 'user_id' in session
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT p.id, u.name, p.skills, p.district, p.village, p.bio, 
+                   p.profile_pic, p.video, p.status, p.featured, p.featured_expiry, u.phone
+            FROM providers p JOIN users u ON p.user_id = u.id WHERE p.id=?
+        """, (provider_id,))
+        provider = c.fetchone()
+        if not provider:
+            conn.close()
+            return "Provider not found.", 404
+        # ... rest of your code ...
+    except Exception as e:
+        import traceback
+        print(f"PROVIDER DETAIL ERROR: {traceback.format_exc()}")
+        return f"Error: {str(e)}", 500
     pid, name, skills, district, village, bio, pic, video, status, featured, expiry, phone = provider
     status_class = status.lower().replace(' ', '-')
     village_display = f", {village}" if village else ""
@@ -3818,10 +3831,13 @@ def provider_detail(provider_id):
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
-    # ---- Build video HTML ----
-    video_display = ""
-    if video:
-        video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
+   # ---- Build video HTML ----
+video_display = ""
+if video:
+    video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
+else:
+    video_display = ""  # Important: define it even if no video
+    detail_html = detail_html.replace("{video_display}", video_display)
 
     # ---- Reviews ----
     c.execute("""
@@ -3876,6 +3892,7 @@ def provider_detail(provider_id):
     detail_html = detail_html.replace("{review_form}", review_form)
     conn.close()
     return render_user_template(detail_html, title=f"Provider: {name}", active_page="list")
+    
 @app.route('/review/<int:provider_id>', methods=['POST'])
 @login_required
 def add_review(provider_id):
@@ -3889,6 +3906,20 @@ def add_review(provider_id):
     conn.close()
     return redirect(f'/provider/{provider_id}')
 
+@app.route('/fix-db')
+def fix_db():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    for table in ['providers', 'vendors', 'jobs']:
+        c.execute(f"PRAGMA table_info({table})")
+        existing = [row[1] for row in c.fetchall()]
+        if 'video' not in existing:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
+            print(f"Added video column to {table}")
+    conn.commit()
+    conn.close()
+    return "Database fixed. <a href='/debug'>Check debug</a>"
+
 # ============================================================
 # PWA ROUTES (serve static files from the root directory)
 # ============================================================
@@ -3901,6 +3932,32 @@ def manifest():
 def service_worker():
     # Serve the service-worker.js file from the same directory as flask_app.py
     return send_from_directory(BASE_DIR, 'service-worker.js', mimetype='application/javascript')
+
+@app.route('/debug')
+def debug_info():
+    import traceback
+    try:
+        # Test database connection
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # Check if video columns exist
+        result = ""
+        for table in ['providers', 'vendors', 'jobs']:
+            c.execute(f"PRAGMA table_info({table})")
+            cols = [row[1] for row in c.fetchall()]
+            result += f"<br><b>{table}:</b> {', '.join(cols)}"
+        conn.close()
+        
+        return f"""
+        <h2>Debug Info</h2>
+        <p>Database tables and columns:</p>
+        {result}
+        <br><br>
+        <p>Session: {dict(session) if session else 'No session'}</p>
+        """
+    except Exception as e:
+        return f"<h2>Error</h2><pre>{traceback.format_exc()}</pre>"
 
 # ============================================================
 # RUN APP
