@@ -12,6 +12,7 @@ from PIL import Image
 # APP CONFIGURATION (DYNAMIC FOR RENDER)
 # ============================================================
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200 MB
 app.secret_key = 'rockabytech-secret-key-change-in-production-2025'
 app.permanent_session_lifetime = timedelta(days=30)
 
