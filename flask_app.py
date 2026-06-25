@@ -2727,6 +2727,7 @@ def edit_vendor_profile():
     conn.close()
     return render_user_template(form, title="Edit Vendor Profile", active_page="dashboard")
 
+
 @app.route('/edit-vendor-profile', methods=['GET', 'POST'])
 @login_required
 def edit_vendor_profile():
