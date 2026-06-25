@@ -2377,7 +2377,8 @@ def dashboard():
 
     profile_section = ""
     if provider:
-        pid, _, skills, district, village, bio, pic, status, featured, featured_expiry = provider
+        # Unpack 11 columns: id, user_id, skills, district, village, bio, profile_pic, video, status, featured, featured_expiry
+        pid, _, skills, district, village, bio, pic, video, status, featured, featured_expiry = provider
         status_class = status.lower().replace(' ', '-')
         location = f"{district}{', ' + village if village else ''}"
         profile_section = f"""
@@ -2402,7 +2403,9 @@ def dashboard():
 
     vendor_section = ""
     if vendor:
-        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vstatus, vfeatured, vexpiry = vendor
+        # Unpack 14 columns: id, user_id, business_name, district, village, landmark, bio,
+        # vendor_image, vendor_image2, vendor_image3, video, status, featured, featured_expiry
+        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vvideo, vstatus, vfeatured, vexpiry = vendor
         vstatus_class = vstatus.lower()
         location = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
         vendor_section = f"""
@@ -2447,14 +2450,10 @@ def dashboard():
             <div class="card-header">Welcome, {session['user_name']}!</div>
             <p style="color:var(--text-secondary);"><a href="/edit-name" style="font-size:0.85rem; color:var(--primary-dark);">Edit my name</a></p>
             <p style="color:#666;">Manage your freelance presence, vendor profile, and job postings.</p>
-            
-            <!-- Quick Actions -->
             <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
                 <a href="/settings" class="btn btn-small" style="background:var(--primary-dark);">⚙️ Settings</a>
                 <a href="/refer" class="btn btn-small" style="background:var(--primary);">🎁 Refer a Friend</a>
             </div>
-            
-            <!-- Referral Banner -->
             <div style="margin-top:15px; padding:15px; background:linear-gradient(135deg, rgba(245,175,25,0.1), rgba(245,175,25,0.05)); border-radius:12px; border:1px solid var(--glass-border);">
                 <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                     <span style="font-size:1.8rem;">🎁</span>
@@ -2468,10 +2467,8 @@ def dashboard():
                 </div>
             </div>
         </div>
-        
         {profile_section}
         {vendor_section}
-        
         <div class="card">
             <div class="card-header">My Job Postings</div>
             {jobs_html}
@@ -2488,38 +2485,61 @@ def dashboard():
 @login_required
 def create_profile():
     user_id = session['user_id']
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT id FROM providers WHERE user_id=?", (user_id,))
-    if c.fetchone():
-        conn.close()
-        return redirect('/edit-profile')
-    conn.close()
-
-    if request.method == 'POST':
-        skills = request.form['skills'].strip()
-        district = request.form['district'].strip()
-        village = request.form.get('village', '').strip()
-        bio = request.form.get('bio', '').strip()
-        status = request.form.get('status', 'Available')
-        file = request.files.get('profile_pic')
-        video_file = request.files.get('video')
-        filename = None
-        video_filename = None
-        if file and allowed_file(file.filename):
-            filename = save_resized_image(file, max_width=800, max_height=600)
-        if video_file and allowed_video(video_file.filename):
-            video_filename = secure_filename(video_file.filename)
-            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
-            video_file.save(video_path)
+    conn = None
+    try:
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout = 5000;")
         c = conn.cursor()
-        c.execute("""
-            INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, video, status)
-            VALUES (?,?,?,?,?,?,?,?)
-        """, (user_id, skills, district, village, bio, filename, video_filename, status))
-        conn.commit()
+        c.execute("SELECT id FROM providers WHERE user_id=?", (user_id,))
+        if c.fetchone():
+            conn.close()
+            return redirect('/edit-profile')
         conn.close()
+
+        if request.method == 'POST':
+            skills = request.form['skills'].strip()
+            district = request.form['district'].strip()
+            village = request.form.get('village', '').strip()
+            bio = request.form.get('bio', '').strip()
+            status = request.form.get('status', 'Available')
+            file = request.files.get('profile_pic')
+            video_file = request.files.get('video')
+            filename = None
+            video_filename = None
+            if file and allowed_file(file.filename):
+                filename = save_resized_image(file, max_width=800, max_height=600)
+            if video_file and allowed_video(video_file.filename):
+                video_filename = secure_filename(video_file.filename)
+                video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+                video_file.save(video_path)
+
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute("PRAGMA busy_timeout = 5000;")
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, video, status)
+                VALUES (?,?,?,?,?,?,?,?)
+            """, (user_id, skills, district, village, bio, filename, video_filename, status))
+            conn.commit()
+            conn.close()
+            return redirect('/dashboard')
+
+        # GET request – show form
+        form_html = profile_form_template.replace("{form_title}", "Create Your Freelancer Profile")
+        form_html = form_html.replace("{skills}", "")
+        form_html = form_html.replace("{skill_suggestions}", ', '.join(SKILL_SUGGESTIONS[:10]) + ', ...')
+        form_html = form_html.replace("{district}", "").replace("{village}", "").replace("{bio}", "")
+        status_options = ''.join([f'<option value="{s}">{s}</option>' for s in FREELANCER_STATUSES])
+        form_html = form_html.replace("{status_options}", status_options)
+        return render_user_template(form_html, title="Create Profile", active_page="dashboard")
+
+    except sqlite3.OperationalError as e:
+        if conn:
+            conn.close()
+        return f"Database error: {str(e)}. Please try again.", 500
+    finally:
+        if conn:
+            conn.close()
         return redirect('/dashboard')
 
     form_html = profile_form_template.replace("{form_title}", "Create Your Freelancer Profile")
