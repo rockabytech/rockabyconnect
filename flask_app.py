@@ -1452,6 +1452,91 @@ base_template = """
                     .catch(err => console.log('Service Worker failed:', err));
             });
         }
+
+        // ===== CLIENT-SIDE IMAGE COMPRESSION =====
+        // Compresses images larger than 1 MB before upload
+        // to speed up uploads and avoid size limits.
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Find all forms that contain an image upload field
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                // Only apply to forms with at least one file input that accepts images
+                const fileInputs = form.querySelectorAll('input[type="file"][accept*="image/"]');
+                if (fileInputs.length === 0) return;
+
+                form.addEventListener('submit', function(e) {
+                    let hasLargeFile = false;
+                    const promises = [];
+
+                    fileInputs.forEach(input => {
+                        if (input.files.length > 0) {
+                            const file = input.files[0];
+                            // If file is larger than 1 MB, compress it
+                            if (file.size > 1 * 1024 * 1024) {
+                                hasLargeFile = true;
+                                promises.push(new Promise((resolve) => {
+                                    compressImage(file, function(compressedFile) {
+                                        // Replace the original file with compressed version
+                                        const dt = new DataTransfer();
+                                        dt.items.add(compressedFile);
+                                        input.files = dt.files;
+                                        resolve();
+                                    });
+                                }));
+                            }
+                        }
+                    });
+
+                    if (hasLargeFile) {
+                        e.preventDefault(); // Stop submission until compression is done
+                        Promise.all(promises).then(() => {
+                            form.submit(); // Re-submit the form after compression
+                        });
+                    }
+                });
+            });
+        });
+
+        function compressImage(file, callback) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 1200;
+                    const MAX_HEIGHT = 1200;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height = Math.round(height * MAX_WIDTH / width);
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width = Math.round(width * MAX_HEIGHT / height);
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob(function(blob) {
+                        const compressedFile = new File([blob], file.name, {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        });
+                        callback(compressedFile);
+                    }, 'image/jpeg', 0.85);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
     </script>
 </body>
 </html>
@@ -3124,6 +3209,8 @@ def debug_info():
 @app.route('/debug-config')
 def debug_config():
     max_size = app.config.get('MAX_CONTENT_LENGTH')
+    if max_size is None:
+        return "MAX_CONTENT_LENGTH is not set (default 1 MB)"
     return f"MAX_CONTENT_LENGTH = {max_size} bytes ({max_size // (1024*1024)} MB)"
 
 @app.errorhandler(413)
