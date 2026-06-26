@@ -79,7 +79,7 @@ def save_resized_image(file, max_width=800):
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
-    c = conn.cursor()
+    c = conn.cursor()   # <-- THIS LINE MUST BE PRESENT
 
     # ---- USERS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -89,7 +89,6 @@ def init_db():
         password_hash TEXT NOT NULL
     )''')
 
-    # Add theme column if missing
     c.execute("PRAGMA table_info(users)")
     columns = [col[1] for col in c.fetchall()]
     if 'theme' not in columns:
@@ -174,29 +173,27 @@ def init_db():
         FOREIGN KEY(reviewer_id) REFERENCES users(id)
     )''')
 
-    # In init_db(), replace the notifications table with this:
-c.execute('''CREATE TABLE IF NOT EXISTS notifications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    type TEXT NOT NULL,
-    message TEXT NOT NULL,
-    link TEXT,
-    is_read INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-)''')
+    # ---- NOTIFICATIONS TABLE (with is_read and link) ----
+    c.execute('''CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        link TEXT,
+        is_read INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
 
-# Add is_read column if missing
-c.execute("PRAGMA table_info(notifications)")
-cols = [row[1] for row in c.fetchall()]
-if 'is_read' not in cols:
-    c.execute("ALTER TABLE notifications ADD COLUMN is_read INTEGER DEFAULT 0")
-if 'link' not in cols:
-    c.execute("ALTER TABLE notifications ADD COLUMN link TEXT")
+    # Add is_read column if missing
+    c.execute("PRAGMA table_info(notifications)")
+    cols = [row[1] for row in c.fetchall()]
+    if 'is_read' not in cols:
+        c.execute("ALTER TABLE notifications ADD COLUMN is_read INTEGER DEFAULT 0")
+    if 'link' not in cols:
+        c.execute("ALTER TABLE notifications ADD COLUMN link TEXT")
 
-    # ============================================================
-    # REFERRAL TABLES
-    # ============================================================
+    # ---- REFERRAL TABLES ----
     c.execute('''CREATE TABLE IF NOT EXISTS referral_codes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL UNIQUE,
@@ -229,7 +226,6 @@ if 'link' not in cols:
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
-    # Insert default referral settings if empty
     c.execute("SELECT COUNT(*) FROM referral_settings")
     if c.fetchone()[0] == 0:
         c.execute("""
@@ -237,48 +233,49 @@ if 'link' not in cols:
             VALUES (10, 0, 'discount', 10, 1)
         """)
 
-    # For existing tables, add video column if missing
+    # ---- JOB APPLICATIONS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS job_applications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER NOT NULL,
+        applicant_id INTEGER NOT NULL,
+        message TEXT,
+        attachment TEXT,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(job_id) REFERENCES jobs(id),
+        FOREIGN KEY(applicant_id) REFERENCES users(id)
+    )''')
+
+    # ---- APPLICATION NOTES TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS application_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        application_id INTEGER NOT NULL,
+        note TEXT NOT NULL,
+        created_by INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(application_id) REFERENCES job_applications(id),
+        FOREIGN KEY(created_by) REFERENCES users(id)
+    )''')
+
+    # ---- MESSAGES TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sender_id INTEGER NOT NULL,
+        receiver_id INTEGER NOT NULL,
+        message TEXT NOT NULL,
+        is_read INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(sender_id) REFERENCES users(id),
+        FOREIGN KEY(receiver_id) REFERENCES users(id)
+    )''')
+
+    # ---- VIDEO COLUMN FIX (for existing databases) ----
     for table in ['providers', 'vendors', 'jobs']:
         c.execute(f"PRAGMA table_info({table})")
         existing = [row[1] for row in c.fetchall()]
         if 'video' not in existing:
             c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
-            # ---- JOB APPLICATIONS TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS job_applications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    job_id INTEGER NOT NULL,
-    applicant_id INTEGER NOT NULL,
-    message TEXT,
-    attachment TEXT,
-    status TEXT DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(job_id) REFERENCES jobs(id),
-    FOREIGN KEY(applicant_id) REFERENCES users(id)
-)''')
-
-# ---- APPLICATION NOTES TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS application_notes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    application_id INTEGER NOT NULL,
-    note TEXT NOT NULL,
-    created_by INTEGER NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(application_id) REFERENCES job_applications(id),
-    FOREIGN KEY(created_by) REFERENCES users(id)
-)''')
-
-# ---- MESSAGES TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sender_id INTEGER NOT NULL,
-    receiver_id INTEGER NOT NULL,
-    message TEXT NOT NULL,
-    is_read INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(sender_id) REFERENCES users(id),
-    FOREIGN KEY(receiver_id) REFERENCES users(id)
-)''')
 
     conn.commit()
     conn.close()
