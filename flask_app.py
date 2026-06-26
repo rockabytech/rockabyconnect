@@ -860,11 +860,23 @@ base_template = """
             border-radius: 12px;
             transition: var(--transition);
             font-size: 0.95rem;
+            position: relative;
         }
         .nav-links a:hover,
         .nav-links a.active {
             background: rgba(245, 175, 25, 0.15);
             color: var(--primary);
+        }
+
+        .nav-links .badge {
+            background: #dc3545;
+            color: white;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 4px;
+            vertical-align: top;
+            display: none;
         }
 
         .theme-toggle {
@@ -1459,6 +1471,10 @@ base_template = """
             <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">Jobs</a>
             <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">Vendors</a>
             {% if session.user_id %}
+                <a href="/my-applications" class="{{ 'active' if active_page == 'applications' else '' }}">📋 My Applications</a>
+                <!-- ===== MESSAGES LINK WITH UNREAD BADGE ===== -->
+                <a href="/messages" id="messagesLink">📨 Messages <span id="messagesBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
+                <!-- ===== END MESSAGES ===== -->
                 <a href="/refer" class="{{ 'active' if active_page == 'refer' else '' }}">🎁 Refer</a>
                 <a href="/settings" class="{{ 'active' if active_page == 'settings' else '' }}">⚙️ Settings</a>
                 <a href="/logout">Logout</a>
@@ -1603,6 +1619,30 @@ base_template = """
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
+        }
+
+        // ===== UNREAD MESSAGES BADGE (navbar) =====
+        function updateUnreadBadge() {
+            fetch('/api/unread-count')
+                .then(r => r.json())
+                .then(data => {
+                    const badge = document.getElementById('messagesBadge');
+                    if (badge) {
+                        if (data.count > 0) {
+                            badge.textContent = data.count;
+                            badge.style.display = 'inline-block';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    }
+                })
+                .catch(err => console.log('Error fetching unread count:', err));
+        }
+
+        // Call initially and every 15 seconds
+        if (document.getElementById('messagesBadge')) {
+            updateUnreadBadge();
+            setInterval(updateUnreadBadge, 15000);
         }
     </script>
 </body>
@@ -3228,8 +3268,19 @@ def list_jobs():
         
         # ---- View Applicants link (only for the employer) ----
         applicants_link = ""
-        if logged_in and session.get('user_id') == employer_id:
-            applicants_link = f'<a href="/job/{job_id}/applicants" class="btn btn-small" style="background:#17a2b8;">👥 View Applicants</a>'
+apply_link = ""
+if logged_in:
+    if session.get('user_id') == employer_id:
+        applicants_link = f'<a href="/job/{job_id}/applicants" class="btn btn-small" style="background:#17a2b8;">👥 View Applicants</a>'
+    elif status == 'Open':
+        apply_link = f'<a href="/apply/{job_id}" class="btn btn-small" style="background:#28a745;">📝 Apply</a>'
+
+# In job card:
+<div style="margin-top:8px;">
+    {applicants_link}
+    {apply_link}
+    <a href="/job/{job_id}" class="btn btn-small btn-outline">View Details</a>
+</div>
         # ---- end ----
         
         jobs_html += f"""
@@ -4480,16 +4531,18 @@ def messages_inbox():
         last_msg = c.fetchone()
         if last_msg:
             name = get_user_name(partner)
-            unread = 0
-            if last_msg[2] == 0 and last_msg[1] == user_id:  # unread and received by user
-                unread = 1
+            # Count unread messages for this conversation
+            c.execute("""
+                SELECT COUNT(*) FROM messages
+                WHERE sender_id=? AND receiver_id=? AND is_read=0
+            """, (partner, user_id))
+            unread_count = c.fetchone()[0]
             convos.append({
                 'partner_id': partner,
                 'name': name,
                 'last_message': last_msg[2],
-                'is_read': last_msg[3],
                 'created_at': last_msg[4],
-                'unread': unread
+                'unread_count': unread_count
             })
     # Sort by latest message
     convos.sort(key=lambda x: x['created_at'], reverse=True)
@@ -4497,7 +4550,7 @@ def messages_inbox():
 
     rows = ""
     for c in convos:
-        unread_badge = '<span class="badge badge-available" style="background:#dc3545;">New</span>' if c['unread'] else ''
+        unread_badge = f'<span class="badge" style="background:#dc3545; color:white;">{c["unread_count"]}</span>' if c['unread_count'] > 0 else ''
         rows += f"""
         <div class="provider-card" onclick="window.location='/messages/{c['partner_id']}'" style="cursor:pointer;">
             <div class="provider-info">
@@ -4512,9 +4565,20 @@ def messages_inbox():
 
     content = f'''
     <div class="card">
-        <div class="card-header">📨 Inbox <span class="badge badge-available" style="background:#28a745;">{len([c for c in convos if c['unread']])} unread</span></div>
+        <div class="card-header">📨 Inbox <span class="badge badge-available" style="background:#28a745; color:white;" id="inboxUnreadBadge">{sum(c['unread_count'] for c in convos)} unread</span></div>
         {rows}
     </div>
+    <script>
+        // Refresh inbox unread count every 10 seconds
+        setInterval(function() {{
+            fetch('/api/unread-count')
+                .then(r => r.json())
+                .then(data => {{
+                    const badge = document.getElementById('inboxUnreadBadge');
+                    if (badge) badge.textContent = data.count + ' unread';
+                }});
+        }}, 10000);
+    </script>
     '''
     return render_user_template(base_template, title="Messages", active_page="messages", content=content)
 
@@ -4556,34 +4620,66 @@ def message_conversation(user_id):
     msgs = c.fetchall()
     conn.close()
 
-    # Build chat HTML
-    chat_html = ""
-    for msg in msgs:
-        align = 'right' if msg[0] == current_user else 'left'
-        bg = '#f5af19' if msg[0] == current_user else 'var(--card-bg)'
-        color = 'white' if msg[0] == current_user else 'var(--text)'
-        chat_html += f"""
-        <div style="text-align:{align}; margin:5px 0;">
-            <div style="display:inline-block; background:{bg}; color:{color}; padding:10px 15px; border-radius:15px; max-width:70%;">
-                {msg[1]}
-                <div style="font-size:0.7rem; opacity:0.7;">{msg[2][:16]}</div>
-            </div>
-        </div>
-        """
-
     partner_name = get_user_name(user_id)
 
+    # Build chat HTML (messages will be rendered inside a container)
     content = f'''
     <div class="card">
         <div class="card-header">💬 {partner_name} <a href="/messages" class="btn btn-small btn-outline">← Back</a></div>
-        <div style="height:400px; overflow-y:auto; padding:10px; background:var(--bg); border-radius:8px; margin-bottom:15px;">
-            {chat_html}
+        <div id="chatContainer" style="height:400px; overflow-y:auto; padding:10px; background:var(--bg); border-radius:8px; margin-bottom:15px;">
+            {''.join([f'''
+            <div style="text-align:{"right" if msg[0]==current_user else "left"}; margin:5px 0;">
+                <div style="display:inline-block; background:{"#f5af19" if msg[0]==current_user else "var(--card-bg)"}; color:{"white" if msg[0]==current_user else "var(--text)"}; padding:10px 15px; border-radius:15px; max-width:70%;">
+                    {msg[1]}
+                    <div style="font-size:0.7rem; opacity:0.7;">{msg[2][:16]}</div>
+                </div>
+            </div>
+            ''' for msg in msgs])}
         </div>
-        <form method="POST" style="display:flex; gap:10px;">
+        <form method="POST" style="display:flex; gap:10px;" id="messageForm">
             <input type="text" name="message" placeholder="Type a message..." required style="flex:1;">
             <button type="submit" class="btn">Send</button>
         </form>
     </div>
+    <script>
+        // Poll for new messages every 3 seconds
+        const chatContainer = document.getElementById('chatContainer');
+        const form = document.getElementById('messageForm');
+        let lastMessageTime = document.querySelector('#chatContainer > div:last-child')?.querySelector('div:last-child')?.textContent || '';
+
+        function loadNewMessages() {{
+            fetch('/api/messages/{user_id}?since=' + encodeURIComponent(lastMessageTime))
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.messages && data.messages.length > 0) {{
+                        data.messages.forEach(msg => {{
+                            const div = document.createElement('div');
+                            const align = msg.sender == {current_user} ? 'right' : 'left';
+                            const bg = msg.sender == {current_user} ? '#f5af19' : 'var(--card-bg)';
+                            const color = msg.sender == {current_user} ? 'white' : 'var(--text)';
+                            div.style.cssText = `text-align:${{align}}; margin:5px 0;`;
+                            div.innerHTML = `
+                                <div style="display:inline-block; background:${{bg}}; color:${{color}}; padding:10px 15px; border-radius:15px; max-width:70%;">
+                                    ${{msg.text}}
+                                    <div style="font-size:0.7rem; opacity:0.7;">${{msg.time.slice(0,16)}}</div>
+                                </div>
+                            `;
+                            chatContainer.appendChild(div);
+                            // Update last message time
+                            if (msg.time > lastMessageTime) lastMessageTime = msg.time;
+                        }});
+                        // Scroll to bottom
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    }}
+                }});
+        }}
+
+        // Initial poll, then every 3 seconds
+        setInterval(loadNewMessages, 3000);
+
+        // Auto-scroll to bottom on load
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    </script>
     '''
     return render_user_template(base_template, title=f"Chat with {partner_name}", active_page="messages", content=content)
 
@@ -4597,6 +4693,45 @@ def manifest():
 @app.route('/service-worker.js')
 def service_worker():
     return send_from_directory(BASE_DIR, 'service-worker.js', mimetype='application/javascript')
+
+# ---- API: Unread count ----
+@app.route('/api/unread-count')
+@login_required
+def api_unread_count():
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM messages WHERE receiver_id=? AND is_read=0", (user_id,))
+    count = c.fetchone()[0]
+    conn.close()
+    return {'count': count}
+
+# ---- API: New messages (polling) ----
+@app.route('/api/messages/<int:user_id>')
+@login_required
+def api_messages(user_id):
+    current_user = session['user_id']
+    since = request.args.get('since', '')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    if since:
+        c.execute("""
+            SELECT sender_id, message, created_at
+            FROM messages
+            WHERE ((sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?))
+            AND created_at > ?
+            ORDER BY created_at ASC
+        """, (current_user, user_id, user_id, current_user, since))
+    else:
+        c.execute("""
+            SELECT sender_id, message, created_at
+            FROM messages
+            WHERE (sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)
+            ORDER BY created_at ASC
+        """, (current_user, user_id, user_id, current_user))
+    msgs = c.fetchall()
+    conn.close()
+    return {'messages': [{'sender': m[0], 'text': m[1], 'time': m[2]} for m in msgs]}
 
 # ============================================================
 # RUN APP
