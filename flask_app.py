@@ -174,15 +174,25 @@ def init_db():
         FOREIGN KEY(reviewer_id) REFERENCES users(id)
     )''')
 
-    # ---- NOTIFICATIONS TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS notifications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        type TEXT NOT NULL,
-        message TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )''')
+    # In init_db(), replace the notifications table with this:
+c.execute('''CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    link TEXT,
+    is_read INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+)''')
+
+# Add is_read column if missing
+c.execute("PRAGMA table_info(notifications)")
+cols = [row[1] for row in c.fetchall()]
+if 'is_read' not in cols:
+    c.execute("ALTER TABLE notifications ADD COLUMN is_read INTEGER DEFAULT 0")
+if 'link' not in cols:
+    c.execute("ALTER TABLE notifications ADD COLUMN link TEXT")
 
     # ============================================================
     # REFERRAL TABLES
@@ -633,6 +643,51 @@ def process_referral(user_id, phone):
         INSERT INTO referrals (referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type)
         VALUES (?, ?, ?, 'pending', 0, ?)
     """, (referrer_id, user_id, phone, reward_type))
+    conn.commit()
+    conn.close()
+
+    def add_notification(user_id, type, message, link=None):
+    """Add a notification for a user."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout = 5000;")
+        c = conn.cursor()
+        c.execute("INSERT INTO notifications (user_id, type, message, link, is_read) VALUES (?,?,?,?,0)",
+                  (user_id, type, message, link))
+        conn.commit()
+        conn.close()
+    except sqlite3.OperationalError as e:
+        print(f"Notification failed: {e}")
+
+def get_unread_notifications(user_id):
+    """Get count of unread notifications for a user."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0", (user_id,))
+    count = c.fetchone()[0]
+    conn.close()
+    return count
+
+def get_notifications(user_id, limit=20):
+    """Get recent notifications for a user, newest first."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, type, message, link, is_read, created_at
+        FROM notifications
+        WHERE user_id=?
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (user_id, limit))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def mark_notification_read(notification_id, user_id):
+    """Mark a notification as read."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE notifications SET is_read=1 WHERE id=? AND user_id=?", (notification_id, user_id))
     conn.commit()
     conn.close()
     
@@ -1474,7 +1529,9 @@ base_template = """
                 <a href="/my-applications" class="{{ 'active' if active_page == 'applications' else '' }}">📋 My Applications</a>
                 <!-- ===== MESSAGES LINK WITH UNREAD BADGE ===== -->
                 <a href="/messages" id="messagesLink">📨 Messages <span id="messagesBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
-                <!-- ===== END MESSAGES ===== -->
+                <!-- ===== NOTIFICATION BELL ===== -->
+                <a href="/notifications" id="notifLink">🔔 <span id="notifBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
+                <!-- ===== END NOTIFICATION ===== -->
                 <a href="/refer" class="{{ 'active' if active_page == 'refer' else '' }}">🎁 Refer</a>
                 <a href="/settings" class="{{ 'active' if active_page == 'settings' else '' }}">⚙️ Settings</a>
                 <a href="/logout">Logout</a>
@@ -1537,14 +1594,9 @@ base_template = """
         }
 
         // ===== CLIENT-SIDE IMAGE COMPRESSION =====
-        // Compresses images larger than 1 MB before upload
-        // to speed up uploads and avoid size limits.
-
         document.addEventListener('DOMContentLoaded', function() {
-            // Find all forms that contain an image upload field
             const forms = document.querySelectorAll('form');
             forms.forEach(form => {
-                // Only apply to forms with at least one file input that accepts images
                 const fileInputs = form.querySelectorAll('input[type="file"][accept*="image/"]');
                 if (fileInputs.length === 0) return;
 
@@ -1555,12 +1607,10 @@ base_template = """
                     fileInputs.forEach(input => {
                         if (input.files.length > 0) {
                             const file = input.files[0];
-                            // If file is larger than 1 MB, compress it
                             if (file.size > 1 * 1024 * 1024) {
                                 hasLargeFile = true;
                                 promises.push(new Promise((resolve) => {
                                     compressImage(file, function(compressedFile) {
-                                        // Replace the original file with compressed version
                                         const dt = new DataTransfer();
                                         dt.items.add(compressedFile);
                                         input.files = dt.files;
@@ -1572,9 +1622,9 @@ base_template = """
                     });
 
                     if (hasLargeFile) {
-                        e.preventDefault(); // Stop submission until compression is done
+                        e.preventDefault();
                         Promise.all(promises).then(() => {
-                            form.submit(); // Re-submit the form after compression
+                            form.submit();
                         });
                     }
                 });
@@ -1621,7 +1671,29 @@ base_template = """
             reader.readAsDataURL(file);
         }
 
-        // ===== UNREAD MESSAGES BADGE (navbar) =====
+        // ============================================================
+        // UNREAD NOTIFICATIONS BADGE
+        // ============================================================
+        function updateNotifBadge() {
+            fetch('/api/unread-notifications')
+                .then(r => r.json())
+                .then(data => {
+                    const badge = document.getElementById('notifBadge');
+                    if (badge) {
+                        if (data.count > 0) {
+                            badge.textContent = data.count;
+                            badge.style.display = 'inline-block';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    }
+                })
+                .catch(err => console.log('Error fetching unread count:', err));
+        }
+
+        // ============================================================
+        // UNREAD MESSAGES BADGE
+        // ============================================================
         function updateUnreadBadge() {
             fetch('/api/unread-count')
                 .then(r => r.json())
@@ -1639,10 +1711,17 @@ base_template = """
                 .catch(err => console.log('Error fetching unread count:', err));
         }
 
-        // Call initially and every 15 seconds
+        // ============================================================
+        // INITIALISE AND POLL
+        // ============================================================
         if (document.getElementById('messagesBadge')) {
             updateUnreadBadge();
             setInterval(updateUnreadBadge, 15000);
+        }
+
+        if (document.getElementById('notifBadge')) {
+            updateNotifBadge();
+            setInterval(updateNotifBadge, 15000);
         }
     </script>
 </body>
@@ -2494,6 +2573,49 @@ def home():
         content = content[:hero_end] + carousel_html + content[hero_end:]
 
     return render_user_template(content, title="Home", active_page="home")
+
+@app.route('/notifications')
+@login_required
+def notifications():
+    user_id = session['user_id']
+    # Mark all as read when viewing the page
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE notifications SET is_read=1 WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+
+    notifs = get_notifications(user_id, 50)
+    rows = ""
+    for n in notifs:
+        nid, ntype, msg, link, is_read, created_at = n
+        icon = {
+            'job_application': '📋',
+            'application_status': '🔄',
+            'message': '💬',
+            'boost_approved': '⭐',
+            'boost_rejected': '❌'
+        }.get(ntype, '🔔')
+        link_html = f'<a href="{link}" class="btn btn-small">View</a>' if link else ''
+        rows += f"""
+        <div class="provider-card">
+            <div class="provider-info">
+                <h3>{icon} {msg}</h3>
+                <small>{created_at[:16]}</small>
+                {link_html}
+            </div>
+        </div>
+        """
+    if not rows:
+        rows = "<p>No notifications yet.</p>"
+
+    content = f'''
+    <div class="card">
+        <div class="card-header">🔔 Notifications</div>
+        {rows}
+    </div>
+    '''
+    return render_user_template(base_template, title="Notifications", active_page="notifications", content=content)
 
 @app.route('/offer-skill')
 def offer_skill():
@@ -4168,17 +4290,14 @@ def apply_job(job_id):
     user_id = session['user_id']
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    # Check job exists and is open
     c.execute("SELECT title, employer_id FROM jobs WHERE id=? AND status='Open'", (job_id,))
     job = c.fetchone()
     if not job:
         conn.close()
         return "Job not available for applications.", 404
-    # Prevent applying to own job
     if job[1] == user_id:
         conn.close()
         return "You cannot apply to your own job.", 400
-    # Check if already applied
     c.execute("SELECT id FROM job_applications WHERE job_id=? AND applicant_id=?", (job_id, user_id))
     if c.fetchone():
         conn.close()
@@ -4196,8 +4315,9 @@ def apply_job(job_id):
             VALUES (?,?,?,?)
         """, (job_id, user_id, message, filename))
         conn.commit()
-        # Notify employer
-        add_notification(job[1], 'job_application', f'New application for "{job[0]}" from {session["user_name"]}')
+        # ---- NOTIFICATION ----
+        add_notification(job[1], 'job_application', f'{session["user_name"]} applied for "{job[0]}"', link=f'/job/{job_id}/applicants')
+        # ---------------------
         conn.close()
         return redirect(url_for('my_applications'))
 
@@ -4354,7 +4474,10 @@ def update_application_status(app_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-        SELECT job_id, applicant_id FROM job_applications WHERE id=?
+        SELECT a.job_id, a.applicant_id, j.title
+        FROM job_applications a
+        JOIN jobs j ON a.job_id = j.id
+        WHERE a.id=?
     """, (app_id,))
     app = c.fetchone()
     if not app:
@@ -4368,8 +4491,9 @@ def update_application_status(app_id):
         return "Unauthorized.", 403
     c.execute("UPDATE job_applications SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (new_status, app_id))
     conn.commit()
-    # Notify applicant
-    add_notification(app[1], 'application_status', f'Your application status for job ID {app[0]} is now {new_status}')
+    # ---- NOTIFICATION ----
+    add_notification(app[1], 'application_status', f'Your application for "{app[2]}" status changed to {new_status}', link='/my-applications')
+    # ---------------------
     conn.close()
     return redirect(url_for('view_application', app_id=app_id))
 
@@ -4726,6 +4850,12 @@ def api_messages(user_id):
     msgs = c.fetchall()
     conn.close()
     return {'messages': [{'sender': m[0], 'text': m[1], 'time': m[2]} for m in msgs]}
+
+@app.route('/api/unread-notifications')
+@login_required
+def api_unread_notifications():
+    count = get_unread_notifications(session['user_id'])
+    return {'count': count}
 
 # ============================================================
 # RUN APP
