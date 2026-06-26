@@ -3266,23 +3266,15 @@ def list_jobs():
         location_display = f"{loc}{', ' + village if village else ''}"
         img_tag = f'<img src="/static/uploads/{image}" class="profile-pic" style="border-radius:8px;" alt="{title}">' if image else ''
         
-        # ---- View Applicants link (only for the employer) ----
         applicants_link = ""
-apply_link = ""
-if logged_in:
-    if session.get('user_id') == employer_id:
-        applicants_link = f'<a href="/job/{job_id}/applicants" class="btn btn-small" style="background:#17a2b8;">👥 View Applicants</a>'
-    elif status == 'Open':
-        apply_link = f'<a href="/apply/{job_id}" class="btn btn-small" style="background:#28a745;">📝 Apply</a>'
+        apply_link = ""
+        if logged_in:
+            if session.get('user_id') == employer_id:
+                applicants_link = f'<a href="/job/{job_id}/applicants" class="btn btn-small" style="background:#17a2b8;">👥 View Applicants</a>'
+            elif status == 'Open':
+                apply_link = f'<a href="/apply/{job_id}" class="btn btn-small" style="background:#28a745;">📝 Apply</a>'
 
-# In job card:
-<div style="margin-top:8px;">
-    {applicants_link}
-    {apply_link}
-    <a href="/job/{job_id}" class="btn btn-small btn-outline">View Details</a>
-</div>
-        # ---- end ----
-        
+        # Build the job card – use a single f‑string with proper escaping
         jobs_html += f"""
         <div class="job-card">
             {img_tag}
@@ -3293,10 +3285,12 @@ if logged_in:
                 {contact_display}
                 <div style="margin-top:8px;">
                     {applicants_link}
+                    {apply_link}
                     <a href="/job/{job_id}" class="btn btn-small btn-outline">View Details</a>
                 </div>
             </div>
         </div>"""
+
     if not jobs_html:
         jobs_html = "<p>No jobs yet.</p>"
     return render_user_template(job_list_page, title="Jobs", active_page="jobs", jobs_html=jobs_html)
