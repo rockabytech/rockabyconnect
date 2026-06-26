@@ -234,7 +234,7 @@ def init_db():
         if 'video' not in existing:
             c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
             # ---- JOB APPLICATIONS TABLE ----
-c.execute('''CREATE TABLE IF NOT EXISTS job_applications (
+    c.execute('''CREATE TABLE IF NOT EXISTS job_applications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id INTEGER NOT NULL,
     applicant_id INTEGER NOT NULL,
@@ -248,7 +248,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS job_applications (
 )''')
 
 # ---- APPLICATION NOTES TABLE ----
-c.execute('''CREATE TABLE IF NOT EXISTS application_notes (
+    c.execute('''CREATE TABLE IF NOT EXISTS application_notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     application_id INTEGER NOT NULL,
     note TEXT NOT NULL,
@@ -259,7 +259,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS application_notes (
 )''')
 
 # ---- MESSAGES TABLE ----
-c.execute('''CREATE TABLE IF NOT EXISTS messages (
+    c.execute('''CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sender_id INTEGER NOT NULL,
     receiver_id INTEGER NOT NULL,
