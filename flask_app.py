@@ -646,14 +646,20 @@ def process_referral(user_id, phone):
     conn.commit()
     conn.close()
 
-    def add_notification(user_id, type, message, link=None):
+   # ============================================================
+# NOTIFICATION HELPERS
+# ============================================================
+
+def add_notification(user_id, type, message, link=None):
     """Add a notification for a user."""
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.execute("PRAGMA busy_timeout = 5000;")
         c = conn.cursor()
-        c.execute("INSERT INTO notifications (user_id, type, message, link, is_read) VALUES (?,?,?,?,0)",
-                  (user_id, type, message, link))
+        c.execute(
+            "INSERT INTO notifications (user_id, type, message, link, is_read) VALUES (?,?,?,?,0)",
+            (user_id, type, message, link)
+        )
         conn.commit()
         conn.close()
     except sqlite3.OperationalError as e:
@@ -2573,6 +2579,16 @@ def home():
         content = content[:hero_end] + carousel_html + content[hero_end:]
 
     return render_user_template(content, title="Home", active_page="home")
+
+# ============================================================
+# NOTIFICATION API & PAGE
+# ============================================================
+
+@app.route('/api/unread-notifications')
+@login_required
+def api_unread_notifications():
+    count = get_unread_notifications(session['user_id'])
+    return {'count': count}
 
 @app.route('/notifications')
 @login_required
@@ -4851,11 +4867,6 @@ def api_messages(user_id):
     conn.close()
     return {'messages': [{'sender': m[0], 'text': m[1], 'time': m[2]} for m in msgs]}
 
-@app.route('/api/unread-notifications')
-@login_required
-def api_unread_notifications():
-    count = get_unread_notifications(session['user_id'])
-    return {'count': count}
 
 # ============================================================
 # RUN APP
