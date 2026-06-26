@@ -2603,12 +2603,13 @@ def notifications():
     for n in notifs:
         nid, ntype, msg, link, is_read, created_at = n
         icon = {
-            'job_application': '📋',
-            'application_status': '🔄',
-            'message': '💬',
-            'boost_approved': '⭐',
-            'boost_rejected': '❌'
-        }.get(ntype, '🔔')
+    'job_application': '📋',
+    'application_status': '🔄',
+    'application_note': '📝',  # <-- ADD THIS
+    'message': '💬',
+    'boost_approved': '⭐',
+    'boost_rejected': '❌'
+}.get(ntype, '🔔')
         link_html = f'<a href="{link}" class="btn btn-small">View</a>' if link else ''
         rows += f"""
         <div class="provider-card">
@@ -4420,7 +4421,28 @@ def view_application(app_id):
     applicant_name = get_user_name(app[2])
     employer_name = get_user_name(app[9])
 
-    # Get notes (only visible to employer, but show to both)
+    # Get applicant's provider profile (for profile link)
+    c.execute("""
+        SELECT p.id, u.name, u.phone, p.skills, p.district, p.village, p.profile_pic
+        FROM providers p
+        JOIN users u ON p.user_id = u.id
+        WHERE p.user_id = ?
+    """, (app[2],))
+    applicant_provider = c.fetchone()
+
+    # ---- Build applicant profile link and message button ----
+    applicant_profile_link = ""
+    message_button = ""
+    if applicant_provider:
+        provider_id = applicant_provider[0]
+        applicant_profile_link = f'<a href="/provider/{provider_id}" class="btn btn-small" style="background:#17a2b8;">👤 View Profile</a>'
+        message_button = f'<a href="/messages/{app[2]}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+    else:
+        # If no provider profile, show user ID or phone
+        applicant_profile_link = f'<p><strong>User ID:</strong> {app[2]}</p>'
+        message_button = f'<a href="/messages/{app[2]}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+
+    # Get notes
     c.execute("""
         SELECT note, created_by, created_at
         FROM application_notes
@@ -4439,6 +4461,11 @@ def view_application(app_id):
         """
     if not notes:
         notes_html = "<p>No notes yet.</p>"
+
+    # ---- Build attachment download link ----
+    attachment_link = ""
+    if app[4]:  # attachment filename exists
+        attachment_link = f'<a href="/download/{app[4]}" class="btn btn-small" style="background:#6c757d;" target="_blank">📄 Download Attachment</a>'
 
     # Status update form (only for employer)
     status_form = ""
@@ -4465,8 +4492,12 @@ def view_application(app_id):
         <div class="card-header">Application #{app[0]} – {app[1]}</div>
         <p><strong>Job:</strong> {app[8]}</p>
         <p><strong>Applicant:</strong> {applicant_name}</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin:10px 0;">
+            {applicant_profile_link}
+            {message_button}
+        </div>
         <p><strong>Message:</strong> {app[3] or 'No message'}</p>
-        <p><strong>Attachment:</strong> {app[4] if app[4] else 'None'}</p>
+        <p><strong>Attachment:</strong> {attachment_link or 'None'}</p>
         <p><strong>Status:</strong> {get_application_status_badge(app[5])}</p>
         <p><strong>Applied:</strong> {app[6][:16]} <strong>Updated:</strong> {app[7][:16]}</p>
         {status_form}
@@ -4504,9 +4535,11 @@ def update_application_status(app_id):
         return "Unauthorized.", 403
     c.execute("UPDATE job_applications SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (new_status, app_id))
     conn.commit()
-    # ---- NOTIFICATION ----
+
+    # ---- NOTIFICATION TO APPLICANT ----
     add_notification(app[1], 'application_status', f'Your application for "{app[2]}" status changed to {new_status}', link='/my-applications')
-    # ---------------------
+    # --------------------------------
+
     conn.close()
     return redirect(url_for('view_application', app_id=app_id))
 
@@ -4519,9 +4552,9 @@ def add_application_note(app_id):
         return "Note cannot be empty.", 400
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    # Permission check
+    # Permission check and get applicant info
     c.execute("""
-        SELECT a.job_id, j.employer_id
+        SELECT a.job_id, j.employer_id, a.applicant_id, j.title
         FROM job_applications a
         JOIN jobs j ON a.job_id = j.id
         WHERE a.id = ?
@@ -4530,8 +4563,17 @@ def add_application_note(app_id):
     if not result or result[1] != session['user_id']:
         conn.close()
         return "Unauthorized.", 403
+    job_title = result[3]
+    applicant_id = result[2]
+
     c.execute("INSERT INTO application_notes (application_id, note, created_by) VALUES (?,?,?)", (app_id, note, session['user_id']))
     conn.commit()
+
+    # ---- NOTIFICATION TO APPLICANT ----
+    employer_name = session.get('user_name', 'Employer')
+    add_notification(applicant_id, 'application_note', f'{employer_name} added a note on your application for "{job_title}"', link=f'/application/{app_id}')
+    # ---------------------------------
+
     conn.close()
     return redirect(url_for('view_application', app_id=app_id))
 
@@ -4863,6 +4905,36 @@ def api_messages(user_id):
     msgs = c.fetchall()
     conn.close()
     return {'messages': [{'sender': m[0], 'text': m[1], 'time': m[2]} for m in msgs]}
+
+@app.route('/download/<filename>')
+@login_required
+def download_file(filename):
+    """Download an uploaded file (CV/attachment)."""
+    # Check if file exists
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if not os.path.exists(file_path):
+        return "File not found.", 404
+
+    # Optional: Check if the user has permission to download this file
+    # Only allow if user is the applicant or the employer of the job
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT a.applicant_id, j.employer_id
+        FROM job_applications a
+        JOIN jobs j ON a.job_id = j.id
+        WHERE a.attachment = ?
+    """, (filename,))
+    result = c.fetchone()
+    conn.close()
+    if result:
+        applicant_id, employer_id = result
+        user_id = session['user_id']
+        if user_id != applicant_id and user_id != employer_id:
+            return "You do not have permission to download this file.", 403
+    # If not found in job_applications, allow download anyway (fallback)
+
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 
 # ============================================================
