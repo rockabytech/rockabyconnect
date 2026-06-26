@@ -641,6 +641,10 @@ def process_referral(user_id, phone):
     
     return True
 
+# ============================================================
+# JOB APPLICATIONS ROUTES
+# ============================================================
+
 def get_application_status_badge(status):
     colors = {
         'pending': '#ffc107',
@@ -666,6 +670,7 @@ def get_unread_count(user_id):
     count = c.fetchone()[0]
     conn.close()
     return count
+
 
 # ============================================================
 # ADMIN REFERRAL SETTINGS
@@ -2032,7 +2037,38 @@ login_page = base_template.replace("{title}", "Login").replace("{active_page}", 
     </div>
 """)
 
-dashboard_template = base_template.replace("{title}", "Dashboard").replace("{active_page}", "dashboard").replace("{content}", "{dashboard_content}")
+dashboard_template = base_template.replace("{title}", "Dashboard").replace("{active_page}", "dashboard").replace("{content}", """
+    <div class="card">
+        <div class="card-header">Welcome, {session['user_name']}!</div>
+        <p style="color:var(--text-secondary);"><a href="/edit-name" style="font-size:0.85rem; color:var(--primary-dark);">Edit my name</a></p>
+        <p style="color:#666;">Manage your freelance presence, vendor profile, and job postings.</p>
+        <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
+            <a href="/settings" class="btn btn-small" style="background:var(--primary-dark);">⚙️ Settings</a>
+            <a href="/refer" class="btn btn-small" style="background:var(--primary);">🎁 Refer a Friend</a>
+            <a href="/my-applications" class="btn btn-small" style="background:#17a2b8;">📋 My Applications</a>
+            <a href="/messages" class="btn btn-small" style="background:#28a745;">📨 Messages</a>
+        </div>
+        <div style="margin-top:15px; padding:15px; background:linear-gradient(135deg, rgba(245,175,25,0.1), rgba(245,175,25,0.05)); border-radius:12px; border:1px solid var(--glass-border);">
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <span style="font-size:1.8rem;">🎁</span>
+                <div style="flex:1;">
+                    <h4 style="margin:0;">Refer a Friend & Earn Rewards!</h4>
+                    <p style="margin:0; font-size:0.9rem; color:var(--text-secondary);">Share your referral link and earn rewards when your friends sign up.</p>
+                </div>
+                <a href="/refer" class="btn" style="background:var(--primary-dark); white-space:nowrap;">
+                    <i class="fas fa-share-alt"></i> Refer Now
+                </a>
+            </div>
+        </div>
+    </div>
+    {profile_section}
+    {vendor_section}
+    <div class="card">
+        <div class="card-header">My Job Postings</div>
+        {jobs_html}
+        <a href="/post-job" class="btn" style="margin-top:10px;">Post a New Job</a>
+    </div>
+""")
 
 profile_form_template = base_template.replace("{title}", "My Freelancer Profile").replace("{content}", """
     <div class="card">
@@ -4124,6 +4160,7 @@ def apply_job(job_id):
     conn.close()
     return render_user_template(base_template, title="Apply to Job", active_page="jobs", content=content)
 
+
 @app.route('/my-applications')
 @login_required
 def my_applications():
@@ -4165,6 +4202,7 @@ def my_applications():
     </div>
     '''
     return render_user_template(base_template, title="My Applications", active_page="jobs", content=content)
+
 
 @app.route('/application/<int:app_id>')
 @login_required
@@ -4251,6 +4289,7 @@ def view_application(app_id):
     conn.close()
     return render_user_template(base_template, title="Application Details", active_page="jobs", content=content)
 
+
 @app.route('/application/<int:app_id>/status', methods=['POST'])
 @login_required
 def update_application_status(app_id):
@@ -4277,6 +4316,7 @@ def update_application_status(app_id):
     conn.close()
     return redirect(url_for('view_application', app_id=app_id))
 
+
 @app.route('/application/<int:app_id>/note', methods=['POST'])
 @login_required
 def add_application_note(app_id):
@@ -4300,6 +4340,7 @@ def add_application_note(app_id):
     conn.commit()
     conn.close()
     return redirect(url_for('view_application', app_id=app_id))
+
 
 @app.route('/job/<int:job_id>/applicants')
 @login_required
@@ -4348,6 +4389,59 @@ def job_applicants(job_id):
     </div>
     '''
     return render_user_template(base_template, title="Job Applicants", active_page="jobs", content=content)
+
+@app.route('/job/<int:job_id>')
+def job_detail(job_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image,
+               u.name as employer_name, u.phone as employer_phone, j.employer_id
+        FROM jobs j
+        JOIN users u ON j.employer_id = u.id
+        WHERE j.id = ?
+    """, (job_id,))
+    job = c.fetchone()
+    conn.close()
+    if not job:
+        return "Job not found.", 404
+    
+    job_id, title, company, desc, loc, village, contact, status, posted_date, job_img, employer_name, employer_phone, employer_id = job
+    status_class = status.lower()
+    location_display = f"{loc}{', ' + village if village else ''}"
+    
+    # Build apply button (only if user is logged in and not the employer)
+    apply_button = ""
+    if 'user_id' in session:
+        if session['user_id'] == employer_id:
+            apply_button = '<p class="alert alert-info">You posted this job.</p>'
+        else:
+            apply_button = f'<a href="/apply/{job_id}" class="btn">📝 Apply for this Job</a>'
+    else:
+        apply_button = '<p><a href="/login" class="btn">Login to Apply</a></p>'
+    
+    content = f'''
+    <div class="card">
+        <div class="card-header">{title}</div>
+        {f'<img src="/static/uploads/{job_img}" class="vendor-img" style="width:100%; max-height:300px; object-fit:cover; border-radius:8px; margin-bottom:15px;">' if job_img else ''}
+        <p><strong>Company:</strong> {company or 'N/A'}</p>
+        <p><strong>Location:</strong> {location_display}</p>
+        <p><strong>Description:</strong> {desc}</p>
+        <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span></p>
+        <p><strong>Posted:</strong> {posted_date[:10]}</p>
+        <p><strong>Employer:</strong> {employer_name} <a href="/messages/{employer_id}" class="btn btn-small btn-whatsapp">💬 Message</a></p>
+        <p><strong>Contact:</strong> {employer_phone}</p>
+        <hr>
+        {apply_button}
+        <p><a href="/jobs" class="btn btn-outline">← Back to Jobs</a></p>
+    </div>
+    '''
+    return render_user_template(base_template, title=f"Job: {title}", active_page="jobs", content=content)
+
+
+# ============================================================
+# IN-APP MESSAGING ROUTES
+# ============================================================
 
 @app.route('/messages')
 @login_required
@@ -4411,6 +4505,7 @@ def messages_inbox():
     </div>
     '''
     return render_user_template(base_template, title="Messages", active_page="messages", content=content)
+
 
 @app.route('/messages/<int:user_id>', methods=['GET', 'POST'])
 @login_required
