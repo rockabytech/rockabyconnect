@@ -432,10 +432,6 @@ def process_referral(user_id, phone):
     conn.commit()
     conn.close()
     
-    # Clear the session so we don't track again
-    session.pop('referral_code', None)
-    
-    return True
 
 def save_resized_image(file, max_width=800, max_height=600, quality=85):
     """Resize image to uniform 800x600 cover (crop to fit) and save."""
