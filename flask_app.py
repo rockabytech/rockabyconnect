@@ -3203,15 +3203,16 @@ def list_jobs():
     c.execute("UPDATE jobs SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
     conn.commit()
     c.execute("""
-        SELECT j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.featured, j.featured_expiry
-        FROM jobs j ORDER BY CASE WHEN j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= date('now')) THEN 0 ELSE 1 END, j.id DESC
+        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.featured, j.featured_expiry, j.employer_id
+        FROM jobs j
+        ORDER BY CASE WHEN j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= date('now')) THEN 0 ELSE 1 END, j.id DESC
     """)
     jobs = c.fetchall()
     conn.close()
 
     jobs_html = ""
     for j in jobs:
-        title, company, desc, loc, village, contact, status, posted_date, image, featured, expiry = j
+        job_id, title, company, desc, loc, village, contact, status, posted_date, image, featured, expiry, employer_id = j
         badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
         if logged_in:
             contact_display = f'<p>Contact: {contact}'
@@ -3224,14 +3225,25 @@ def list_jobs():
         feat_badge = '<span class="badge badge-available" style="background:var(--primary);">FEATURED</span>' if active_featured else ''
         location_display = f"{loc}{', ' + village if village else ''}"
         img_tag = f'<img src="/static/uploads/{image}" class="profile-pic" style="border-radius:8px;" alt="{title}">' if image else ''
+        
+        # ---- View Applicants link (only for the employer) ----
+        applicants_link = ""
+        if logged_in and session.get('user_id') == employer_id:
+            applicants_link = f'<a href="/job/{job_id}/applicants" class="btn btn-small" style="background:#17a2b8;">👥 View Applicants</a>'
+        # ---- end ----
+        
         jobs_html += f"""
         <div class="job-card">
             {img_tag}
             <div class="job-info">
-                <h3>{title} <span class="badge badge-{badge_class}">{status}</span> {feat_badge}</h3>
+                <h3><a href="/job/{job_id}" style="color:inherit; text-decoration:none;">{title}</a> <span class="badge badge-{badge_class}">{status}</span> {feat_badge}</h3>
                 <p class="meta">{company or 'N/A'} · {location_display} · {posted_date[:10] if posted_date else ''}</p>
                 <p>{desc}</p>
                 {contact_display}
+                <div style="margin-top:8px;">
+                    {applicants_link}
+                    <a href="/job/{job_id}" class="btn btn-small btn-outline">View Details</a>
+                </div>
             </div>
         </div>"""
     if not jobs_html:
