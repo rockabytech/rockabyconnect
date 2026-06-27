@@ -78,7 +78,8 @@ def save_resized_image(file, max_width=800):
 # ============================================================
 def init_db():
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
+    conn.execute("PRAGMA journal_mode=WAL;")   # <-- ADD THIS
     c = conn.cursor()   # <-- THIS LINE MUST BE PRESENT
 
     # ---- USERS TABLE ----
@@ -288,7 +289,7 @@ init_db()
 def get_db():
     """Get database connection (for routes that use it)."""
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -327,7 +328,7 @@ def is_featured_now(featured_flag, expiry_date):
 def add_notification(user_id, type, message):
     try:
         conn = sqlite3.connect(DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA busy_timeout = 30000;")
         c = conn.cursor()
         c.execute("INSERT INTO notifications (user_id, type, message) VALUES (?,?,?)", (user_id, type, message))
         conn.commit()
@@ -344,7 +345,7 @@ def generate_referral_code(user_id):
 def get_referral_code(user_id):
     """Get or create referral code for a user"""
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     c.execute("SELECT code FROM referral_codes WHERE user_id=?", (user_id,))
     row = c.fetchone()
@@ -361,7 +362,7 @@ def get_referral_code(user_id):
 def get_referral_stats(user_id):
     """Get referral statistics for a user"""
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     total = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (user_id,)).fetchone()[0]
     pending = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status='pending'", (user_id,)).fetchone()[0]
@@ -387,7 +388,7 @@ def process_referral(user_id, phone):
     
     ref_code = session['referral_code']
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     
     # Find the referrer (user who owns this referral code)
@@ -483,7 +484,7 @@ def allowed_video(filename):
 def get_user_theme(user_id):
     """Get the user's theme preference (default: 'default')"""
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     c.execute("SELECT theme FROM users WHERE id=?", (user_id,))
     row = c.fetchone()
@@ -495,7 +496,7 @@ def set_user_theme(user_id, theme):
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH, timeout=10)  # 10-second timeout
-        conn.execute("PRAGMA busy_timeout = 10000;")
+        conn.execute("PRAGMA busy_timeout = 30000;")
         c = conn.cursor()
         # Ensure column exists
         c.execute("PRAGMA table_info(users)")
@@ -551,7 +552,7 @@ def generate_referral_code(user_id):
 def get_referral_code(user_id):
     """Get or create referral code for a user"""
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     c.execute("SELECT code FROM referral_codes WHERE user_id=?", (user_id,))
     row = c.fetchone()
@@ -568,7 +569,7 @@ def get_referral_code(user_id):
 def get_referral_stats(user_id):
     """Get referral statistics for a user"""
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     total = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (user_id,)).fetchone()[0]
     pending = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status='pending'", (user_id,)).fetchone()[0]
@@ -594,7 +595,7 @@ def process_referral(user_id, phone):
     
     ref_code = session['referral_code']
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     
     # Find the referrer (user who owns this referral code)
@@ -647,7 +648,7 @@ def add_notification(user_id, type, message, link=None):
     """Add a notification for a user."""
     try:
         conn = sqlite3.connect(DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA busy_timeout = 30000;")
         c = conn.cursor()
         c.execute(
             "INSERT INTO notifications (user_id, type, message, link, is_read) VALUES (?,?,?,?,0)",
@@ -735,7 +736,7 @@ def admin_referral_settings_page():  # ← Renamed to avoid conflict
         return redirect('/admin/login')
     
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     
     # Get current settings
@@ -2715,7 +2716,7 @@ def update_name():
 def dashboard():
     user_id = session['user_id']
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
 
     c.execute("SELECT * FROM providers WHERE user_id=?", (user_id,))
@@ -2822,42 +2823,64 @@ def dashboard():
 @login_required
 def create_profile():
     user_id = session['user_id']
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
-    c = conn.cursor()
-    c.execute("SELECT id FROM providers WHERE user_id=?", (user_id,))
-    if c.fetchone():
-        conn.close()
-        return redirect('/edit-profile')
-    conn.close()
-
-    if request.method == 'POST':
-        skills = request.form['skills'].strip()
-        district = request.form['district'].strip()
-        village = request.form.get('village', '').strip()
-        bio = request.form.get('bio', '').strip()
-        status = request.form.get('status', 'Available')
-        file = request.files.get('profile_pic')
-        video_file = request.files.get('video')
-
-        filename = None
-        video_filename = None
-        if file and allowed_file(file.filename):
-            filename = save_resized_image(file, max_width=800, max_height=600)
-        if video_file and allowed_video(video_file.filename):
-            video_filename = secure_filename(video_file.filename)
-            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
-            video_file.save(video_path)
-
+    conn = None
+    try:
+        # First check if profile exists
         conn = sqlite3.connect(DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA busy_timeout = 30000;")
         c = conn.cursor()
-        c.execute("""
-            INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, video, status)
-            VALUES (?,?,?,?,?,?,?,?)
-        """, (user_id, skills, district, village, bio, filename, video_filename, status))
-        conn.commit()
+        c.execute("SELECT id FROM providers WHERE user_id=?", (user_id,))
+        if c.fetchone():
+            conn.close()
+            return redirect('/edit-profile')
         conn.close()
+
+        if request.method == 'POST':
+            skills = request.form['skills'].strip()
+            district = request.form['district'].strip()
+            village = request.form.get('village', '').strip()
+            bio = request.form.get('bio', '').strip()
+            status = request.form.get('status', 'Available')
+            file = request.files.get('profile_pic')
+            video_file = request.files.get('video')
+
+            filename = None
+            video_filename = None
+            if file and allowed_file(file.filename):
+                filename = save_resized_image(file, max_width=800, max_height=600)
+            if video_file and allowed_video(video_file.filename):
+                video_filename = secure_filename(video_file.filename)
+                video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+                video_file.save(video_path)
+
+            # Reconnect for INSERT
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute("PRAGMA busy_timeout = 30000;")
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, video, status)
+                VALUES (?,?,?,?,?,?,?,?)
+            """, (user_id, skills, district, village, bio, filename, video_filename, status))
+            conn.commit()
+            conn.close()
+            return redirect('/dashboard')
+
+        # GET request – show form
+        form_html = profile_form_template.replace("{form_title}", "Create Your Freelancer Profile")
+        form_html = form_html.replace("{skills}", "")
+        form_html = form_html.replace("{skill_suggestions}", ', '.join(SKILL_SUGGESTIONS[:10]) + ', ...')
+        form_html = form_html.replace("{district}", "").replace("{village}", "").replace("{bio}", "")
+        status_options = ''.join([f'<option value="{s}">{s}</option>' for s in FREELANCER_STATUSES])
+        form_html = form_html.replace("{status_options}", status_options)
+        return render_user_template(form_html, title="Create Profile", active_page="dashboard")
+
+    except sqlite3.OperationalError as e:
+        if conn:
+            conn.close()
+        return f"Database error: {str(e)}. Please try again.", 500
+    finally:
+        if conn:
+            conn.close()
         return redirect('/dashboard')
 
     form_html = profile_form_template.replace("{form_title}", "Create Your Freelancer Profile")
@@ -2873,7 +2896,7 @@ def create_profile():
 def edit_profile():
     user_id = session['user_id']
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     c.execute("SELECT skills, district, village, bio, profile_pic, video, status FROM providers WHERE user_id=?", (user_id,))
     provider = c.fetchone()
@@ -2928,7 +2951,7 @@ def edit_profile():
 def create_vendor_profile():
     user_id = session['user_id']
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     c.execute("SELECT id FROM vendors WHERE user_id=?", (user_id,))
     if c.fetchone():
@@ -2958,7 +2981,7 @@ def create_vendor_profile():
             video_file.save(video_path)
 
         conn = sqlite3.connect(DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA busy_timeout = 30000;")
         c = conn.cursor()
         c.execute("""
             INSERT INTO vendors (user_id, business_name, district, village, landmark, bio, 
@@ -2982,7 +3005,7 @@ def create_vendor_profile():
 def edit_vendor_profile():
     user_id = session['user_id']
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     c.execute("""
         SELECT business_name, district, village, landmark, bio, 
@@ -3310,7 +3333,7 @@ def edit_job(job_id):
 def list_providers():
     logged_in = 'user_id' in session
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     today = date.today().isoformat()
     c.execute("UPDATE providers SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
@@ -3356,7 +3379,7 @@ def list_providers():
 def list_jobs():
     logged_in = 'user_id' in session
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     today = date.today().isoformat()
     c.execute("UPDATE jobs SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
@@ -3418,7 +3441,7 @@ def list_jobs():
 def list_vendors():
     logged_in = 'user_id' in session
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     today = date.today().isoformat()
     c.execute("UPDATE vendors SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
@@ -3622,7 +3645,7 @@ def refer():
     stats = get_referral_stats(user_id)
     
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     referrals = c.execute("""
         SELECT r.*, u.name as referred_name 
@@ -3816,7 +3839,7 @@ def admin_dashboard():
         return redirect('/admin/login')
     
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
 
     # Stats
@@ -3859,7 +3882,7 @@ def admin_dashboard():
 
     # Pending boost requests
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     c.execute("""
         SELECT br.id, u.phone, u.name, br.transaction_id, br.plan, br.boost_type, br.item_id, br.request_date
@@ -3924,7 +3947,7 @@ def admin_stats():
         return redirect('/admin/login')
     
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
 
     c.execute("SELECT COUNT(*) FROM users")
@@ -4016,7 +4039,7 @@ def admin_approve_boost(req_id):
         return redirect('/admin/login')
     
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     
     c.execute("SELECT user_id, plan, boost_type, item_id FROM boost_requests WHERE id=?", (req_id,))
@@ -4044,7 +4067,7 @@ def admin_reject_boost(req_id):
         return redirect('/admin/login')
     
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     c.execute("UPDATE boost_requests SET status='rejected' WHERE id=?", (req_id,))
     conn.commit()
