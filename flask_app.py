@@ -289,9 +289,23 @@ init_db()
 def get_db():
     """Get database connection (for routes that use it)."""
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
+    conn.execute("PRAGMA busy_timeout = 5000;")
     conn.row_factory = sqlite3.Row
     return conn
+
+# ===== INSERT THE CONTEXT MANAGER RIGHT HERE =====
+import contextlib
+
+@contextlib.contextmanager
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 30000;")   # 30 seconds
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+# ===== END INSERT =====
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -2823,56 +2837,51 @@ def dashboard():
 @login_required
 def create_profile():
     user_id = session['user_id']
-    conn = None
-    try:
-        # First check if profile exists
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 30000;")
+    
+    # First, check if profile exists (read-only)
+    with get_db_connection() as conn:
         c = conn.cursor()
         c.execute("SELECT id FROM providers WHERE user_id=?", (user_id,))
         if c.fetchone():
-            conn.close()
             return redirect('/edit-profile')
-        conn.close()
 
-        if request.method == 'POST':
-            skills = request.form['skills'].strip()
-            district = request.form['district'].strip()
-            village = request.form.get('village', '').strip()
-            bio = request.form.get('bio', '').strip()
-            status = request.form.get('status', 'Available')
-            file = request.files.get('profile_pic')
-            video_file = request.files.get('video')
+    if request.method == 'POST':
+        skills = request.form['skills'].strip()
+        district = request.form['district'].strip()
+        village = request.form.get('village', '').strip()
+        bio = request.form.get('bio', '').strip()
+        status = request.form.get('status', 'Available')
+        file = request.files.get('profile_pic')
+        video_file = request.files.get('video')
 
-            filename = None
-            video_filename = None
-            if file and allowed_file(file.filename):
-                filename = save_resized_image(file, max_width=800, max_height=600)
-            if video_file and allowed_video(video_file.filename):
-                video_filename = secure_filename(video_file.filename)
-                video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
-                video_file.save(video_path)
+        filename = None
+        video_filename = None
+        if file and allowed_file(file.filename):
+            filename = save_resized_image(file, max_width=800, max_height=600)
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
 
-            # Reconnect for INSERT
-            conn = sqlite3.connect(DB_PATH)
-            conn.execute("PRAGMA busy_timeout = 30000;")
+        # Write operation
+        with get_db_connection() as conn:
             c = conn.cursor()
             c.execute("""
                 INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, video, status)
                 VALUES (?,?,?,?,?,?,?,?)
             """, (user_id, skills, district, village, bio, filename, video_filename, status))
             conn.commit()
-            conn.close()
-            return redirect('/dashboard')
+        
+        return redirect('/dashboard')
 
-        # GET request – show form
-        form_html = profile_form_template.replace("{form_title}", "Create Your Freelancer Profile")
-        form_html = form_html.replace("{skills}", "")
-        form_html = form_html.replace("{skill_suggestions}", ', '.join(SKILL_SUGGESTIONS[:10]) + ', ...')
-        form_html = form_html.replace("{district}", "").replace("{village}", "").replace("{bio}", "")
-        status_options = ''.join([f'<option value="{s}">{s}</option>' for s in FREELANCER_STATUSES])
-        form_html = form_html.replace("{status_options}", status_options)
-        return render_user_template(form_html, title="Create Profile", active_page="dashboard")
+    # GET request – show form
+    form_html = profile_form_template.replace("{form_title}", "Create Your Freelancer Profile")
+    form_html = form_html.replace("{skills}", "")
+    form_html = form_html.replace("{skill_suggestions}", ', '.join(SKILL_SUGGESTIONS[:10]) + ', ...')
+    form_html = form_html.replace("{district}", "").replace("{village}", "").replace("{bio}", "")
+    status_options = ''.join([f'<option value="{s}">{s}</option>' for s in FREELANCER_STATUSES])
+    form_html = form_html.replace("{status_options}", status_options)
+    return render_user_template(form_html, title="Create Profile", active_page="dashboard")
 
     except sqlite3.OperationalError as e:
         if conn:
