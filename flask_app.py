@@ -1198,534 +1198,93 @@ base_template = """
         }
         input, textarea, select {
             width: 100%;
-            padding: 12px 16px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            background: var(--card-bg);
-            color: var(--text);
-            font-size: 0.95rem;
-            transition: var(--transition);
-        }
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(245, 175, 25, 0.2);
-        }
-
-        .rating {
-            color: var(--primary);
-            font-size: 1.1rem;
-            letter-spacing: 2px;
-        }
-        .review-card {
-            border-left: 3px solid var(--primary);
-            padding: 12px 16px;
-            margin: 12px 0;
-            background: rgba(245, 175, 25, 0.05);
-            border-radius: 0 12px 12px 0;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-        }
-        th {
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .whatsapp-float {
+            padding: 12px 16px;base_template = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>RockabyConnect – {title}</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#f5af19">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* ... your existing CSS ... */
+        /* (keep all your existing styles – I'm omitting them for brevity) */
+        /* Just add this at the end of the style block: */
+        #lightbox {
+            display: none;
             position: fixed;
-            bottom: 24px;
-            right: 24px;
-            background: linear-gradient(135deg, #25D366, #128C7E);
-            color: white;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            display: flex;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 9999;
             align-items: center;
             justify-content: center;
-            font-size: 28px;
-            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.4);
-            z-index: 999;
-            text-decoration: none;
-            transition: var(--transition);
+            flex-direction: column;
         }
-        .whatsapp-float:hover { transform: scale(1.1); }
-
-        footer {
-            text-align: center;
-            padding: 30px;
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            border-top: 1px solid var(--border);
-            margin-top: 40px;
-        }
-
-        .alert {
-            padding: 14px 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-        }
-        .alert-success {
-            background: rgba(40, 167, 69, 0.15);
-            border: 1px solid rgba(40, 167, 69, 0.3);
-            color: #28a745;
-        }
-        .alert-error {
-            background: rgba(220, 53, 69, 0.15);
-            border: 1px solid rgba(220, 53, 69, 0.3);
-            color: #dc3545;
-        }
-
-        .install-btn {
-            background: linear-gradient(135deg, #28a745, #20c997);
+        #lightbox button {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 3rem;
             color: white;
+            background: none;
             border: none;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 0.85rem;
             cursor: pointer;
-            display: none;
-            font-weight: 600;
+            z-index: 10000;
         }
-        .install-btn:hover { transform: scale(1.05); }
-
-        /* ================================================
-           NEON THEME (Applied via body.theme-neon)
-           ================================================ */
-        body.theme-neon {
-            --primary: #00d4ff !important;
-            --primary-dark: #0099cc !important;
-            --bg: #0a0a1a !important;
-            --card-bg: rgba(20, 20, 40, 0.85) !important;
-            --text: #e0e0ff !important;
-            --text-secondary: #a0a0cc !important;
-            --border: rgba(0, 212, 255, 0.3) !important;
-            --shadow: 0 8px 32px rgba(0, 212, 255, 0.2) !important;
-            --glass-border: rgba(0, 212, 255, 0.15) !important;
+        #lightbox img {
+            max-width: 90%;
+            max-height: 80%;
+            object-fit: contain;
         }
-
-        body.theme-neon {
-            background: #0a0a1a !important;
-            background-image: 
-                radial-gradient(circle at 20% 30%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 70%, rgba(255, 0, 150, 0.1) 0%, transparent 50%) !important;
-        }
-
-        body.theme-neon .hero {
-            background: rgba(0, 212, 255, 0.05) !important;
-            border: 1px solid rgba(0, 212, 255, 0.2) !important;
-        }
-
-        body.theme-neon .hero h1 {
-            background: linear-gradient(135deg, #00d4ff, #ff00a0) !important;
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-            background-clip: text !important;
-        }
-
-        body.theme-neon .btn {
-            background: linear-gradient(135deg, #00d4ff, #0099cc) !important;
-            box-shadow: 0 0 20px rgba(0, 212, 255, 0.4) !important;
-        }
-        body.theme-neon .btn:hover {
-            box-shadow: 0 0 40px rgba(0, 212, 255, 0.6) !important;
-            transform: translateY(-2px) !important;
-        }
-        body.theme-neon .btn-outline {
-            border-color: #00d4ff !important;
-            color: #00d4ff !important;
-        }
-        body.theme-neon .btn-outline:hover {
-            background: rgba(0, 212, 255, 0.15) !important;
-        }
-
-        body.theme-neon .card {
-            background: rgba(20, 20, 40, 0.85) !important;
-            border: 1px solid rgba(0, 212, 255, 0.2) !important;
-        }
-        body.theme-neon .card:hover {
-            border-color: rgba(0, 212, 255, 0.4) !important;
-            box-shadow: 0 0 40px rgba(0, 212, 255, 0.1) !important;
-        }
-        body.theme-neon .card-header {
-            border-bottom-color: rgba(0, 212, 255, 0.2) !important;
-        }
-
-        body.theme-neon .stat-card {
-            background: rgba(20, 20, 40, 0.7) !important;
-            border: 1px solid rgba(0, 212, 255, 0.15) !important;
-        }
-        body.theme-neon .stat-card h3 {
-            color: #00d4ff !important;
-        }
-        body.theme-neon .stat-card::before {
-            background: linear-gradient(135deg, #00d4ff, #ff00a0) !important;
-            opacity: 0.2 !important;
-        }
-
-        body.theme-neon .navbar {
-            background: rgba(20, 20, 40, 0.9) !important;
-            border-bottom: 1px solid rgba(0, 212, 255, 0.2) !important;
-        }
-        body.theme-neon .logo-text span {
-            color: #00d4ff !important;
-        }
-        body.theme-neon .nav-links a:hover,
-        body.theme-neon .nav-links a.active {
-            background: rgba(0, 212, 255, 0.15) !important;
-            color: #00d4ff !important;
-        }
-
-        body.theme-neon .chip {
-            background: rgba(0, 212, 255, 0.15) !important;
-            border-color: rgba(0, 212, 255, 0.2) !important;
-        }
-        body.theme-neon .chip:hover {
-            background: #00d4ff !important;
-            color: #0a0a1a !important;
-        }
-
-        body.theme-neon .badge-available { 
-            background: #00d4ff !important; 
-            color: #0a0a1a !important; 
-        }
-        body.theme-neon .badge-open { 
-            background: #00d4ff !important; 
-            color: #0a0a1a !important; 
-        }
-        body.theme-neon .badge-occupied { 
-            background: #ff00a0 !important; 
-            color: #fff !important; 
-        }
-        body.theme-neon .badge-closed { 
-            background: #ff0040 !important; 
-            color: #fff !important; 
-        }
-        body.theme-neon .badge-taken { 
-            background: #ff00a0 !important; 
-            color: #fff !important; 
-        }
-        body.theme-neon .badge-leave { 
-            background: #666 !important; 
-            color: #fff !important; 
-        }
-
-        body.theme-neon .theme-toggle {
-            background: rgba(0, 212, 255, 0.15) !important;
-            border-color: rgba(0, 212, 255, 0.3) !important;
-        }
-        body.theme-neon .theme-toggle:hover {
-            background: rgba(0, 212, 255, 0.3) !important;
-        }
-
-        body.theme-neon .whatsapp-float {
-            background: linear-gradient(135deg, #00d4ff, #0099cc) !important;
-            box-shadow: 0 0 30px rgba(0, 212, 255, 0.5) !important;
-        }
-        body.theme-neon .whatsapp-float:hover {
-            box-shadow: 0 0 50px rgba(0, 212, 255, 0.7) !important;
-        }
-
-        body.theme-neon footer {
-            border-top: 1px solid rgba(0, 212, 255, 0.2) !important;
-        }
-
-        body.theme-neon .provider-card:hover,
-        body.theme-neon .job-card:hover,
-        body.theme-neon .vendor-card:hover {
-            background: rgba(0, 212, 255, 0.05) !important;
-        }
-
-        body.theme-neon input:focus,
-        body.theme-neon textarea:focus,
-        body.theme-neon select:focus {
-            border-color: #00d4ff !important;
-            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.3) !important;
-        }
-        body.theme-neon input,
-        body.theme-neon textarea,
-        body.theme-neon select {
-            background: rgba(20, 20, 40, 0.6) !important;
-            border-color: rgba(0, 212, 255, 0.2) !important;
-            color: #e0e0ff !important;
-        }
-
-        body.theme-neon th {
-            color: #00d4ff !important;
-        }
-        body.theme-neon td {
-            border-bottom-color: rgba(0, 212, 255, 0.1) !important;
-        }
-
-        body.theme-neon .alert-success {
-            background: rgba(0, 212, 255, 0.1) !important;
-            border-color: rgba(0, 212, 255, 0.3) !important;
-            color: #00d4ff !important;
-        }
-        body.theme-neon .alert-error {
-            background: rgba(255, 0, 100, 0.1) !important;
-            border-color: rgba(255, 0, 100, 0.3) !important;
-            color: #ff0064 !important;
-        }
-
-        /* ================================================
-           RESPONSIVE STYLES
-           ================================================ */
-        @media (max-width: 768px) {
-            .navbar { padding: 12px 16px; }
-            .nav-links {
-                display: none;
-                width: 100%;
-                flex-direction: column;
-                gap: 10px;
-                padding-top: 15px;
-            }
-            .nav-links.open { display: flex; }
-            .hamburger { display: block; }
-            .hero h1 { font-size: 1.8rem; }
-            .hero { padding: 40px 20px; }
-            .provider-card, .job-card, .vendor-card {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .stat-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
-            .container { padding: 0 16px; }
-            .card { padding: 20px; }
-        }
-
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .card, .hero, .stat-card {
-            animation: fadeInUp 0.6s ease-out;
+        .clickable-img {
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
+    <!-- ===== LIGHTBOX MODAL ===== -->
+    <div id="lightbox">
+        <button onclick="closeLightbox()">&times;</button>
+        <img id="lightbox-img" src="" alt="Image">
+    </div>
+    <!-- ===== END LIGHTBOX ===== -->
+
     <nav class="navbar">
-        <a href="/" class="logo">
-            <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
-            <div>
-                <div class="logo-text">ROCKABY<span>CONNECT</span></div>
-                <div class="logo-sub">Connecting Skills, Building Uganda</div>
-            </div>
-        </a>
-        <button class="hamburger" onclick="toggleMenu()">☰</button>
-        <div class="nav-links" id="navMenu">
-            <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">Home</a>
-            {% if session.user_id %}
-                <a href="/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
-            {% endif %}
-            <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">Find Skills</a>
-            <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">Jobs</a>
-            <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">Vendors</a>
-            {% if session.user_id %}
-                <a href="/my-applications" class="{{ 'active' if active_page == 'applications' else '' }}">📋 My Applications</a>
-                <!-- ===== MESSAGES LINK WITH UNREAD BADGE ===== -->
-                <a href="/messages" id="messagesLink">📨 Messages <span id="messagesBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
-                <!-- ===== NOTIFICATION BELL ===== -->
-                <a href="/notifications" id="notifLink">🔔 <span id="notifBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
-                <!-- ===== END NOTIFICATION ===== -->
-                <a href="/refer" class="{{ 'active' if active_page == 'refer' else '' }}">🎁 Refer</a>
-                <a href="/settings" class="{{ 'active' if active_page == 'settings' else '' }}">⚙️ Settings</a>
-                <a href="/logout">Logout</a>
-            {% else %}
-                <a href="/login" class="{{ 'active' if active_page == 'login' else '' }}">Login</a>
-                <a href="/signup" class="{{ 'active' if active_page == 'signup' else '' }}">Sign Up</a>
-            {% endif %}
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
-            <button id="installBtn" class="install-btn"><i class="fas fa-download"></i> Install App</button>
-        </div>
+        <!-- ... your existing navbar ... -->
     </nav>
+
     <div class="container">
         {content}
     </div>
+
     <footer>&copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬</footer>
     <a href="https://wa.me/256751318876?text=Hi%20RockabyConnect%20Support" target="_blank" class="whatsapp-float">💬</a>
+
     <script>
-        function toggleMenu() {
-            document.getElementById('navMenu').classList.toggle('open');
-        }
-        function toggleTheme() {
-            document.body.classList.toggle('dark-mode');
-            const theme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
-            localStorage.setItem('rockabyconnect-theme', theme);
-        }
-        const savedTheme = localStorage.getItem('rockabyconnect-theme');
-        if (savedTheme === 'dark') {
-            document.body.classList.add('dark-mode');
-        }
+        // ... your existing scripts ...
 
-        // PWA install prompt
-        let deferredPrompt;
-        const installBtn = document.getElementById('installBtn');
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            installBtn.style.display = 'inline-block';
+        // ===== LIGHTBOX =====
+        function openLightbox(src) {
+            document.getElementById('lightbox').style.display = 'flex';
+            document.getElementById('lightbox-img').src = src;
+        }
+        function closeLightbox() {
+            document.getElementById('lightbox').style.display = 'none';
+        }
+        document.getElementById('lightbox').addEventListener('click', function(e) {
+            if (e.target === this) closeLightbox();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeLightbox();
         });
 
-        installBtn.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                deferredPrompt = null;
-                installBtn.style.display = 'none';
-            }
-        });
-
-        window.addEventListener('appinstalled', () => {
-            installBtn.style.display = 'none';
-        });
-
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(() => console.log('Service Worker registered'))
-                    .catch(err => console.log('Service Worker failed:', err));
-            });
-        }
-
-        // ===== CLIENT-SIDE IMAGE COMPRESSION =====
-        document.addEventListener('DOMContentLoaded', function() {
-            const forms = document.querySelectorAll('form');
-            forms.forEach(form => {
-                const fileInputs = form.querySelectorAll('input[type="file"][accept*="image/"]');
-                if (fileInputs.length === 0) return;
-
-                form.addEventListener('submit', function(e) {
-                    let hasLargeFile = false;
-                    const promises = [];
-
-                    fileInputs.forEach(input => {
-                        if (input.files.length > 0) {
-                            const file = input.files[0];
-                            if (file.size > 1 * 1024 * 1024) {
-                                hasLargeFile = true;
-                                promises.push(new Promise((resolve) => {
-                                    compressImage(file, function(compressedFile) {
-                                        const dt = new DataTransfer();
-                                        dt.items.add(compressedFile);
-                                        input.files = dt.files;
-                                        resolve();
-                                    });
-                                }));
-                            }
-                        }
-                    });
-
-                    if (hasLargeFile) {
-                        e.preventDefault();
-                        Promise.all(promises).then(() => {
-                            form.submit();
-                        });
-                    }
-                });
-            });
-        });
-
-        function compressImage(file, callback) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 1200;
-                    const MAX_HEIGHT = 1200;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_WIDTH) {
-                            height = Math.round(height * MAX_WIDTH / width);
-                            width = MAX_WIDTH;
-                        }
-                    } else {
-                        if (height > MAX_HEIGHT) {
-                            width = Math.round(width * MAX_HEIGHT / height);
-                            height = MAX_HEIGHT;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    canvas.toBlob(function(blob) {
-                        const compressedFile = new File([blob], file.name, {
-                            type: 'image/jpeg',
-                            lastModified: Date.now()
-                        });
-                        callback(compressedFile);
-                    }, 'image/jpeg', 0.85);
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-
-        // ============================================================
-        // UNREAD NOTIFICATIONS BADGE
-        // ============================================================
-        function updateNotifBadge() {
-            fetch('/api/unread-notifications')
-                .then(r => r.json())
-                .then(data => {
-                    const badge = document.getElementById('notifBadge');
-                    if (badge) {
-                        if (data.count > 0) {
-                            badge.textContent = data.count;
-                            badge.style.display = 'inline-block';
-                        } else {
-                            badge.style.display = 'none';
-                        }
-                    }
-                })
-                .catch(err => console.log('Error fetching unread count:', err));
-        }
-
-        // ============================================================
-        // UNREAD MESSAGES BADGE
-        // ============================================================
-        function updateUnreadBadge() {
-            fetch('/api/unread-count')
-                .then(r => r.json())
-                .then(data => {
-                    const badge = document.getElementById('messagesBadge');
-                    if (badge) {
-                        if (data.count > 0) {
-                            badge.textContent = data.count;
-                            badge.style.display = 'inline-block';
-                        } else {
-                            badge.style.display = 'none';
-                        }
-                    }
-                })
-                .catch(err => console.log('Error fetching unread count:', err));
-        }
-
-        // ============================================================
-        // INITIALISE AND POLL
-        // ============================================================
-        if (document.getElementById('messagesBadge')) {
-            updateUnreadBadge();
-            setInterval(updateUnreadBadge, 15000);
-        }
-
-        if (document.getElementById('notifBadge')) {
-            updateNotifBadge();
-            setInterval(updateNotifBadge, 15000);
-        }
+        // Your existing functions (toggleMenu, toggleTheme, etc.)
+        // ... keep them all ...
     </script>
 </body>
 </html>
@@ -2400,7 +1959,9 @@ vendor_list_page = base_template.replace("{title}", "Vendors").replace("{active_
 vendor_detail_template = base_template.replace("{title}", "Vendor Detail").replace("{active_page}", "vendors").replace("{content}", """
     <div class="card">
         <div class="card-header">{business_name}</div>
-        {main_image}
+        <a href="#" onclick="openLightbox('{img_url}'); return false;">
+            <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
+        </a>
         {extra_images}
         <!-- ===== VIDEO DISPLAY ===== -->
         {video_display}
@@ -2418,8 +1979,8 @@ vendor_detail_template = base_template.replace("{title}", "Vendor Detail").repla
 provider_detail_template = base_template.replace("{title}", "Provider Detail").replace("{active_page}", "list").replace("{content}", """
     <div class="card">
         <div class="card-header">{provider_name}</div>
-        <a href="{img_url}" target="_blank">
-            <img src="{img_url}" class="profile-pic" style="width:120px; height:120px; margin-bottom:15px; cursor:pointer;">
+        <a href="#" onclick="openLightbox('{img_url}'); return false;">
+            <img src="{img_url}" class="profile-pic clickable-img" style="width:120px; height:120px; margin-bottom:15px; cursor:pointer;">
         </a>
         <!-- ===== VIDEO DISPLAY ===== -->
         {video_display}
@@ -3595,22 +3156,19 @@ def vendor_detail(vendor_id):
     if video:
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
-    # ---- Build extra images with click-to-view ----
+    # ---- Build extra images – all same size, clickable with lightbox ----
     extra_images = ""
     if img2 or img3:
         extra_images = '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">'
         if img2:
-            extra_images += f'<a href="/static/uploads/{img2}" target="_blank"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; cursor:pointer; flex:1; min-width:150px;"></a>'
+            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img2}\'); return false;" style="flex:1; min-width:150px;"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         if img3:
-            extra_images += f'<a href="/static/uploads/{img3}" target="_blank"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; cursor:pointer; flex:1; min-width:150px;"></a>'
+            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;" style="flex:1; min-width:150px;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         extra_images += '</div>'
-
-    # ---- Main image ----
-    main_image = f'<a href="{img_url}" target="_blank"><img src="{img_url}" class="vendor-img" style="width:100%; max-height:300px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;"></a>' if img_url else ''
 
     detail_html = vendor_detail_template
     detail_html = detail_html.replace("{business_name}", bname)
-    detail_html = detail_html.replace("{main_image}", main_image)
+    detail_html = detail_html.replace("{img_url}", img_url)
     detail_html = detail_html.replace("{extra_images}", extra_images)
     detail_html = detail_html.replace("{video_display}", video_display)
     detail_html = detail_html.replace("{district}", district)
