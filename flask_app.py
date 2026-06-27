@@ -2728,7 +2728,7 @@ def dashboard():
     jobs = c.fetchall()
     conn.close()
 
-    # ---- Freelancer Profile Section (with delete) ----
+    # ---- Freelancer Profile Section ----
     profile_section = ""
     if provider:
         pid, _, skills, district, village, bio, pic, video, status, featured, featured_expiry = provider
@@ -2757,7 +2757,7 @@ def dashboard():
             </div>
         """
 
-    # ---- Vendor Profile Section (with delete) ----
+    # ---- Vendor Profile Section ----
     vendor_section = ""
     if vendor:
         vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vvideo, vstatus, vfeatured, vexpiry = vendor
@@ -2786,7 +2786,7 @@ def dashboard():
             </div>
         """
 
-    # ---- Jobs Section (with delete) ----
+    # ---- Jobs Section ----
     jobs_html = ""
     if jobs:
         for job in jobs:
@@ -2807,41 +2807,15 @@ def dashboard():
     else:
         jobs_html = "<p>No jobs posted yet.</p>"
 
-    # ---- Dashboard content ----
-    dashboard_content = f"""
-        <div class="card">
-            <div class="card-header">Welcome, {session['user_name']}!</div>
-            <p style="color:var(--text-secondary);"><a href="/edit-name" style="font-size:0.85rem; color:var(--primary-dark);">Edit my name</a></p>
-            <p style="color:#666;">Manage your freelance presence, vendor profile, and job postings.</p>
-            <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
-                <a href="/settings" class="btn btn-small" style="background:var(--primary-dark);">⚙️ Settings</a>
-                <a href="/refer" class="btn btn-small" style="background:var(--primary);">🎁 Refer a Friend</a>
-            </div>
-            <div style="margin-top:15px; padding:15px; background:linear-gradient(135deg, rgba(245,175,25,0.1), rgba(245,175,25,0.05)); border-radius:12px; border:1px solid var(--glass-border);">
-                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                    <span style="font-size:1.8rem;">🎁</span>
-                    <div style="flex:1;">
-                        <h4 style="margin:0;">Refer a Friend & Earn Rewards!</h4>
-                        <p style="margin:0; font-size:0.9rem; color:var(--text-secondary);">Share your referral link and earn rewards when your friends sign up.</p>
-                    </div>
-                    <a href="/refer" class="btn" style="background:var(--primary-dark); white-space:nowrap;">
-                        <i class="fas fa-share-alt"></i> Refer Now
-                    </a>
-                </div>
-            </div>
-        </div>
-        {profile_section}
-        {vendor_section}
-        <div class="card">
-            <div class="card-header">My Job Postings</div>
-            {jobs_html}
-            <a href="/post-job" class="btn" style="margin-top:10px;">Post a New Job</a>
-        </div>
-    """
-    return render_user_template(dashboard_template, 
-                                title="Dashboard", 
-                                active_page="dashboard", 
-                                dashboard_content=dashboard_content)
+    # ---- Return with placeholders ----
+    return render_user_template(
+        dashboard_template,
+        title="Dashboard",
+        active_page="dashboard",
+        profile_section=profile_section,
+        vendor_section=vendor_section,
+        jobs_html=jobs_html
+    )
 
 # ---------- Freelancer Profile (create/edit) ----------
 @app.route('/create-profile', methods=['GET', 'POST'])
