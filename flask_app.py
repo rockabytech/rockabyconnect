@@ -2400,7 +2400,7 @@ vendor_list_page = base_template.replace("{title}", "Vendors").replace("{active_
 vendor_detail_template = base_template.replace("{title}", "Vendor Detail").replace("{active_page}", "vendors").replace("{content}", """
     <div class="card">
         <div class="card-header">{business_name}</div>
-        <img src="{img_url}" class="vendor-img" style="width:100%; max-height:300px; object-fit:cover; border-radius:8px; margin-bottom:15px;">
+        {main_image}
         {extra_images}
         <!-- ===== VIDEO DISPLAY ===== -->
         {video_display}
@@ -2409,13 +2409,18 @@ vendor_detail_template = base_template.replace("{title}", "Vendor Detail").repla
         <p><strong>Description:</strong> {bio}</p>
         <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
         {contact_display}
+        <div style="margin-top:10px;">
+            {message_button}
+        </div>
     </div>
 """)
 
 provider_detail_template = base_template.replace("{title}", "Provider Detail").replace("{active_page}", "list").replace("{content}", """
     <div class="card">
         <div class="card-header">{provider_name}</div>
-        <img src="{img_url}" class="profile-pic" style="width:120px; height:120px; margin-bottom:15px;">
+        <a href="{img_url}" target="_blank">
+            <img src="{img_url}" class="profile-pic" style="width:120px; height:120px; margin-bottom:15px; cursor:pointer;">
+        </a>
         <!-- ===== VIDEO DISPLAY ===== -->
         {video_display}
         <!-- ===== END VIDEO ===== -->
@@ -2424,6 +2429,9 @@ provider_detail_template = base_template.replace("{title}", "Provider Detail").r
         <p><strong>Bio:</strong> {bio}</p>
         <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
         {contact_display}
+        <div style="margin-top:10px;">
+            {message_button}
+        </div>
         <hr>
         <h3>Reviews ({avg_rating}/5)</h3>
         <div id="reviews">{reviews_html}</div>
@@ -3466,7 +3474,7 @@ def provider_detail(provider_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-        SELECT p.id, u.name, p.skills, p.district, p.village, p.bio, 
+        SELECT p.id, u.id as user_id, u.name, p.skills, p.district, p.village, p.bio, 
                p.profile_pic, p.video, p.status, p.featured, p.featured_expiry, u.phone
         FROM providers p JOIN users u ON p.user_id = u.id WHERE p.id=?
     """, (provider_id,))
@@ -3474,7 +3482,7 @@ def provider_detail(provider_id):
     if not provider:
         conn.close()
         return "Provider not found.", 404
-    pid, name, skills, district, village, bio, pic, video, status, featured, expiry, phone = provider
+    pid, user_id, name, skills, district, village, bio, pic, video, status, featured, expiry, phone = provider
     status_class = status.lower().replace(' ', '-')
     village_display = f", {village}" if village else ""
     img_url = f"/static/uploads/{pic}" if pic else "https://via.placeholder.com/120"
@@ -3484,6 +3492,11 @@ def provider_detail(provider_id):
         contact_display = f'<p><strong>Contact:</strong> {phone} <a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">WhatsApp</a></p>'
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
+
+    # ---- Message button (only if logged in and not viewing own profile) ----
+    message_button = ""
+    if logged_in and session['user_id'] != user_id:
+        message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
 
     # ---- Build video HTML ----
     video_display = ""
@@ -3538,6 +3551,7 @@ def provider_detail(provider_id):
     detail_html = detail_html.replace("{status}", status)
     detail_html = detail_html.replace("{feat}", feat)
     detail_html = detail_html.replace("{contact_display}", contact_display)
+    detail_html = detail_html.replace("{message_button}", message_button)
     detail_html = detail_html.replace("{avg_rating}", str(avg_rating))
     detail_html = detail_html.replace("{reviews_html}", reviews_html)
     detail_html = detail_html.replace("{review_form}", review_form)
@@ -3550,7 +3564,7 @@ def vendor_detail(vendor_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-        SELECT v.business_name, v.district, v.village, v.landmark, v.bio, 
+        SELECT v.id, v.user_id, v.business_name, v.district, v.village, v.landmark, v.bio, 
                v.vendor_image, v.vendor_image2, v.vendor_image3, v.video,
                v.status, v.featured, v.featured_expiry, u.phone
         FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
@@ -3559,7 +3573,7 @@ def vendor_detail(vendor_id):
     if not v:
         conn.close()
         return "Vendor not found.", 404
-    bname, district, village, landmark, bio, img, img2, img3, video, status, featured, expiry, phone = v
+    vid, user_id, bname, district, village, landmark, bio, img, img2, img3, video, status, featured, expiry, phone = v
     status_class = status.lower()
     img_url = f"/static/uploads/{img}" if img else ""
     active_feat = is_featured_now(featured, expiry)
@@ -3571,24 +3585,32 @@ def vendor_detail(vendor_id):
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
+    # ---- Message button (only if logged in and not viewing own profile) ----
+    message_button = ""
+    if logged_in and session['user_id'] != user_id:
+        message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+
     # ---- Build video HTML ----
     video_display = ""
     if video:
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
-    # ---- Build extra images ----
+    # ---- Build extra images with click-to-view ----
     extra_images = ""
     if img2 or img3:
-        extra_images = '<div class="vendor-img-gallery" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">'
+        extra_images = '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">'
         if img2:
-            extra_images += f'<img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px;">'
+            extra_images += f'<a href="/static/uploads/{img2}" target="_blank"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; cursor:pointer; flex:1; min-width:150px;"></a>'
         if img3:
-            extra_images += f'<img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px;">'
+            extra_images += f'<a href="/static/uploads/{img3}" target="_blank"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; cursor:pointer; flex:1; min-width:150px;"></a>'
         extra_images += '</div>'
+
+    # ---- Main image ----
+    main_image = f'<a href="{img_url}" target="_blank"><img src="{img_url}" class="vendor-img" style="width:100%; max-height:300px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;"></a>' if img_url else ''
 
     detail_html = vendor_detail_template
     detail_html = detail_html.replace("{business_name}", bname)
-    detail_html = detail_html.replace("{img_url}", img_url)
+    detail_html = detail_html.replace("{main_image}", main_image)
     detail_html = detail_html.replace("{extra_images}", extra_images)
     detail_html = detail_html.replace("{video_display}", video_display)
     detail_html = detail_html.replace("{district}", district)
@@ -3599,6 +3621,7 @@ def vendor_detail(vendor_id):
     detail_html = detail_html.replace("{status}", status)
     detail_html = detail_html.replace("{feat}", feat)
     detail_html = detail_html.replace("{contact_display}", contact_display)
+    detail_html = detail_html.replace("{message_button}", message_button)
     conn.close()
     return render_user_template(detail_html, title=f"Vendor: {bname}", active_page="vendors")
 
