@@ -2728,6 +2728,7 @@ def dashboard():
     jobs = c.fetchall()
     conn.close()
 
+    # ---- Freelancer Profile Section (with delete) ----
     profile_section = ""
     if provider:
         pid, _, skills, district, village, bio, pic, video, status, featured, featured_expiry = provider
@@ -2742,6 +2743,9 @@ def dashboard():
                 <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
                     <a href="/edit-profile" class="btn btn-small">Edit Profile</a>
                     <a href="/boost" class="btn btn-small" style="background:var(--primary-dark);">Boost Profile</a>
+                    <form method="POST" action="/delete-profile" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete your freelancer profile? This cannot be undone.');">
+                        <button type="submit" class="btn btn-small btn-danger">Delete Profile</button>
+                    </form>
                 </div>
             </div>
         """
@@ -2753,6 +2757,7 @@ def dashboard():
             </div>
         """
 
+    # ---- Vendor Profile Section (with delete) ----
     vendor_section = ""
     if vendor:
         vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vvideo, vstatus, vfeatured, vexpiry = vendor
@@ -2767,6 +2772,9 @@ def dashboard():
                 <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
                     <a href="/edit-vendor-profile" class="btn btn-small">Edit Vendor Profile</a>
                     <a href="/boost-vendor" class="btn btn-small" style="background:var(--primary-dark);">Boost Vendor</a>
+                    <form method="POST" action="/delete-vendor-profile" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete your vendor profile? This cannot be undone.');">
+                        <button type="submit" class="btn btn-small btn-danger">Delete Vendor</button>
+                    </form>
                 </div>
             </div>
         """
@@ -2778,6 +2786,7 @@ def dashboard():
             </div>
         """
 
+    # ---- Jobs Section (with delete) ----
     jobs_html = ""
     if jobs:
         for job in jobs:
@@ -2789,12 +2798,16 @@ def dashboard():
                     <div style="display:flex; gap:5px; flex-wrap:wrap;">
                         <a href="/edit-job/{jid}" class="btn btn-small btn-outline">Edit</a>
                         <a href="/boost-job/{jid}" class="btn btn-small" style="background:var(--primary-dark);">Boost</a>
+                        <form method="POST" action="/delete-job/{jid}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this job? This cannot be undone.');">
+                            <button type="submit" class="btn btn-small btn-danger">Delete</button>
+                        </form>
                     </div>
                 </div>
             """
     else:
         jobs_html = "<p>No jobs posted yet.</p>"
 
+    # ---- Dashboard content ----
     dashboard_content = f"""
         <div class="card">
             <div class="card-header">Welcome, {session['user_name']}!</div>
@@ -4931,6 +4944,57 @@ def download_file(filename):
     # If not found in job_applications, allow download anyway (fallback)
 
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+
+@app.route('/delete-profile', methods=['POST'])
+@login_required
+def delete_profile():
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id FROM providers WHERE user_id=?", (user_id,))
+    provider = c.fetchone()
+    if not provider:
+        conn.close()
+        return "You don't have a freelancer profile.", 404
+    c.execute("DELETE FROM providers WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/dashboard')
+
+@app.route('/delete-vendor-profile', methods=['POST'])
+@login_required
+def delete_vendor_profile():
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id FROM vendors WHERE user_id=?", (user_id,))
+    vendor = c.fetchone()
+    if not vendor:
+        conn.close()
+        return "You don't have a vendor profile.", 404
+    c.execute("DELETE FROM vendors WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/dashboard')
+
+@app.route('/delete-job/<int:job_id>', methods=['POST'])
+@login_required
+def delete_job(job_id):
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT employer_id FROM jobs WHERE id=?", (job_id,))
+    job = c.fetchone()
+    if not job:
+        conn.close()
+        return "Job not found.", 404
+    if job[0] != user_id:
+        conn.close()
+        return "You are not the employer of this job.", 403
+    c.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/dashboard')
 
 
 # ============================================================
