@@ -339,17 +339,6 @@ def is_featured_now(featured_flag, expiry_date):
         return True
     return date.today() <= date.fromisoformat(expiry_date)
 
-def add_notification(user_id, type, message):
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 30000;")
-        c = conn.cursor()
-        c.execute("INSERT INTO notifications (user_id, type, message) VALUES (?,?,?)", (user_id, type, message))
-        conn.commit()
-        conn.close()
-    except sqlite3.OperationalError as e:
-        print(f"Notification failed: {e}")
-
 def generate_referral_code(user_id):
     """Generate a unique referral code for a user"""
     import hashlib
@@ -509,7 +498,7 @@ def set_user_theme(user_id, theme):
     """Set the user's theme preference with proper connection handling"""
     conn = None
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10)  # 10-second timeout
+        conn = sqlite3.connect(DB_PATH, timeout=10)
         conn.execute("PRAGMA busy_timeout = 30000;")
         c = conn.cursor()
         # Ensure column exists
@@ -2838,7 +2827,7 @@ def dashboard():
 def create_profile():
     user_id = session['user_id']
     
-    # First, check if profile exists (read-only)
+    # Check if profile exists
     with get_db_connection() as conn:
         c = conn.cursor()
         c.execute("SELECT id FROM providers WHERE user_id=?", (user_id,))
@@ -2863,7 +2852,6 @@ def create_profile():
             video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
             video_file.save(video_path)
 
-        # Write operation
         with get_db_connection() as conn:
             c = conn.cursor()
             c.execute("""
@@ -2871,27 +2859,9 @@ def create_profile():
                 VALUES (?,?,?,?,?,?,?,?)
             """, (user_id, skills, district, village, bio, filename, video_filename, status))
             conn.commit()
-        
         return redirect('/dashboard')
 
-    # GET request – show form
-    form_html = profile_form_template.replace("{form_title}", "Create Your Freelancer Profile")
-    form_html = form_html.replace("{skills}", "")
-    form_html = form_html.replace("{skill_suggestions}", ', '.join(SKILL_SUGGESTIONS[:10]) + ', ...')
-    form_html = form_html.replace("{district}", "").replace("{village}", "").replace("{bio}", "")
-    status_options = ''.join([f'<option value="{s}">{s}</option>' for s in FREELANCER_STATUSES])
-    form_html = form_html.replace("{status_options}", status_options)
-    return render_user_template(form_html, title="Create Profile", active_page="dashboard")
-
-    except sqlite3.OperationalError as e:
-        if conn:
-            conn.close()
-        return f"Database error: {str(e)}. Please try again.", 500
-    finally:
-        if conn:
-            conn.close()
-        return redirect('/dashboard')
-
+    # GET – show form
     form_html = profile_form_template.replace("{form_title}", "Create Your Freelancer Profile")
     form_html = form_html.replace("{skills}", "")
     form_html = form_html.replace("{skill_suggestions}", ', '.join(SKILL_SUGGESTIONS[:10]) + ', ...')
