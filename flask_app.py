@@ -806,7 +806,9 @@ base_template = """
             padding-bottom: calc(var(--bottom-nav-height) + 20px);
         }
 
-        /* ===== TOP NAVBAR ===== */
+        /* ================================================
+           TOP NAVBAR
+           ================================================ */
         .navbar {
             background: var(--card-bg);
             backdrop-filter: blur(20px);
@@ -882,7 +884,9 @@ base_template = """
             display: block;
         }
 
-        /* ===== MOBILE MENU OVERLAY ===== */
+        /* ================================================
+           MOBILE MENU
+           ================================================ */
         .mobile-menu-overlay {
             display: none;
             position: fixed;
@@ -898,7 +902,6 @@ base_template = """
             display: block;
         }
 
-        /* ===== MOBILE SIDE MENU ===== */
         .mobile-menu {
             display: block;
             position: fixed;
@@ -976,6 +979,9 @@ base_template = """
             margin-top: 2px;
         }
 
+        /* ================================================
+           CONTAINER
+           ================================================ */
         .container {
             max-width: 1200px;
             margin: 16px auto;
@@ -1050,12 +1056,39 @@ base_template = """
             text-align: center;
         }
 
-        /* Hide old nav-links (moved to mobile menu) */
         .nav-links {
             display: none !important;
         }
 
-        /* ===== CARD STYLES ===== */
+        /* ================================================
+           HERO
+           ================================================ */
+        .hero {
+            background: linear-gradient(135deg, rgba(245, 175, 25, 0.15), rgba(26, 115, 232, 0.15));
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius);
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 1px solid var(--glass-border);
+        }
+        .hero h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        /* ================================================
+           CARDS
+           ================================================ */
         .card {
             background: var(--card-bg);
             backdrop-filter: blur(20px);
@@ -1083,7 +1116,9 @@ base_template = """
             gap: 8px;
         }
 
-        /* ===== BUTTONS ===== */
+        /* ================================================
+           BUTTONS
+           ================================================ */
         .btn {
             display: inline-block;
             padding: 10px 20px;
@@ -1127,7 +1162,9 @@ base_template = """
             background: linear-gradient(135deg, #28a745, #20c997);
         }
 
-        /* ===== BADGES ===== */
+        /* ================================================
+           BADGES
+           ================================================ */
         .badge {
             display: inline-block;
             padding: 2px 8px;
@@ -1144,31 +1181,9 @@ base_template = """
         .badge-taken { background: #6f42c1; color: white; }
         .badge-closed { background: #dc3545; color: white; }
 
-        /* ===== HERO ===== */
-        .hero {
-            background: linear-gradient(135deg, rgba(245, 175, 25, 0.15), rgba(26, 115, 232, 0.15));
-            backdrop-filter: blur(10px);
-            border-radius: var(--radius);
-            padding: 40px 20px;
-            text-align: center;
-            margin-bottom: 20px;
-            border: 1px solid var(--glass-border);
-        }
-        .hero h1 {
-            font-size: 2rem;
-            margin-bottom: 10px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .hero p {
-            font-size: 1rem;
-            color: var(--text-secondary);
-            margin-bottom: 20px;
-        }
-
-        /* ===== STAT GRID ===== */
+        /* ================================================
+           STAT GRID
+           ================================================ */
         .stat-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -1197,7 +1212,45 @@ base_template = """
             font-size: 0.75rem;
         }
 
-        /* ===== LIGHTBOX ===== */
+        /* ================================================
+           CATEGORY CHIPS
+           ================================================ */
+        .category-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+            padding: 10px 0;
+        }
+
+        .chip {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 30px;
+            background: rgba(245, 175, 25, 0.12);
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 500;
+            border: 1px solid rgba(245, 175, 25, 0.15);
+            transition: all 0.2s ease;
+        }
+
+        .chip:hover {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
+        }
+
+        .chip:active {
+            transform: scale(0.95);
+        }
+
+        /* ================================================
+           LIGHTBOX
+           ================================================ */
         #lightbox {
             display: none;
             position: fixed;
@@ -1248,7 +1301,9 @@ base_template = """
             cursor: pointer;
         }
 
-        /* ===== WHATSAPP FLOAT ===== */
+        /* ================================================
+           WHATSAPP FLOAT
+           ================================================ */
         .whatsapp-float {
             position: fixed;
             bottom: calc(var(--bottom-nav-height) + 20px);
@@ -1284,6 +1339,24 @@ base_template = """
             .logo-text { font-size: 0.95rem; }
             .logo img { height: 30px; width: 30px; }
             .mobile-menu { width: 260px; }
+            .chip {
+                padding: 6px 14px;
+                font-size: 0.7rem;
+            }
+            .category-chips {
+                gap: 8px;
+                padding: 8px 0;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .chip {
+                padding: 4px 10px;
+                font-size: 0.6rem;
+            }
+            .stat-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+            .stat-card { padding: 12px 8px; }
+            .stat-card h3 { font-size: 1.4rem; }
         }
 
         @media (min-width: 769px) {
@@ -1337,6 +1410,8 @@ base_template = """
         body.theme-neon .logo-text span { color: #00d4ff !important; }
         body.theme-neon .bottom-nav { background: rgba(20, 20, 40, 0.9) !important; border-top: 1px solid rgba(0, 212, 255, 0.2) !important; }
         body.theme-neon .bottom-nav a:hover, body.theme-neon .bottom-nav a.active { color: #00d4ff !important; }
+        body.theme-neon .chip { background: rgba(0, 212, 255, 0.15) !important; border-color: rgba(0, 212, 255, 0.2) !important; }
+        body.theme-neon .chip:hover { background: #00d4ff !important; color: #0a0a1a !important; }
 
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(30px); }
@@ -1626,15 +1701,15 @@ home_page = base_template.replace("{title}", "Home").replace("{active_page}", "h
             <a href="/offer-skill" class="btn" style="font-size:0.85rem;">Offer Your Skill</a>
             <a href="/post-job" class="btn btn-outline" style="font-size:0.85rem;">Post a Job</a>
         </div>
-        <div class="category-chips" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:15px;">
-            <span style="color: var(--text-secondary); font-size:0.8rem;">Popular:</span>
-            <a href="/list?search=Boda+Rider" class="chip" style="padding:4px 14px; font-size:0.75rem;">Boda Rider</a>
-            <a href="/list?search=Maid" class="chip" style="padding:4px 14px; font-size:0.75rem;">Maid</a>
-            <a href="/list?search=Plumbing" class="chip" style="padding:4px 14px; font-size:0.75rem;">Plumbing</a>
-            <a href="/list?search=Electrical" class="chip" style="padding:4px 14px; font-size:0.75rem;">Electrical</a>
-            <a href="/list?search=Carpentry" class="chip" style="padding:4px 14px; font-size:0.75rem;">Carpentry</a>
-            <a href="/list?search=Cooking" class="chip" style="padding:4px 14px; font-size:0.75rem;">Cooking</a>
-            <a href="/list?search=Driver" class="chip" style="padding:4px 14px; font-size:0.75rem;">Driver</a>
+        <div class="category-chips" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:20px; padding:10px 0;">
+            <span style="color: var(--text-secondary); font-size:0.85rem; font-weight:600; margin-right:4px;">Popular:</span>
+            <a href="/list?search=Boda+Rider" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🏍️ Boda Rider</a>
+            <a href="/list?search=Maid" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🧹 Maid</a>
+            <a href="/list?search=Plumbing" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🔧 Plumbing</a>
+            <a href="/list?search=Electrical" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">⚡ Electrical</a>
+            <a href="/list?search=Carpentry" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🪚 Carpentry</a>
+            <a href="/list?search=Cooking" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🍳 Cooking</a>
+            <a href="/list?search=Driver" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🚗 Driver</a>
         </div>
     </div>
     <div class="stat-grid">
@@ -1729,30 +1804,39 @@ dashboard_template = base_template.replace("{title}", "Dashboard").replace("{act
 """)
 
 profile_form_template = base_template.replace("{title}", "My Freelancer Profile").replace("{content}", """
-    <div class="card">
-        <div class="card-header">{form_title}</div>
+    <div class="hero" style="padding:25px 20px;">
+        <h1 style="font-size:1.6rem;">{form_title}</h1>
+        <p>Set up your freelance profile to attract clients</p>
+    </div>
+    <div class="card" style="max-width:700px; margin:0 auto;">
+        <div class="card-header">📝 Profile Details</div>
         <form method="POST" enctype="multipart/form-data">
-            <label>Skills * (separate by commas)</label>
-            <input type="text" name="skills" value="{skills}" required placeholder="e.g., Plumbing, Boda Rider, Carpentry">
-            <p style="font-size:0.8rem;">Suggestions: {skill_suggestions}</p>
-            <label>District/City *</label>
-            <input type="text" name="district" value="{district}" required>
-            <label>Village/Area</label>
-            <input type="text" name="village" value="{village}">
-            <label>Short Bio</label>
-            <textarea name="bio" maxlength="300">{bio}</textarea>
-            <label>Profile Picture</label>
-            <input type="file" name="profile_pic" accept="image/*">
-            <p style="font-size:0.8rem;">Leave blank to keep current picture.</p>
-            <!-- ===== VIDEO UPLOAD ===== -->
-            <label>Upload a Video (optional)</label>
-            <input type="file" name="video" accept="video/*">
-            <p style="font-size:0.8rem;">MP4, WebM, OGG, MOV, AVI, MKV (max 50MB recommended)</p>
-            <!-- ===== END VIDEO ===== -->
-            <label>Availability Status</label>
-            <select name="status">
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Skills * <span style="font-weight:400; color:var(--text-secondary);">(separate by commas)</span></label>
+            <input type="text" name="skills" value="{skills}" required placeholder="e.g., Plumbing, Boda Rider, Carpentry" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            <p style="font-size:0.75rem; color:var(--text-secondary); margin-top:4px;">Suggestions: {skill_suggestions}</p>
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">District/City *</label>
+            <input type="text" name="district" value="{district}" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Village/Area</label>
+            <input type="text" name="village" value="{village}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Short Bio</label>
+            <textarea name="bio" maxlength="300" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem; min-height:80px;">{bio}</textarea>
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Profile Picture</label>
+            <input type="file" name="profile_pic" accept="image/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <p style="font-size:0.75rem; color:var(--text-secondary);">Leave blank to keep current picture.</p>
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Upload a Video (optional)</label>
+            <input type="file" name="video" accept="video/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <p style="font-size:0.75rem; color:var(--text-secondary);">MP4, WebM, OGG, MOV, AVI, MKV</p>
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Availability Status</label>
+            <select name="status" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
                 {status_options}
             </select>
+            
             <button type="submit" class="btn" style="margin-top:20px; width:100%;">Save Profile</button>
         </form>
     </div>
@@ -1839,28 +1923,38 @@ vendor_form_template = base_template.replace("{title}", "My Vendor Profile").rep
 """)
 
 job_form_template = base_template.replace("{title}", "{job_form_title}").replace("{content}", """
-    <div class="card">
-        <div class="card-header">{form_header}</div>
+    <div class="hero" style="padding:25px 20px;">
+        <h1 style="font-size:1.6rem;">{form_header}</h1>
+        <p>Find the right talent for your job</p>
+    </div>
+    <div class="card" style="max-width:700px; margin:0 auto;">
+        <div class="card-header">💼 Job Details</div>
         <form method="POST" enctype="multipart/form-data">
-            <label>Job Title *</label>
-            <input type="text" name="title" value="{title_val}" required>
-            <label>Company / Your Name</label>
-            <input type="text" name="company" value="{company_val}">
-            <label>Description *</label>
-            <textarea name="description" rows="4" required>{description_val}</textarea>
-            <label>District/City *</label>
-            <input type="text" name="location" value="{location_val}" required>
-            <label>Village/Area</label>
-            <input type="text" name="village" value="{village_val}">
-            <label>Contact (phone or email)</label>
-            <input type="text" name="contact" value="{contact_val}">
-            <label>Job Image (optional)</label>
-            <input type="file" name="job_image" accept="image/*">
-            <!-- ===== VIDEO UPLOAD ===== -->
-            <label>Upload a Video (optional)</label>
-            <input type="file" name="video" accept="video/*">
-            <p style="font-size:0.8rem;">MP4, WebM, OGG, MOV, AVI, MKV (max 50MB recommended)</p>
-            <!-- ===== END VIDEO ===== -->
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Job Title *</label>
+            <input type="text" name="title" value="{title_val}" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Company / Your Name</label>
+            <input type="text" name="company" value="{company_val}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Description *</label>
+            <textarea name="description" rows="4" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem; min-height:100px;">{description_val}</textarea>
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">District/City *</label>
+            <input type="text" name="location" value="{location_val}" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Village/Area</label>
+            <input type="text" name="village" value="{village_val}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Contact (phone or email)</label>
+            <input type="text" name="contact" value="{contact_val}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Job Image (optional)</label>
+            <input type="file" name="job_image" accept="image/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Upload a Video (optional)</label>
+            <input type="file" name="video" accept="video/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <p style="font-size:0.75rem; color:var(--text-secondary);">MP4, WebM, OGG, MOV, AVI, MKV</p>
+            
             <button type="submit" class="btn" style="margin-top:20px; width:100%;">{submit_button}</button>
         </form>
     </div>
@@ -3873,7 +3967,6 @@ def apply_job(job_id):
         
         # Allow any file type for attachment (PDF, DOC, DOCX, TXT, PNG, JPG, etc.)
         if attachment and attachment.filename:
-            # Check if file type is allowed (extend ALLOWED_EXTENSIONS or use a separate list)
             allowed_attachment_extensions = {'pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg', 'gif'}
             ext = attachment.filename.rsplit('.', 1)[1].lower() if '.' in attachment.filename else ''
             if ext in allowed_attachment_extensions or ext == '':
@@ -3891,20 +3984,26 @@ def apply_job(job_id):
         conn.close()
         return redirect(url_for('my_applications'))
 
-    # GET – show form
+    # GET – show form with improved visuals
     content = f'''
-    <div class="card">
-        <div class="card-header">Apply for: {job[0]}</div>
-        <form method="POST" enctype="multipart/form-data">
-            <label>Message (optional)</label>
-            <textarea name="message" rows="4" placeholder="Why are you the right person for this job?"></textarea>
-            <label>Attachment (optional – resume, portfolio)</label>
-            <input type="file" name="attachment" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif">
-            <p style="font-size:0.8rem; color:var(--text-secondary);">Supported: PDF, DOC, DOCX, TXT, PNG, JPG, GIF</p>
-            <button type="submit" class="btn" style="margin-top:20px;">Submit Application</button>
-        </form>
-    </div>
-    '''
+<div class="hero" style="padding:25px 20px;">
+    <h1 style="font-size:1.6rem;">📝 Apply for: {job[0]}</h1>
+    <p>Submit your application to get hired</p>
+</div>
+<div class="card" style="max-width:700px; margin:0 auto;">
+    <div class="card-header">Application Form</div>
+    <form method="POST" enctype="multipart/form-data">
+        <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Message (optional)</label>
+        <textarea name="message" rows="4" placeholder="Why are you the right person for this job?" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem; min-height:100px;"></textarea>
+        
+        <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Attachment (optional – resume, portfolio)</label>
+        <input type="file" name="attachment" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+        <p style="font-size:0.75rem; color:var(--text-secondary); margin-top:4px;">Supported: PDF, DOC, DOCX, TXT, PNG, JPG, GIF</p>
+        
+        <button type="submit" class="btn" style="margin-top:20px; width:100%;">Submit Application</button>
+    </form>
+</div>
+'''
     conn.close()
     return render_user_template(base_template, title="Apply to Job", active_page="jobs", content=content)
 
