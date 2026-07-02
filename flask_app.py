@@ -2236,14 +2236,19 @@ def signup():
         hashed = generate_password_hash(password)
         try:
             conn = sqlite3.connect(DB_PATH)
+            conn.execute("PRAGMA busy_timeout = 30000;")
             c = conn.cursor()
             c.execute("INSERT INTO users (phone, name, password_hash) VALUES (?, ?, ?)", (phone, name, hashed))
             user_id = c.lastrowid
             conn.commit()
+            conn.close()
+            
             # ---- PROCESS REFERRAL ----
             process_referral(user_id, phone)
-            conn.close()
+            
+            # ---- FIXED: add notification with link ----
             add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready.', link='/dashboard')
+            
             return redirect(url_for('login'))
         except sqlite3.IntegrityError:
             return "Phone number already registered. <a href='/login'>Login</a>"
