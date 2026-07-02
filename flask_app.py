@@ -1674,24 +1674,24 @@ base_template = """
 # ============================================================
 home_page = base_template.replace("{title}", "Home").replace("{active_page}", "home").replace("{content}", """
     <div class="hero">
-        <div style="display:flex; align-items:center; justify-content:center; gap:20px; flex-wrap:wrap; margin-bottom:15px;">
-            <img src="/static/ug-06.png" alt="RockabyConnect Logo" style="height:80px; width:80px; border-radius:16px; object-fit:cover; box-shadow:0 4px 15px rgba(0,0,0,0.2);">
-            <h1 style="margin:0;">Get Work Done – or Get Paid</h1>
+        <div style="display:flex; align-items:center; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:10px;">
+            <img src="/static/ug-06.png" alt="RockabyConnect Logo" style="height:60px; width:60px; border-radius:12px; object-fit:cover; box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+            <h1 style="margin:0; font-size:1.8rem;">Get Work Done – or Get Paid</h1>
         </div>
-        <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers near you.</p>
-        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-            <a href="/offer-skill" class="btn" style="border-color:white; color:white; background:var(--primary);">Offer Your Skill</a>
-            <a href="/post-job" class="btn btn-outline" style="border-color:white; color:white;">Post a Job</a>
+        <p style="font-size:0.95rem;">Uganda's premier freelance marketplace. Connect with trusted skilled workers near you.</p>
+        <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <a href="/offer-skill" class="btn" style="font-size:0.85rem;">Offer Your Skill</a>
+            <a href="/post-job" class="btn btn-outline" style="font-size:0.85rem;">Post a Job</a>
         </div>
-        <div class="category-chips">
-            <span style="color: var(--text-secondary);">Popular:</span>
-            <a href="/list?search=Boda+Rider" class="chip">Boda Rider</a>
-            <a href="/list?search=Maid" class="chip">Maid</a>
-            <a href="/list?search=Plumbing" class="chip">Plumbing</a>
-            <a href="/list?search=Electrical" class="chip">Electrical</a>
-            <a href="/list?search=Carpentry" class="chip">Carpentry</a>
-            <a href="/list?search=Cooking" class="chip">Cooking</a>
-            <a href="/list?search=Driver" class="chip">Driver</a>
+        <div class="category-chips" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:15px;">
+            <span style="color: var(--text-secondary); font-size:0.8rem;">Popular:</span>
+            <a href="/list?search=Boda+Rider" class="chip" style="padding:4px 14px; font-size:0.75rem;">Boda Rider</a>
+            <a href="/list?search=Maid" class="chip" style="padding:4px 14px; font-size:0.75rem;">Maid</a>
+            <a href="/list?search=Plumbing" class="chip" style="padding:4px 14px; font-size:0.75rem;">Plumbing</a>
+            <a href="/list?search=Electrical" class="chip" style="padding:4px 14px; font-size:0.75rem;">Electrical</a>
+            <a href="/list?search=Carpentry" class="chip" style="padding:4px 14px; font-size:0.75rem;">Carpentry</a>
+            <a href="/list?search=Cooking" class="chip" style="padding:4px 14px; font-size:0.75rem;">Cooking</a>
+            <a href="/list?search=Driver" class="chip" style="padding:4px 14px; font-size:0.75rem;">Driver</a>
         </div>
     </div>
     <div class="stat-grid">
@@ -1701,40 +1701,30 @@ home_page = base_template.replace("{title}", "Home").replace("{active_page}", "h
     </div>
     <div class="card">
         <div class="card-header">📖 How It Works</div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: center;">
-            <div><div style="font-size: 2rem;">🔍</div><h3>1. Find Skills</h3><p>Browse verified workers</p></div>
-            <div><div style="font-size: 2rem;">📝</div><h3>2. Post a Job</h3><p>Describe what you need</p></div>
-            <div><div style="font-size: 2rem;">💬</div><h3>3. Connect</h3><p>Chat on WhatsApp</p></div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; text-align: center;">
+            <div><div style="font-size: 2rem;">🔍</div><h3 style="font-size:1rem; margin:8px 0;">1. Find Skills</h3><p style="font-size:0.8rem;">Browse verified workers</p></div>
+            <div><div style="font-size: 2rem;">📝</div><h3 style="font-size:1rem; margin:8px 0;">2. Post a Job</h3><p style="font-size:0.8rem;">Describe what you need</p></div>
+            <div><div style="font-size: 2rem;">💬</div><h3 style="font-size:1rem; margin:8px 0;">3. Connect</h3><p style="font-size:0.8rem;">Chat on WhatsApp</p></div>
         </div>
     </div>
-""")
-signup_page = base_template.replace("{title}", "Sign Up").replace("{active_page}", "signup").replace("{content}", """
-    <div class="card">
-        <div class="card-header">Create Your Free Account</div>
-        <form method="POST">
-            <label>Full Name *</label>
-            <input type="text" name="name" required>
-            <label>Phone Number *</label>
-            <input type="tel" name="phone" required>
-            <label>Password *</label>
-            <input type="password" name="password" required>
-            <button type="submit" class="btn" style="margin-top:20px; width:100%;">Sign Up</button>
-        </form>
-        <p style="margin-top:15px;">Already have an account? <a href="/login">Login</a></p>
-    </div>
+    {carousel}
 """)
 
 login_page = base_template.replace("{title}", "Login").replace("{active_page}", "login").replace("{content}", """
-    <div class="card">
-        <div class="card-header">Login</div>
+    <div class="hero" style="padding:30px 20px;">
+        <h1 style="font-size:1.8rem;">Welcome Back</h1>
+        <p>Login to manage your account</p>
+    </div>
+    <div class="card" style="max-width:500px; margin:0 auto;">
+        <div class="card-header">🔐 Login</div>
         <form method="POST">
-            <label>Phone Number</label>
-            <input type="tel" name="phone" required>
-            <label>Password</label>
-            <input type="password" name="password" required>
+            <label style="display:block; margin-top:12px; font-weight:600;">Phone Number</label>
+            <input type="tel" name="phone" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Password</label>
+            <input type="password" name="password" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
             <button type="submit" class="btn" style="margin-top:20px; width:100%;">Login</button>
         </form>
-        <p style="margin-top:15px;">No account? <a href="/signup">Sign Up</a></p>
+        <p style="margin-top:15px; text-align:center;">No account? <a href="/signup" style="color:var(--primary);">Sign Up</a></p>
     </div>
 """)
 
@@ -1805,43 +1795,41 @@ vendor_form_template = base_template.replace("{title}", "My Vendor Profile").rep
     <div class="card">
         <div class="card-header">{form_title}</div>
         <form method="POST" enctype="multipart/form-data" id="vendorForm">
-            <label>Business Name *</label>
-            <input type="text" name="business_name" value="{business_name}" required>
-            <label>District/City *</label>
-            <input type="text" name="district" value="{district}" required>
-            <label>Village/Area</label>
-            <input type="text" name="village" value="{village}">
-            <label>Landmark (e.g., opp. SDA church, Mukwano B23)</label>
-            <input type="text" name="landmark" value="{landmark}">
-            <label>Short Description</label>
-            <textarea name="bio" maxlength="300">{bio}</textarea>
-            <label>Main Shop / Product Photo</label>
-            <input type="file" name="vendor_image" accept="image/*">
-            <label>Additional Photo 1</label>
-            <input type="file" name="vendor_image2" accept="image/*">
-            <label>Additional Photo 2</label>
-            <input type="file" name="vendor_image3" accept="image/*">
-            <!-- ===== VIDEO UPLOAD ===== -->
-            <label>Upload a Video (optional)</label>
-            <input type="file" name="video" accept="video/*">
-            <p style="font-size:0.8rem;">MP4, WebM, OGG, MOV, AVI, MKV (max 50MB recommended)</p>
-            <!-- ===== END VIDEO ===== -->
-            <label>Status</label>
-            <select name="status">
+            <label style="display:block; margin-top:12px; font-weight:600;">Business Name *</label>
+            <input type="text" name="business_name" value="{business_name}" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">District/City *</label>
+            <input type="text" name="district" value="{district}" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Village/Area</label>
+            <input type="text" name="village" value="{village}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Landmark</label>
+            <input type="text" name="landmark" value="{landmark}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Short Description</label>
+            <textarea name="bio" maxlength="300" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">{bio}</textarea>
+            <label style="display:block; margin-top:12px; font-weight:600;">Main Shop / Product Photo</label>
+            <input type="file" name="vendor_image" accept="image/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Additional Photo 1</label>
+            <input type="file" name="vendor_image2" accept="image/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Additional Photo 2</label>
+            <input type="file" name="vendor_image3" accept="image/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Upload a Video (optional)</label>
+            <input type="file" name="video" accept="video/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <p style="font-size:0.75rem; color:var(--text-secondary);">MP4, WebM, OGG, MOV, AVI, MKV</p>
+            <label style="display:block; margin-top:12px; font-weight:600;">Status</label>
+            <select name="status" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
                 {status_options}
             </select>
             <button type="submit" class="btn" style="margin-top:20px; width:100%;">Save Vendor Profile</button>
         </form>
     </div>
     <script>
-    // Client-side image resizer – compresses images before upload for lightning speed
+    // Client-side image resizer
     document.getElementById('vendorForm').addEventListener('submit', function(e) {
         const fileInputs = document.querySelectorAll('#vendorForm input[type=file]');
         const promises = [];
         fileInputs.forEach(input => {
             if (input.files.length > 0) {
                 const file = input.files[0];
-                if (file.size > 500 * 1024) { // only resize if > 500KB
+                if (file.size > 500 * 1024) {
                     promises.push(new Promise((resolve) => {
                         const reader = new FileReader();
                         reader.onload = function(ev) {
@@ -2182,6 +2170,7 @@ def notifications():
     user_id = session['user_id']
     # Mark all as read when viewing the page
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
     c.execute("UPDATE notifications SET is_read=1 WHERE user_id=?", (user_id,))
     conn.commit()
@@ -2192,13 +2181,14 @@ def notifications():
     for n in notifs:
         nid, ntype, msg, link, is_read, created_at = n
         icon = {
-    'job_application': '📋',
-    'application_status': '🔄',
-    'application_note': '📝',  # <-- ADD THIS
-    'message': '💬',
-    'boost_approved': '⭐',
-    'boost_rejected': '❌'
-}.get(ntype, '🔔')
+            'job_application': '📋',
+            'application_status': '🔄',
+            'application_note': '📝',
+            'message': '💬',
+            'boost_approved': '⭐',
+            'boost_rejected': '❌',
+            'email': '📧'
+        }.get(ntype, '🔔')
         link_html = f'<a href="{link}" class="btn btn-small">View</a>' if link else ''
         rows += f"""
         <div class="provider-card">
@@ -2253,7 +2243,7 @@ def signup():
             # ---- PROCESS REFERRAL ----
             process_referral(user_id, phone)
             conn.close()
-            add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready.')
+            add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready.', link='/dashboard')
             return redirect(url_for('login'))
         except sqlite3.IntegrityError:
             return "Phone number already registered. <a href='/login'>Login</a>"
@@ -3332,7 +3322,7 @@ def refer():
         }}
     </script>
     '''
-    return render_user_template(base_template, title="Refer a Friend", active_page="", content=content)
+    return render_user_template(base_template, title="Refer a Friend", active_page="refer", content=content)
 
 # ---------- Settings ----------
 @app.route('/settings', methods=['GET', 'POST'])
