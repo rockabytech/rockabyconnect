@@ -1710,6 +1710,30 @@ home_page = base_template.replace("{title}", "Home").replace("{active_page}", "h
     {carousel}
 """)
 
+# ============================================================
+# PAGE TEMPLATES (define these AFTER base_template)
+# ============================================================
+
+signup_page = base_template.replace("{title}", "Sign Up").replace("{active_page}", "signup").replace("{content}", """
+    <div class="hero" style="padding:30px 20px;">
+        <h1 style="font-size:1.8rem;">Create Your Free Account</h1>
+        <p>Join Uganda's premier freelance marketplace</p>
+    </div>
+    <div class="card" style="max-width:500px; margin:0 auto;">
+        <div class="card-header">📝 Sign Up</div>
+        <form method="POST">
+            <label style="display:block; margin-top:12px; font-weight:600;">Full Name *</label>
+            <input type="text" name="name" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Phone Number *</label>
+            <input type="tel" name="phone" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Password *</label>
+            <input type="password" name="password" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <button type="submit" class="btn" style="margin-top:20px; width:100%;">Sign Up</button>
+        </form>
+        <p style="margin-top:15px; text-align:center;">Already have an account? <a href="/login" style="color:var(--primary);">Login</a></p>
+    </div>
+""")
+
 login_page = base_template.replace("{title}", "Login").replace("{active_page}", "login").replace("{content}", """
     <div class="hero" style="padding:30px 20px;">
         <h1 style="font-size:1.8rem;">Welcome Back</h1>
