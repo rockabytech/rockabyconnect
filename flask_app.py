@@ -381,60 +381,6 @@ def get_referral_stats(user_id):
         'total_rewards': total_rewards
     }
 
-def process_referral(user_id, phone):
-    """
-    Check if there's a referral code in session, and if so,
-    create a referral record for the new user signing up.
-    """
-    if 'referral_code' not in session:
-        return False
-    
-    ref_code = session['referral_code']
-    
-    with get_db_connection() as conn:
-        c = conn.cursor()
-        
-        # Find the referrer (user who owns this referral code)
-        c.execute("SELECT user_id FROM referral_codes WHERE code = ?", (ref_code,))
-        referrer = c.fetchone()
-        if not referrer:
-            return False
-        
-        referrer_id = referrer[0]
-        
-        # Prevent self-referral
-        if referrer_id == user_id:
-            return False
-        
-        # Check if this user has already been referred by this referrer
-        c.execute("SELECT id FROM referrals WHERE referrer_id = ? AND referred_user_id = ?", (referrer_id, user_id))
-        if c.fetchone():
-            return False
-        
-        # Get referral settings
-        c.execute("SELECT reward_percentage, reward_type, max_referrals FROM referral_settings WHERE is_active=1 LIMIT 1")
-        settings = c.fetchone()
-        if not settings:
-            settings = (10, 'discount', 10)
-        
-        reward_percentage, reward_type, max_referrals = settings
-        
-        # Count completed referrals for this referrer
-        count = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status IN ('completed', 'rewarded')", (referrer_id,)).fetchone()[0]
-        if count >= max_referrals:
-            return False
-        
-        # Insert pending referral
-        c.execute("""
-            INSERT INTO referrals (referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type)
-            VALUES (?, ?, ?, 'pending', 0, ?)
-        """, (referrer_id, user_id, phone, reward_type))
-        conn.commit()
-    
-    # Clear the session
-    session.pop('referral_code', None)
-    return True
-
 def save_resized_image(file, max_width=800, max_height=600, quality=85):
     """Resize image to uniform 800x600 cover (crop to fit) and save."""
     if not file or not file.filename:
@@ -638,7 +584,7 @@ def process_referral(user_id, phone):
     
     # Clear the session
     session.pop('referral_code', None)
-    return True)
+    return True
 
    # ============================================================
 # NOTIFICATION HELPERS
