@@ -863,20 +863,19 @@ base_template = """
             padding-bottom: calc(var(--bottom-nav-height) + 20px);
         }
 
+        /* ===== TOP NAVBAR ===== */
         .navbar {
             background: var(--card-bg);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--glass-border);
-            padding: 12px 16px;
+            padding: 10px 16px;
             position: sticky;
             top: 0;
             z-index: 1000;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 10px;
         }
 
         .logo {
@@ -887,103 +886,60 @@ base_template = """
         }
 
         .logo img {
-            height: 40px;
-            width: 40px;
-            border-radius: 12px;
+            height: 35px;
+            width: 35px;
+            border-radius: 10px;
             object-fit: cover;
             box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
         }
 
         .logo-text {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 800;
             line-height: 1.2;
         }
         .logo-text span { color: var(--primary); }
         .logo-sub {
-            font-size: 0.6rem;
+            font-size: 0.5rem;
             color: var(--text-secondary);
             line-height: 1;
         }
 
-        /* ===== BOTTOM NAVIGATION BAR ===== */
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: var(--bottom-nav-height);
-            background: var(--card-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-top: 1px solid var(--glass-border);
+        .navbar-right {
             display: flex;
             align-items: center;
-            justify-content: space-around;
-            z-index: 999;
-            padding: 0 8px;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+            gap: 12px;
         }
 
-        .bottom-nav a {
+        .theme-toggle {
+            background: rgba(245, 175, 25, 0.1);
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.6rem;
-            padding: 4px 8px;
-            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
             transition: var(--transition);
-            min-width: 50px;
-            position: relative;
+            color: var(--text);
+        }
+        .theme-toggle:hover {
+            background: rgba(245, 175, 25, 0.2);
+            transform: scale(1.05);
         }
 
-        .bottom-nav a i {
-            font-size: 1.4rem;
-            margin-bottom: 2px;
-        }
-
-        .bottom-nav a span {
-            font-size: 0.55rem;
-            font-weight: 500;
-        }
-
-        .bottom-nav a:hover,
-        .bottom-nav a.active {
-            color: var(--primary);
-        }
-
-        .bottom-nav .badge {
-            position: absolute;
-            top: 2px;
-            right: 4px;
-            background: #dc3545;
-            color: white;
-            font-size: 0.5rem;
-            padding: 2px 6px;
-            border-radius: 10px;
-            min-width: 18px;
-            text-align: center;
-        }
-
-        /* Hide nav links in navbar (moved to bottom) */
-        .nav-links {
-            display: none;
-        }
-
-        /* Show hamburger only on mobile */
-        .hamburger {
-            display: block;
+        .menu-toggle {
             background: none;
             border: none;
             font-size: 1.5rem;
             cursor: pointer;
             color: var(--text);
+            display: block;
         }
 
-        /* Mobile menu overlay */
+        /* ===== MOBILE MENU OVERLAY ===== */
         .mobile-menu-overlay {
             display: none;
             position: fixed;
@@ -995,11 +951,16 @@ base_template = """
             z-index: 9998;
         }
 
+        .mobile-menu-overlay.show {
+            display: block;
+        }
+
+        /* ===== MOBILE SIDE MENU ===== */
         .mobile-menu {
-            display: none;
+            display: block;
             position: fixed;
             top: 0;
-            right: -280px;
+            right: -300px;
             width: 280px;
             height: 100%;
             background: var(--card-bg);
@@ -1016,17 +977,29 @@ base_template = """
             right: 0;
         }
 
-        .mobile-menu-overlay.show {
-            display: block;
-        }
-
         .mobile-menu .close-btn {
             background: none;
             border: none;
-            font-size: 2rem;
+            font-size: 1.8rem;
             cursor: pointer;
             color: var(--text);
             float: right;
+        }
+
+        .mobile-menu .user-section {
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+
+        .mobile-menu .user-section .name {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .mobile-menu .user-section .phone {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
         }
 
         .mobile-menu a {
@@ -1036,37 +1009,28 @@ base_template = """
             text-decoration: none;
             font-weight: 500;
             border-bottom: 1px solid var(--border);
-            font-size: 1rem;
+            font-size: 0.95rem;
         }
 
         .mobile-menu a:hover {
             color: var(--primary);
         }
 
-        .mobile-menu .user-info {
-            padding: 20px 0;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 10px;
+        .mobile-menu .logout-link {
+            color: #dc3545;
+            border-top: 1px solid var(--border);
+            margin-top: 10px;
+            padding-top: 12px;
         }
 
-        /* Theme toggle in navbar */
-        .theme-toggle {
-            background: rgba(245, 175, 25, 0.1);
-            border: 1px solid var(--glass-border);
-            border-radius: 50%;
-            width: 38px;
-            height: 38px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 1.1rem;
-            transition: var(--transition);
-            color: var(--text);
-        }
-        .theme-toggle:hover {
-            background: rgba(245, 175, 25, 0.2);
-            transform: scale(1.05);
+        .mobile-menu .badge {
+            background: #dc3545;
+            color: white;
+            font-size: 0.6rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            float: right;
+            margin-top: 2px;
         }
 
         .container {
@@ -1075,58 +1039,80 @@ base_template = """
             padding: 0 16px;
         }
 
-        /* ===== LIGHTBOX ===== */
-        #lightbox {
-            display: none;
+        /* ================================================
+           BOTTOM NAVIGATION (Jumia-style)
+           ================================================ */
+        .bottom-nav {
             position: fixed;
-            top: 0;
+            bottom: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.95);
-            z-index: 99999;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-        }
-        #lightbox .lightbox-close {
-            position: absolute;
-            top: 20px;
-            right: 30px;
-            font-size: 3rem;
-            color: white;
-            background: none;
-            border: none;
-            cursor: pointer;
-            z-index: 100000;
-        }
-        #lightbox .lightbox-back {
-            position: absolute;
-            top: 20px;
-            left: 30px;
-            font-size: 2rem;
-            color: white;
-            background: none;
-            border: none;
-            cursor: pointer;
-            z-index: 100000;
+            right: 0;
+            height: var(--bottom-nav-height);
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
-            gap: 8px;
-        }
-        #lightbox .lightbox-back span {
-            font-size: 1rem;
-        }
-        #lightbox img {
-            max-width: 90%;
-            max-height: 80%;
-            object-fit: contain;
-        }
-        .clickable-img {
-            cursor: pointer;
+            justify-content: space-around;
+            z-index: 999;
+            padding: 4px 8px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
         }
 
-        /* ===== CARDS ===== */
+        .bottom-nav a {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.55rem;
+            padding: 4px 6px;
+            border-radius: 8px;
+            transition: var(--transition);
+            min-width: 45px;
+            position: relative;
+            flex: 1;
+            max-width: 70px;
+        }
+
+        .bottom-nav a i {
+            font-size: 1.3rem;
+            margin-bottom: 1px;
+        }
+
+        .bottom-nav a span {
+            font-size: 0.5rem;
+            font-weight: 500;
+            text-align: center;
+            line-height: 1.1;
+        }
+
+        .bottom-nav a:hover,
+        .bottom-nav a.active {
+            color: var(--primary);
+        }
+
+        .bottom-nav .badge {
+            position: absolute;
+            top: 0px;
+            right: 4px;
+            background: #dc3545;
+            color: white;
+            font-size: 0.45rem;
+            padding: 1px 5px;
+            border-radius: 8px;
+            min-width: 16px;
+            text-align: center;
+        }
+
+        /* Hide old nav-links (moved to mobile menu) */
+        .nav-links {
+            display: none !important;
+        }
+
+        /* ===== CARD STYLES ===== */
         .card {
             background: var(--card-bg);
             backdrop-filter: blur(20px);
@@ -1142,14 +1128,16 @@ base_template = """
             box-shadow: var(--shadow-hover);
         }
         .card-header {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 700;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
             padding-bottom: 10px;
             border-bottom: 2px solid var(--primary);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         /* ===== BUTTONS ===== */
@@ -1163,7 +1151,7 @@ base_template = """
             font-weight: 600;
             cursor: pointer;
             text-decoration: none;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             transition: var(--transition);
             box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
         }
@@ -1185,11 +1173,15 @@ base_template = """
             box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
         }
         .btn-small {
-            padding: 5px 12px;
-            font-size: 0.8rem;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            border-radius: 8px;
         }
         .btn-danger {
             background: linear-gradient(135deg, #dc3545, #c82333);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #28a745, #20c997);
         }
 
         /* ===== BADGES ===== */
@@ -1197,7 +1189,7 @@ base_template = """
             display: inline-block;
             padding: 2px 8px;
             border-radius: 12px;
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             font-weight: 600;
             margin-left: 4px;
             vertical-align: middle;
@@ -1209,18 +1201,42 @@ base_template = """
         .badge-taken { background: #6f42c1; color: white; }
         .badge-closed { background: #dc3545; color: white; }
 
+        /* ===== HERO ===== */
+        .hero {
+            background: linear-gradient(135deg, rgba(245, 175, 25, 0.15), rgba(26, 115, 232, 0.15));
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius);
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 1px solid var(--glass-border);
+        }
+        .hero h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
         /* ===== STAT GRID ===== */
         .stat-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
             margin-bottom: 20px;
         }
         .stat-card {
             background: var(--card-bg);
             backdrop-filter: blur(20px);
             border-radius: var(--radius);
-            padding: 20px 16px;
+            padding: 16px 12px;
             text-align: center;
             border: 1px solid var(--glass-border);
             transition: var(--transition);
@@ -1228,30 +1244,107 @@ base_template = """
             overflow: hidden;
         }
         .stat-card h3 {
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: 800;
             color: var(--primary);
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
         .stat-card small {
             color: var(--text-secondary);
-            font-size: 0.8rem;
+            font-size: 0.75rem;
         }
 
-        /* ===== RESPONSIVE ===== */
+        /* ===== LIGHTBOX ===== */
+        #lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 99999;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        #lightbox .lightbox-close {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 2.5rem;
+            color: white;
+            background: none;
+            border: none;
+            cursor: pointer;
+            z-index: 100000;
+        }
+        #lightbox .lightbox-back {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            font-size: 1.2rem;
+            color: white;
+            background: none;
+            border: none;
+            cursor: pointer;
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #lightbox .lightbox-back span {
+            font-size: 0.9rem;
+        }
+        #lightbox img {
+            max-width: 92%;
+            max-height: 80%;
+            object-fit: contain;
+        }
+        .clickable-img {
+            cursor: pointer;
+        }
+
+        /* ===== WHATSAPP FLOAT ===== */
+        .whatsapp-float {
+            position: fixed;
+            bottom: calc(var(--bottom-nav-height) + 20px);
+            right: 16px;
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.4);
+            z-index: 998;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+        .whatsapp-float:hover { transform: scale(1.1); }
+
+        /* ================================================
+           RESPONSIVE
+           ================================================ */
         @media (max-width: 768px) {
             .stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
-            .card { padding: 16px; }
+            .card { padding: 14px; }
             .container { padding: 0 12px; }
-            .hero h1 { font-size: 1.8rem; }
-            .hero { padding: 30px 20px; }
-            .bottom-nav a { min-width: 40px; }
+            .hero h1 { font-size: 1.6rem; }
+            .hero { padding: 24px 16px; }
+            .bottom-nav a { min-width: 40px; max-width: 60px; }
             .bottom-nav a i { font-size: 1.2rem; }
-            .bottom-nav a span { font-size: 0.5rem; }
+            .bottom-nav a span { font-size: 0.45rem; }
+            .logo-text { font-size: 0.95rem; }
+            .logo img { height: 30px; width: 30px; }
+            .mobile-menu { width: 260px; }
         }
 
         @media (min-width: 769px) {
-            .hamburger { display: none; }
+            .menu-toggle { display: none; }
             .nav-links {
                 display: flex !important;
                 gap: 6px;
@@ -1265,7 +1358,7 @@ base_template = """
                 padding: 6px 12px;
                 border-radius: 8px;
                 transition: var(--transition);
-                font-size: 0.9rem;
+                font-size: 0.85rem;
             }
             .nav-links a:hover,
             .nav-links a.active {
@@ -1274,7 +1367,33 @@ base_template = """
             }
             .bottom-nav { display: none; }
             body { padding-bottom: 0; }
+            .whatsapp-float { bottom: 20px; }
         }
+
+        /* ================================================
+           NEON THEME
+           ================================================ */
+        body.theme-neon {
+            --primary: #00d4ff !important;
+            --primary-dark: #0099cc !important;
+            --bg: #0a0a1a !important;
+            --card-bg: rgba(20, 20, 40, 0.85) !important;
+            --text: #e0e0ff !important;
+            --text-secondary: #a0a0cc !important;
+            --border: rgba(0, 212, 255, 0.3) !important;
+            --shadow: 0 8px 32px rgba(0, 212, 255, 0.2) !important;
+            --glass-border: rgba(0, 212, 255, 0.15) !important;
+        }
+        body.theme-neon .hero { background: rgba(0, 212, 255, 0.05) !important; border: 1px solid rgba(0, 212, 255, 0.2) !important; }
+        body.theme-neon .hero h1 { background: linear-gradient(135deg, #00d4ff, #ff00a0) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important; background-clip: text !important; }
+        body.theme-neon .btn { background: linear-gradient(135deg, #00d4ff, #0099cc) !important; box-shadow: 0 0 20px rgba(0, 212, 255, 0.4) !important; }
+        body.theme-neon .card { background: rgba(20, 20, 40, 0.85) !important; border: 1px solid rgba(0, 212, 255, 0.2) !important; }
+        body.theme-neon .stat-card { background: rgba(20, 20, 40, 0.7) !important; border: 1px solid rgba(0, 212, 255, 0.15) !important; }
+        body.theme-neon .stat-card h3 { color: #00d4ff !important; }
+        body.theme-neon .navbar { background: rgba(20, 20, 40, 0.9) !important; border-bottom: 1px solid rgba(0, 212, 255, 0.2) !important; }
+        body.theme-neon .logo-text span { color: #00d4ff !important; }
+        body.theme-neon .bottom-nav { background: rgba(20, 20, 40, 0.9) !important; border-top: 1px solid rgba(0, 212, 255, 0.2) !important; }
+        body.theme-neon .bottom-nav a:hover, body.theme-neon .bottom-nav a.active { color: #00d4ff !important; }
 
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(30px); }
@@ -1296,29 +1415,26 @@ base_template = """
     <!-- ===== MOBILE MENU OVERLAY ===== -->
     <div class="mobile-menu-overlay" id="mobileOverlay" onclick="closeMobileMenu()"></div>
 
-    <!-- ===== MOBILE MENU ===== -->
+    <!-- ===== MOBILE SIDE MENU ===== -->
     <div class="mobile-menu" id="mobileMenu">
         <button class="close-btn" onclick="closeMobileMenu()">&times;</button>
-        <div class="user-info">
+        <div class="user-section">
             {% if session.user_id %}
-                <p style="font-weight:600; font-size:1.1rem;">👋 {{ session.user_name }}</p>
-                <p style="color:var(--text-secondary); font-size:0.8rem;">{{ session.user_phone }}</p>
+                <div class="name">👋 {{ session.user_name }}</div>
+                <div class="phone">{{ session.user_phone }}</div>
+            {% else %}
+                <div class="name">Guest</div>
             {% endif %}
         </div>
         <a href="/" onclick="closeMobileMenu()">🏠 Home</a>
         {% if session.user_id %}
             <a href="/dashboard" onclick="closeMobileMenu()">📊 Dashboard</a>
-        {% endif %}
-        <a href="/list" onclick="closeMobileMenu()">🔍 Find Skills</a>
-        <a href="/jobs" onclick="closeMobileMenu()">💼 Jobs</a>
-        <a href="/vendors" onclick="closeMobileMenu()">🏪 Vendors</a>
-        {% if session.user_id %}
             <a href="/my-applications" onclick="closeMobileMenu()">📋 My Applications</a>
-            <a href="/messages" onclick="closeMobileMenu()">📨 Messages <span id="mobileMsgBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
-            <a href="/notifications" onclick="closeMobileMenu()">🔔 Notifications <span id="mobileNotifBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
-            <a href="/refer" onclick="closeMobileMenu()">🎁 Refer</a>
+            <a href="/messages" onclick="closeMobileMenu()">📨 Messages <span id="mobileMsgBadge" class="badge"></span></a>
+            <a href="/notifications" onclick="closeMobileMenu()">🔔 Notifications <span id="mobileNotifBadge" class="badge"></span></a>
+            <a href="/refer" onclick="closeMobileMenu()">🎁 Refer a Friend</a>
             <a href="/settings" onclick="closeMobileMenu()">⚙️ Settings</a>
-            <a href="/logout" onclick="closeMobileMenu()" style="color:#dc3545;">🚪 Logout</a>
+            <a href="/logout" onclick="closeMobileMenu()" class="logout-link">🚪 Logout</a>
         {% else %}
             <a href="/login" onclick="closeMobileMenu()">🔐 Login</a>
             <a href="/signup" onclick="closeMobileMenu()">📝 Sign Up</a>
@@ -1327,7 +1443,6 @@ base_template = """
 
     <!-- ===== TOP NAVBAR ===== -->
     <nav class="navbar">
-        <button class="hamburger" onclick="toggleMobileMenu()">☰</button>
         <a href="/" class="logo">
             <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
             <div>
@@ -1335,23 +1450,9 @@ base_template = """
                 <div class="logo-sub">Connecting Skills, Building Uganda</div>
             </div>
         </a>
-        <div class="nav-links" id="navMenu">
-            <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">Home</a>
-            {% if session.user_id %}
-                <a href="/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
-            {% endif %}
-            <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">Find Skills</a>
-            <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">Jobs</a>
-            <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">Vendors</a>
-            {% if session.user_id %}
-                <a href="/messages" id="messagesLink">📨 Messages <span id="messagesBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
-                <a href="/notifications" id="notifLink">🔔 Notifications <span id="notifBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
-                <a href="/logout">Logout</a>
-            {% else %}
-                <a href="/login" class="{{ 'active' if active_page == 'login' else '' }}">Login</a>
-                <a href="/signup" class="{{ 'active' if active_page == 'signup' else '' }}">Sign Up</a>
-            {% endif %}
+        <div class="navbar-right">
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
+            <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
         </div>
     </nav>
 
@@ -1359,8 +1460,8 @@ base_template = """
         {content}
     </div>
 
-    <!-- ===== BOTTOM NAVIGATION BAR (Mobile) ===== -->
-    <div class="bottom-nav" id="bottomNav">
+    <!-- ===== BOTTOM NAVIGATION (Jumia-style) ===== -->
+    <div class="bottom-nav">
         <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">
             <i class="fas fa-home"></i>
             <span>Home</span>
@@ -1391,7 +1492,9 @@ base_template = """
         {% endif %}
     </div>
 
-    <footer>&copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬</footer>
+    <footer style="text-align:center; padding:16px; color:var(--text-secondary); font-size:0.7rem; border-top:1px solid var(--border); margin-top:20px;">
+        &copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬
+    </footer>
     <a href="https://wa.me/256751318876?text=Hi%20RockabyConnect%20Support" target="_blank" class="whatsapp-float">💬</a>
 
     <script>
@@ -1439,7 +1542,7 @@ base_template = """
             document.body.classList.add('dark-mode');
         }
 
-        // ===== UNREAD NOTIFICATIONS BADGE =====
+        // ===== UNREAD BADGES =====
         function updateNotifBadge() {
             fetch('/api/unread-notifications')
                 .then(r => r.json())
@@ -1474,7 +1577,7 @@ base_template = """
                 .catch(err => console.log('Error:', err));
         }
 
-        // ===== INITIALIZE =====
+        // ===== INITIALIZE BADGES =====
         if (document.querySelector('#messagesBadge')) {
             updateUnreadBadge();
             setInterval(updateUnreadBadge, 15000);
