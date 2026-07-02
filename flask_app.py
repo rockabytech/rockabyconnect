@@ -814,101 +814,9 @@ base_template = """
     <meta name="theme-color" content="#f5af19">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* ... your existing CSS ... */
-        /* (keep all your existing styles – I'm omitting them for brevity) */
-        /* Just add this at the end of the style block: */
-        #lightbox {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.9);
-            z-index: 9999;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-        }
-        #lightbox button {
-            position: absolute;
-            top: 20px;
-            right: 30px;
-            font-size: 3rem;
-            color: white;
-            background: none;
-            border: none;
-            cursor: pointer;
-            z-index: 10000;
-        }
-        #lightbox img {
-            max-width: 90%;
-            max-height: 80%;
-            object-fit: contain;
-        }
-        .clickable-img {
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
-    <!-- ===== LIGHTBOX MODAL ===== -->
-    <div id="lightbox">
-        <button onclick="closeLightbox()">&times;</button>
-        <img id="lightbox-img" src="" alt="Image">
-    </div>
-    <!-- ===== END LIGHTBOX ===== -->
-
-    <nav class="navbar">
-        <!-- ... your existing navbar ... -->
-    </nav>
-
-    <div class="container">
-        {content}
-    </div>
-
-    <footer>&copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬</footer>
-    <a href="https://wa.me/256751318876?text=Hi%20RockabyConnect%20Support" target="_blank" class="whatsapp-float">💬</a>
-
-    <script>
-        // ... your existing scripts ...
-
-        // ===== LIGHTBOX =====
-        function openLightbox(src) {
-            document.getElementById('lightbox').style.display = 'flex';
-            document.getElementById('lightbox-img').src = src;
-        }
-        function closeLightbox() {
-            document.getElementById('lightbox').style.display = 'none';
-        }
-        document.getElementById('lightbox').addEventListener('click', function(e) {
-            if (e.target === this) closeLightbox();
-        });
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') closeLightbox();
-        });
-
-        // Your existing functions (toggleMenu, toggleTheme, etc.)
-        // ... keep them all ...
-    </script>
-</body>
-</html>
-"""
-
-# ============================================================
-# ADMIN BASE TEMPLATE (Glassmorphism + Dark Mode)
-# ============================================================
-admin_base_template = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>RockabyConnect Admin – {title}</title>
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#f5af19">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>
+        /* ================================================
+           DEFAULT STYLES
+           ================================================ */
         * {
             margin: 0;
             padding: 0;
@@ -930,6 +838,7 @@ admin_base_template = """
             --shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
             --shadow-hover: 0 12px 48px rgba(0, 0, 0, 0.12);
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --bottom-nav-height: 65px;
         }
 
         body.dark-mode {
@@ -951,6 +860,7 @@ admin_base_template = """
             color: var(--text);
             min-height: 100vh;
             transition: var(--transition);
+            padding-bottom: calc(var(--bottom-nav-height) + 20px);
         }
 
         .navbar {
@@ -958,7 +868,7 @@ admin_base_template = """
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--glass-border);
-            padding: 16px 24px;
+            padding: 12px 16px;
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -966,68 +876,191 @@ admin_base_template = """
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 15px;
+            gap: 10px;
         }
 
         .logo {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             text-decoration: none;
         }
 
         .logo img {
-            height: 45px;
-            width: 45px;
+            height: 40px;
+            width: 40px;
             border-radius: 12px;
             object-fit: cover;
             box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
         }
 
         .logo-text {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             font-weight: 800;
             line-height: 1.2;
         }
         .logo-text span { color: var(--primary); }
         .logo-sub {
-            font-size: 0.7rem;
+            font-size: 0.6rem;
             color: var(--text-secondary);
             line-height: 1;
         }
 
-        .nav-links {
+        /* ===== BOTTOM NAVIGATION BAR ===== */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: var(--bottom-nav-height);
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid var(--glass-border);
             display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
             align-items: center;
+            justify-content: space-around;
+            z-index: 999;
+            padding: 0 8px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
         }
-        .nav-links a {
+
+        .bottom-nav a {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             color: var(--text-secondary);
             text-decoration: none;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 12px;
+            font-size: 0.6rem;
+            padding: 4px 8px;
+            border-radius: 8px;
             transition: var(--transition);
-            font-size: 0.95rem;
+            min-width: 50px;
+            position: relative;
         }
-        .nav-links a:hover,
-        .nav-links a.active {
-            background: rgba(245, 175, 25, 0.15);
+
+        .bottom-nav a i {
+            font-size: 1.4rem;
+            margin-bottom: 2px;
+        }
+
+        .bottom-nav a span {
+            font-size: 0.55rem;
+            font-weight: 500;
+        }
+
+        .bottom-nav a:hover,
+        .bottom-nav a.active {
             color: var(--primary);
         }
 
+        .bottom-nav .badge {
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            background: #dc3545;
+            color: white;
+            font-size: 0.5rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        /* Hide nav links in navbar (moved to bottom) */
+        .nav-links {
+            display: none;
+        }
+
+        /* Show hamburger only on mobile */
+        .hamburger {
+            display: block;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text);
+        }
+
+        /* Mobile menu overlay */
+        .mobile-menu-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9998;
+        }
+
+        .mobile-menu {
+            display: none;
+            position: fixed;
+            top: 0;
+            right: -280px;
+            width: 280px;
+            height: 100%;
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 9999;
+            padding: 20px;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+        }
+
+        .mobile-menu.open {
+            right: 0;
+        }
+
+        .mobile-menu-overlay.show {
+            display: block;
+        }
+
+        .mobile-menu .close-btn {
+            background: none;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            color: var(--text);
+            float: right;
+        }
+
+        .mobile-menu a {
+            display: block;
+            padding: 12px 0;
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 500;
+            border-bottom: 1px solid var(--border);
+            font-size: 1rem;
+        }
+
+        .mobile-menu a:hover {
+            color: var(--primary);
+        }
+
+        .mobile-menu .user-info {
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+
+        /* Theme toggle in navbar */
         .theme-toggle {
             background: rgba(245, 175, 25, 0.1);
             border: 1px solid var(--glass-border);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 38px;
+            height: 38px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             transition: var(--transition);
             color: var(--text);
         }
@@ -1036,57 +1069,101 @@ admin_base_template = """
             transform: scale(1.05);
         }
 
-        .hamburger {
-            display: none;
-            background: none;
-            border: none;
-            font-size: 1.8rem;
-            cursor: pointer;
-            color: var(--text);
-        }
-
         .container {
             max-width: 1200px;
-            margin: 24px auto;
-            padding: 0 20px;
+            margin: 16px auto;
+            padding: 0 16px;
         }
 
+        /* ===== LIGHTBOX ===== */
+        #lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 99999;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        #lightbox .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 3rem;
+            color: white;
+            background: none;
+            border: none;
+            cursor: pointer;
+            z-index: 100000;
+        }
+        #lightbox .lightbox-back {
+            position: absolute;
+            top: 20px;
+            left: 30px;
+            font-size: 2rem;
+            color: white;
+            background: none;
+            border: none;
+            cursor: pointer;
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #lightbox .lightbox-back span {
+            font-size: 1rem;
+        }
+        #lightbox img {
+            max-width: 90%;
+            max-height: 80%;
+            object-fit: contain;
+        }
+        .clickable-img {
+            cursor: pointer;
+        }
+
+        /* ===== CARDS ===== */
         .card {
             background: var(--card-bg);
             backdrop-filter: blur(20px);
             border-radius: var(--radius);
-            padding: 28px;
-            margin-bottom: 24px;
+            padding: 20px;
+            margin-bottom: 16px;
             box-shadow: var(--shadow);
             border: 1px solid var(--glass-border);
             transition: var(--transition);
         }
         .card:hover {
-            transform: translateY(-4px);
+            transform: translateY(-2px);
             box-shadow: var(--shadow-hover);
         }
         .card-header {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             font-weight: 700;
-            margin-bottom: 20px;
-            padding-bottom: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
             border-bottom: 2px solid var(--primary);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
+        /* ===== BUTTONS ===== */
         .btn {
             display: inline-block;
-            padding: 12px 28px;
+            padding: 10px 20px;
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             font-weight: 600;
             cursor: pointer;
             text-decoration: none;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             transition: var(--transition);
             box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
         }
@@ -1103,151 +1180,386 @@ admin_base_template = """
         .btn-outline:hover {
             background: rgba(245, 175, 25, 0.1);
         }
+        .btn-whatsapp {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+        }
+        .btn-small {
+            padding: 5px 12px;
+            font-size: 0.8rem;
+        }
         .btn-danger {
             background: linear-gradient(135deg, #dc3545, #c82333);
         }
-        .btn-small {
-            padding: 6px 14px;
-            font-size: 0.85rem;
-        }
 
+        /* ===== BADGES ===== */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+        .badge-available { background: #28a745; color: white; }
+        .badge-occupied { background: #ffc107; color: #333; }
+        .badge-leave { background: #6c757d; color: white; }
+        .badge-open { background: #17a2b8; color: white; }
+        .badge-taken { background: #6f42c1; color: white; }
+        .badge-closed { background: #dc3545; color: white; }
+
+        /* ===== STAT GRID ===== */
         .stat-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
         }
         .stat-card {
             background: var(--card-bg);
             backdrop-filter: blur(20px);
             border-radius: var(--radius);
-            padding: 28px 20px;
+            padding: 20px 16px;
             text-align: center;
             border: 1px solid var(--glass-border);
             transition: var(--transition);
             position: relative;
             overflow: hidden;
         }
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: -30px;
-            right: -30px;
-            width: 80px;
-            height: 80px;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            opacity: 0.1;
-            border-radius: 50%;
-        }
         .stat-card h3 {
-            font-size: 2.5rem;
+            font-size: 2rem;
             font-weight: 800;
             color: var(--primary);
-            margin-bottom: 8px;
+            margin-bottom: 4px;
         }
         .stat-card small {
             color: var(--text-secondary);
-            font-size: 0.9rem;
+            font-size: 0.8rem;
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-        }
-        th {
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .alert {
-            padding: 14px 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-        }
-        .alert-success {
-            background: rgba(40, 167, 69, 0.15);
-            border: 1px solid rgba(40, 167, 69, 0.3);
-            color: #28a745;
-        }
-        .alert-error {
-            background: rgba(220, 53, 69, 0.15);
-            border: 1px solid rgba(220, 53, 69, 0.3);
-            color: #dc3545;
-        }
-
-        footer {
-            text-align: center;
-            padding: 30px;
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            border-top: 1px solid var(--border);
-            margin-top: 40px;
-        }
-
+        /* ===== RESPONSIVE ===== */
         @media (max-width: 768px) {
-            .navbar { padding: 12px 16px; }
+            .stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .card { padding: 16px; }
+            .container { padding: 0 12px; }
+            .hero h1 { font-size: 1.8rem; }
+            .hero { padding: 30px 20px; }
+            .bottom-nav a { min-width: 40px; }
+            .bottom-nav a i { font-size: 1.2rem; }
+            .bottom-nav a span { font-size: 0.5rem; }
+        }
+
+        @media (min-width: 769px) {
+            .hamburger { display: none; }
             .nav-links {
-                display: none;
-                width: 100%;
-                flex-direction: column;
-                gap: 10px;
-                padding-top: 15px;
+                display: flex !important;
+                gap: 6px;
+                flex-wrap: wrap;
+                align-items: center;
             }
-            .nav-links.open { display: flex; }
-            .hamburger { display: block; }
-            .stat-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
-            .container { padding: 0 16px; }
-            .card { padding: 20px; }
+            .nav-links a {
+                color: var(--text-secondary);
+                text-decoration: none;
+                font-weight: 500;
+                padding: 6px 12px;
+                border-radius: 8px;
+                transition: var(--transition);
+                font-size: 0.9rem;
+            }
+            .nav-links a:hover,
+            .nav-links a.active {
+                background: rgba(245, 175, 25, 0.15);
+                color: var(--primary);
+            }
+            .bottom-nav { display: none; }
+            body { padding-bottom: 0; }
         }
 
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(30px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .card, .stat-card {
+        .card, .hero, .stat-card {
             animation: fadeInUp 0.6s ease-out;
         }
     </style>
 </head>
-<body class="{theme_class}">
+<body>
+    <!-- ===== LIGHTBOX ===== -->
+    <div id="lightbox">
+        <button class="lightbox-back" onclick="closeLightbox()"><i class="fas fa-arrow-left"></i> <span>Back</span></button>
+        <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+        <img id="lightbox-img" src="" alt="Image">
+    </div>
+
+    <!-- ===== MOBILE MENU OVERLAY ===== -->
+    <div class="mobile-menu-overlay" id="mobileOverlay" onclick="closeMobileMenu()"></div>
+
+    <!-- ===== MOBILE MENU ===== -->
+    <div class="mobile-menu" id="mobileMenu">
+        <button class="close-btn" onclick="closeMobileMenu()">&times;</button>
+        <div class="user-info">
+            {% if session.user_id %}
+                <p style="font-weight:600; font-size:1.1rem;">👋 {{ session.user_name }}</p>
+                <p style="color:var(--text-secondary); font-size:0.8rem;">{{ session.user_phone }}</p>
+            {% endif %}
+        </div>
+        <a href="/" onclick="closeMobileMenu()">🏠 Home</a>
+        {% if session.user_id %}
+            <a href="/dashboard" onclick="closeMobileMenu()">📊 Dashboard</a>
+        {% endif %}
+        <a href="/list" onclick="closeMobileMenu()">🔍 Find Skills</a>
+        <a href="/jobs" onclick="closeMobileMenu()">💼 Jobs</a>
+        <a href="/vendors" onclick="closeMobileMenu()">🏪 Vendors</a>
+        {% if session.user_id %}
+            <a href="/my-applications" onclick="closeMobileMenu()">📋 My Applications</a>
+            <a href="/messages" onclick="closeMobileMenu()">📨 Messages <span id="mobileMsgBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
+            <a href="/notifications" onclick="closeMobileMenu()">🔔 Notifications <span id="mobileNotifBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
+            <a href="/refer" onclick="closeMobileMenu()">🎁 Refer</a>
+            <a href="/settings" onclick="closeMobileMenu()">⚙️ Settings</a>
+            <a href="/logout" onclick="closeMobileMenu()" style="color:#dc3545;">🚪 Logout</a>
+        {% else %}
+            <a href="/login" onclick="closeMobileMenu()">🔐 Login</a>
+            <a href="/signup" onclick="closeMobileMenu()">📝 Sign Up</a>
+        {% endif %}
+    </div>
+
+    <!-- ===== TOP NAVBAR ===== -->
     <nav class="navbar">
-        <a href="/admin/dashboard" class="logo">
+        <button class="hamburger" onclick="toggleMobileMenu()">☰</button>
+        <a href="/" class="logo">
             <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
             <div>
                 <div class="logo-text">ROCKABY<span>CONNECT</span></div>
-                <div class="logo-sub">Admin Panel</div>
+                <div class="logo-sub">Connecting Skills, Building Uganda</div>
             </div>
         </a>
-        <button class="hamburger" onclick="toggleMenu()">☰</button>
         <div class="nav-links" id="navMenu">
-            <a href="/admin/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
-            <a href="/admin/stats" class="{{ 'active' if active_page == 'stats' else '' }}">Statistics</a>
-            <a href="/admin/backups" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
-            <a href="/admin/logout">Logout</a>
+            <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">Home</a>
+            {% if session.user_id %}
+                <a href="/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
+            {% endif %}
+            <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">Find Skills</a>
+            <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">Jobs</a>
+            <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">Vendors</a>
+            {% if session.user_id %}
+                <a href="/messages" id="messagesLink">📨 Messages <span id="messagesBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
+                <a href="/notifications" id="notifLink">🔔 Notifications <span id="notifBadge" class="badge" style="background:#dc3545; color:white; display:none;"></span></a>
+                <a href="/logout">Logout</a>
+            {% else %}
+                <a href="/login" class="{{ 'active' if active_page == 'login' else '' }}">Login</a>
+                <a href="/signup" class="{{ 'active' if active_page == 'signup' else '' }}">Sign Up</a>
+            {% endif %}
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
         </div>
     </nav>
+
     <div class="container">
         {content}
     </div>
-    <footer>&copy; 2025 RockabyTech – Admin Panel</footer>
+
+    <!-- ===== BOTTOM NAVIGATION BAR (Mobile) ===== -->
+    <div class="bottom-nav" id="bottomNav">
+        <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">
+            <i class="fas fa-search"></i>
+            <span>Find</span>
+        </a>
+        <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">
+            <i class="fas fa-briefcase"></i>
+            <span>Jobs</span>
+        </a>
+        <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">
+            <i class="fas fa-store"></i>
+            <span>Vendors</span>
+        </a>
+        {% if session.user_id %}
+            <a href="/messages" id="bottomMsgLink">
+                <i class="fas fa-envelope"></i>
+                <span>Messages</span>
+                <span id="bottomMsgBadge" class="badge" style="display:none;"></span>
+            </a>
+        {% else %}
+            <a href="/login">
+                <i class="fas fa-user"></i>
+                <span>Account</span>
+            </a>
+        {% endif %}
+    </div>
+
+    <footer>&copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬</footer>
+    <a href="https://wa.me/256751318876?text=Hi%20RockabyConnect%20Support" target="_blank" class="whatsapp-float">💬</a>
+
     <script>
-        function toggleMenu() {
-            document.getElementById('navMenu').classList.toggle('open');
+        // ===== MOBILE MENU =====
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobileMenu');
+            const overlay = document.getElementById('mobileOverlay');
+            menu.classList.toggle('open');
+            overlay.classList.toggle('show');
+            document.body.style.overflow = menu.classList.contains('open') ? 'hidden' : 'auto';
         }
+        function closeMobileMenu() {
+            const menu = document.getElementById('mobileMenu');
+            const overlay = document.getElementById('mobileOverlay');
+            menu.classList.remove('open');
+            overlay.classList.remove('show');
+            document.body.style.overflow = 'auto';
+        }
+
+        // ===== LIGHTBOX =====
+        function openLightbox(src) {
+            document.getElementById('lightbox').style.display = 'flex';
+            document.getElementById('lightbox-img').src = src;
+            document.body.style.overflow = 'hidden';
+        }
+        function closeLightbox() {
+            document.getElementById('lightbox').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+        document.getElementById('lightbox').addEventListener('click', function(e) {
+            if (e.target === this) closeLightbox();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeLightbox();
+        });
+
+        // ===== THEME TOGGLE =====
         function toggleTheme() {
             document.body.classList.toggle('dark-mode');
             const theme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
-            localStorage.setItem('rockabyconnect-admin-theme', theme);
+            localStorage.setItem('rockabyconnect-theme', theme);
         }
-        const savedTheme = localStorage.getItem('rockabyconnect-admin-theme');
+        const savedTheme = localStorage.getItem('rockabyconnect-theme');
         if (savedTheme === 'dark') {
             document.body.classList.add('dark-mode');
+        }
+
+        // ===== UNREAD NOTIFICATIONS BADGE =====
+        function updateNotifBadge() {
+            fetch('/api/unread-notifications')
+                .then(r => r.json())
+                .then(data => {
+                    const badges = document.querySelectorAll('#notifBadge, #mobileNotifBadge, #bottomMsgBadge');
+                    badges.forEach(badge => {
+                        if (data.count > 0) {
+                            badge.textContent = data.count;
+                            badge.style.display = 'inline-block';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    });
+                })
+                .catch(err => console.log('Error:', err));
+        }
+
+        function updateUnreadBadge() {
+            fetch('/api/unread-count')
+                .then(r => r.json())
+                .then(data => {
+                    const badges = document.querySelectorAll('#messagesBadge, #mobileMsgBadge, #bottomMsgBadge');
+                    badges.forEach(badge => {
+                        if (data.count > 0) {
+                            badge.textContent = data.count;
+                            badge.style.display = 'inline-block';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    });
+                })
+                .catch(err => console.log('Error:', err));
+        }
+
+        // ===== INITIALIZE =====
+        if (document.querySelector('#messagesBadge')) {
+            updateUnreadBadge();
+            setInterval(updateUnreadBadge, 15000);
+        }
+        if (document.querySelector('#notifBadge')) {
+            updateNotifBadge();
+            setInterval(updateNotifBadge, 15000);
+        }
+
+        // ===== CLIENT-SIDE IMAGE COMPRESSION =====
+        document.addEventListener('DOMContentLoaded', function() {
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                const fileInputs = form.querySelectorAll('input[type="file"][accept*="image/"]');
+                if (fileInputs.length === 0) return;
+
+                form.addEventListener('submit', function(e) {
+                    let hasLargeFile = false;
+                    const promises = [];
+
+                    fileInputs.forEach(input => {
+                        if (input.files.length > 0) {
+                            const file = input.files[0];
+                            if (file.size > 1 * 1024 * 1024) {
+                                hasLargeFile = true;
+                                promises.push(new Promise((resolve) => {
+                                    compressImage(file, function(compressedFile) {
+                                        const dt = new DataTransfer();
+                                        dt.items.add(compressedFile);
+                                        input.files = dt.files;
+                                        resolve();
+                                    });
+                                }));
+                            }
+                        }
+                    });
+
+                    if (hasLargeFile) {
+                        e.preventDefault();
+                        Promise.all(promises).then(() => {
+                            form.submit();
+                        });
+                    }
+                });
+            });
+        });
+
+        function compressImage(file, callback) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 1200;
+                    const MAX_HEIGHT = 1200;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height = Math.round(height * MAX_WIDTH / width);
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width = Math.round(width * MAX_HEIGHT / height);
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob(function(blob) {
+                        const compressedFile = new File([blob], file.name, {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        });
+                        callback(compressedFile);
+                    }, 'image/jpeg', 0.85);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
         }
     </script>
 </body>
@@ -1325,7 +1637,7 @@ login_page = base_template.replace("{title}", "Login").replace("{active_page}", 
 
 dashboard_template = base_template.replace("{title}", "Dashboard").replace("{active_page}", "dashboard").replace("{content}", """
     <div class="card">
-        <div class="card-header">Welcome, {session['user_name']}!</div>
+        <div class="card-header">Welcome, {user_name}!</div>
         <p style="color:var(--text-secondary);"><a href="/edit-name" style="font-size:0.85rem; color:var(--primary-dark);">Edit my name</a></p>
         <p style="color:#666;">Manage your freelance presence, vendor profile, and job postings.</p>
         <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
@@ -1893,7 +2205,7 @@ def update_name():
 def dashboard():
     user_id = session['user_id']
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
+    conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
 
     c.execute("SELECT * FROM providers WHERE user_id=?", (user_id,))
@@ -1990,6 +2302,7 @@ def dashboard():
         dashboard_template,
         title="Dashboard",
         active_page="dashboard",
+        user_name=session['user_name'],
         profile_section=profile_section,
         vendor_section=vendor_section,
         jobs_html=jobs_html
@@ -3492,17 +3805,24 @@ def apply_job(job_id):
         message = request.form.get('message', '').strip()
         attachment = request.files.get('attachment')
         filename = None
-        if attachment and allowed_file(attachment.filename):
-            filename = secure_filename(attachment.filename)
-            attachment.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        
+        # Allow any file type for attachment (PDF, DOC, DOCX, TXT, PNG, JPG, etc.)
+        if attachment and attachment.filename:
+            # Check if file type is allowed (extend ALLOWED_EXTENSIONS or use a separate list)
+            allowed_attachment_extensions = {'pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg', 'gif'}
+            ext = attachment.filename.rsplit('.', 1)[1].lower() if '.' in attachment.filename else ''
+            if ext in allowed_attachment_extensions or ext == '':
+                filename = secure_filename(attachment.filename)
+                attachment.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            else:
+                conn.close()
+                return f"File type .{ext} not allowed. Please upload PDF, DOC, DOCX, TXT, PNG, JPG, or GIF.", 400
         c.execute("""
             INSERT INTO job_applications (job_id, applicant_id, message, attachment)
             VALUES (?,?,?,?)
         """, (job_id, user_id, message, filename))
         conn.commit()
-        # ---- NOTIFICATION ----
         add_notification(job[1], 'job_application', f'{session["user_name"]} applied for "{job[0]}"', link=f'/job/{job_id}/applicants')
-        # ---------------------
         conn.close()
         return redirect(url_for('my_applications'))
 
@@ -3514,7 +3834,8 @@ def apply_job(job_id):
             <label>Message (optional)</label>
             <textarea name="message" rows="4" placeholder="Why are you the right person for this job?"></textarea>
             <label>Attachment (optional – resume, portfolio)</label>
-            <input type="file" name="attachment" accept=".pdf,.doc,.docx,.txt,.jpg,.png">
+            <input type="file" name="attachment" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif">
+            <p style="font-size:0.8rem; color:var(--text-secondary);">Supported: PDF, DOC, DOCX, TXT, PNG, JPG, GIF</p>
             <button type="submit" class="btn" style="margin-top:20px;">Submit Application</button>
         </form>
     </div>
