@@ -299,7 +299,7 @@ import contextlib
 @contextlib.contextmanager
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")   # 30 seconds
+    conn.execute("PRAGMA busy_timeout = 30000;")
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -597,51 +597,50 @@ def process_referral(user_id, phone):
         return False
     
     ref_code = session['referral_code']
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
-    c = conn.cursor()
     
-    # Find the referrer (user who owns this referral code)
-    c.execute("SELECT user_id FROM referral_codes WHERE code = ?", (ref_code,))
-    referrer = c.fetchone()
-    if not referrer:
-        conn.close()
-        return False
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        
+        # Find the referrer (user who owns this referral code)
+        c.execute("SELECT user_id FROM referral_codes WHERE code = ?", (ref_code,))
+        referrer = c.fetchone()
+        if not referrer:
+            return False
+        
+        referrer_id = referrer[0]
+        
+        # Prevent self-referral
+        if referrer_id == user_id:
+            return False
+        
+        # Check if this user has already been referred by this referrer
+        c.execute("SELECT id FROM referrals WHERE referrer_id = ? AND referred_user_id = ?", (referrer_id, user_id))
+        if c.fetchone():
+            return False
+        
+        # Get referral settings
+        c.execute("SELECT reward_percentage, reward_type, max_referrals FROM referral_settings WHERE is_active=1 LIMIT 1")
+        settings = c.fetchone()
+        if not settings:
+            settings = (10, 'discount', 10)
+        
+        reward_percentage, reward_type, max_referrals = settings
+        
+        # Count completed referrals for this referrer
+        count = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status IN ('completed', 'rewarded')", (referrer_id,)).fetchone()[0]
+        if count >= max_referrals:
+            return False
+        
+        # Insert pending referral
+        c.execute("""
+            INSERT INTO referrals (referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type)
+            VALUES (?, ?, ?, 'pending', 0, ?)
+        """, (referrer_id, user_id, phone, reward_type))
+        conn.commit()
     
-    referrer_id = referrer[0]
-    
-    # Prevent self-referral
-    if referrer_id == user_id:
-        conn.close()
-        return False
-    
-    # Check if this user has already been referred by this referrer
-    c.execute("SELECT id FROM referrals WHERE referrer_id = ? AND referred_user_id = ?", (referrer_id, user_id))
-    if c.fetchone():
-        conn.close()
-        return False
-    
-    # Get referral settings
-    c.execute("SELECT reward_percentage, reward_type, max_referrals FROM referral_settings WHERE is_active=1 LIMIT 1")
-    settings = c.fetchone()
-    if not settings:
-        settings = (10, 'discount', 10)  # Default
-    
-    reward_percentage, reward_type, max_referrals = settings
-    
-    # Count completed referrals for this referrer
-    count = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status IN ('completed', 'rewarded')", (referrer_id,)).fetchone()[0]
-    if count >= max_referrals:
-        conn.close()
-        return False
-    
-    # Insert pending referral
-    c.execute("""
-        INSERT INTO referrals (referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type)
-        VALUES (?, ?, ?, 'pending', 0, ?)
-    """, (referrer_id, user_id, phone, reward_type))
-    conn.commit()
-    conn.close()
+    # Clear the session
+    session.pop('referral_code', None)
+    return True)
 
    # ============================================================
 # NOTIFICATION HELPERS
@@ -2259,23 +2258,24 @@ def signup():
             return "All fields required. <a href='/signup'>Back</a>"
         hashed = generate_password_hash(password)
         try:
-            conn = sqlite3.connect(DB_PATH)
-            conn.execute("PRAGMA busy_timeout = 30000;")
-            c = conn.cursor()
-            c.execute("INSERT INTO users (phone, name, password_hash) VALUES (?, ?, ?)", (phone, name, hashed))
-            user_id = c.lastrowid
-            conn.commit()
-            conn.close()
+            # Use the context manager to ensure connection is closed
+            with get_db_connection() as conn:
+                c = conn.cursor()
+                c.execute("INSERT INTO users (phone, name, password_hash) VALUES (?, ?, ?)", (phone, name, hashed))
+                user_id = c.lastrowid
+                conn.commit()
             
             # ---- PROCESS REFERRAL ----
             process_referral(user_id, phone)
             
-            # ---- FIXED: add notification with link ----
+            # ---- add notification with link ----
             add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready.', link='/dashboard')
             
             return redirect(url_for('login'))
         except sqlite3.IntegrityError:
             return "Phone number already registered. <a href='/login'>Login</a>"
+        except sqlite3.OperationalError as e:
+            return f"Database error: {str(e)}. Please try again.", 500
     return render_user_template(signup_page, title="Sign Up", active_page="signup")
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -2283,11 +2283,10 @@ def login():
     if request.method == 'POST':
         phone = request.form['phone'].strip()
         password = request.form['password']
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT id, name, password_hash FROM users WHERE phone=?", (phone,))
-        user = c.fetchone()
-        conn.close()
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT id, name, password_hash FROM users WHERE phone=?", (phone,))
+            user = c.fetchone()
         if user and check_password_hash(user[2], password):
             session['user_id'] = user[0]
             session['user_name'] = user[1]
