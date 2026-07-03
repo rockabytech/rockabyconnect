@@ -1701,22 +1701,76 @@ base_template = """
                 .catch(err => console.log('Error:', err));
         }
 
-        function updateUnreadBadge() {
-            fetch('/api/unread-count')
-                .then(r => r.json())
-                .then(data => {
-                    const badges = document.querySelectorAll('#messagesBadge, #mobileMsgBadge, #bottomMsgBadge');
-                    badges.forEach(badge => {
-                        if (data.count > 0) {
-                            badge.textContent = data.count;
-                            badge.style.display = 'inline-block';
-                        } else {
-                            badge.style.display = 'none';
-                        }
-                    });
-                })
-                .catch(err => console.log('Error:', err));
-        }
+        // ============================================================
+// UNREAD BADGES (Messages & Notifications)
+// ============================================================
+function updateUnreadBadge() {
+    fetch('/api/unread-count')
+        .then(r => r.json())
+        .then(data => {
+            const count = data.count || 0;
+            // Navbar (desktop)
+            const badge = document.getElementById('messagesBadge');
+            if (badge) {
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+            // Mobile menu
+            const mobileBadge = document.getElementById('mobileMsgBadge');
+            if (mobileBadge) {
+                if (count > 0) {
+                    mobileBadge.textContent = count;
+                    mobileBadge.style.display = 'inline-block';
+                } else {
+                    mobileBadge.style.display = 'none';
+                }
+            }
+            // Bottom nav
+            const bottomBadge = document.getElementById('bottomMsgBadge');
+            if (bottomBadge) {
+                if (count > 0) {
+                    bottomBadge.textContent = count;
+                    bottomBadge.style.display = 'inline-block';
+                } else {
+                    bottomBadge.style.display = 'none';
+                }
+            }
+        })
+        .catch(err => console.log('Error fetching unread count:', err));
+}
+
+function updateNotifBadge() {
+    fetch('/api/unread-notifications')
+        .then(r => r.json())
+        .then(data => {
+            const count = data.count || 0;
+            // Navbar (desktop)
+            const badge = document.getElementById('notifBadge');
+            if (badge) {
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+            // Mobile menu
+            const mobileBadge = document.getElementById('mobileNotifBadge');
+            if (mobileBadge) {
+                if (count > 0) {
+                    mobileBadge.textContent = count;
+                    mobileBadge.style.display = 'inline-block';
+                } else {
+                    mobileBadge.style.display = 'none';
+                }
+            }
+        })
+        .catch(err => console.log('Error fetching unread notifications:', err));
+}
 
         // ============================================================
         // INITIALIZE BADGES
@@ -2186,10 +2240,18 @@ job_form_template = base_template.replace("{title}", "{job_form_title}").replace
 """)
 
 list_page = base_template.replace("{title}", "Find Skills").replace("{active_page}", "list").replace("{content}", """
+    <div class="hero" style="padding:25px 20px;">
+        <h1 style="font-size:1.6rem;">🔍 Find Skilled Workers</h1>
+        <p>Search for trusted freelancers near you</p>
+    </div>
     <div class="card">
         <div class="card-header">Skill Providers</div>
-        <div class="search-bar"><input type="text" id="searchInput" placeholder="Filter by skill, district, village..." onkeyup="filterCards()"></div>
-        <div id="providerCards">{cards}</div>
+        <div class="search-bar" style="margin-bottom:20px;">
+            <input type="text" id="searchInput" placeholder="Filter by skill, district, village..." onkeyup="filterCards()" style="width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+        </div>
+        <div id="providerCards" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
+            {cards}
+        </div>
     </div>
     <script>
         function filterCards() {
@@ -2202,21 +2264,27 @@ list_page = base_template.replace("{title}", "Find Skills").replace("{active_pag
 """)
 
 job_list_page = base_template.replace("{title}", "Jobs").replace("{active_page}", "jobs").replace("{content}", """
+    <div class="hero" style="padding:25px 20px;">
+        <h1 style="font-size:1.6rem;">💼 Available Jobs</h1>
+        <p>Find the perfect opportunity or hire the right talent</p>
+    </div>
     <div class="card">
-        <div class="card-header">Available Jobs</div>
-        <div class="search-bar">
-            <input type="text" id="jobSearch" placeholder="Search by title, location..." onkeyup="filterJobs()">
+        <div class="card-header">Job Listings</div>
+        <div class="search-bar" style="margin-bottom:15px;">
+            <input type="text" id="jobSearch" placeholder="Search by title, location..." onkeyup="filterJobs()" style="width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
         </div>
-        <div style="display:flex; gap:10px; margin-bottom:15px;">
-            <select id="statusFilter" onchange="filterJobs()">
+        <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+            <select id="statusFilter" onchange="filterJobs()" style="padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.85rem;">
                 <option value="">All Statuses</option>
                 <option value="open">Open</option>
                 <option value="taken">Taken</option>
                 <option value="closed">Closed</option>
             </select>
-            <input type="text" id="locationFilter" placeholder="Filter by location" onkeyup="filterJobs()" style="max-width:200px;">
+            <input type="text" id="locationFilter" placeholder="Filter by location" onkeyup="filterJobs()" style="flex:1; padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.85rem;">
         </div>
-        <div id="jobCards">{jobs_html}</div>
+        <div id="jobCards" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px;">
+            {jobs_html}
+        </div>
     </div>
     <script>
         function filterJobs() {
@@ -2234,27 +2302,11 @@ job_list_page = base_template.replace("{title}", "Jobs").replace("{active_page}"
     </script>
 """)
 
-vendor_list_page = base_template.replace("{title}", "Vendors").replace("{active_page}", "vendors").replace("{content}", """
-    <div class="card">
-        <div class="card-header">Local Vendors & Shops</div>
-        <div class="search-bar"><input type="text" id="vendorSearch" placeholder="Search by business name, location, landmark..." onkeyup="filterVendors()"></div>
-        <div id="vendorCards">{cards}</div>
-    </div>
-    <script>
-        function filterVendors() {
-            const q = document.getElementById('vendorSearch').value.toLowerCase();
-            document.querySelectorAll('.vendor-card').forEach(card => {
-                card.style.display = card.innerText.toLowerCase().includes(q) ? 'flex' : 'none';
-            });
-        }
-    </script>
-""")
-
 vendor_detail_template = base_template.replace("{title}", "Vendor Detail").replace("{active_page}", "vendors").replace("{content}", """
     <div class="card">
         <div class="card-header">{business_name}</div>
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
-            <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
+            <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:300px; min-height:250px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
         </a>
         {extra_images}
         <!-- ===== VIDEO DISPLAY ===== -->
@@ -2274,7 +2326,7 @@ provider_detail_template = base_template.replace("{title}", "Provider Detail").r
     <div class="card">
         <div class="card-header">{provider_name}</div>
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
-            <img src="{img_url}" class="profile-pic clickable-img" style="width:120px; height:120px; margin-bottom:15px; cursor:pointer;">
+            <img src="{img_url}" class="profile-pic clickable-img" style="width:200px; height:200px; margin-bottom:15px; cursor:pointer; object-fit:cover; border-radius:50%;">
         </a>
         <!-- ===== VIDEO DISPLAY ===== -->
         {video_display}
@@ -3461,12 +3513,12 @@ def vendor_detail(vendor_id):
     # ---- Build extra images – all same size, clickable with lightbox ----
     extra_images = ""
     if img2 or img3:
-        extra_images = '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">'
-        if img2:
-            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img2}\'); return false;" style="flex:1; min-width:150px;"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
-        if img3:
-            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;" style="flex:1; min-width:150px;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
-        extra_images += '</div>'
+    extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:12px; margin-bottom:15px;">'
+    if img2:
+        extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img2}\'); return false;"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
+    if img3:
+        extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
+    extra_images += '</div>'
 
     detail_html = vendor_detail_template
     detail_html = detail_html.replace("{business_name}", bname)
