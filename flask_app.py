@@ -2431,32 +2431,6 @@ provider_detail_template = base_template.replace("{title}", "Provider Detail").r
     </div>
 """)
 
-provider_detail_template = base_template.replace("{title}", "Provider Detail").replace("{active_page}", "list").replace("{content}", """
-    <div class="card">
-        <div class="card-header">
-            {provider_name}
-            <a href="/list" class="btn btn-small btn-outline">← Back</a>
-        </div>
-        <!-- Clickable profile photo -->
-        <a href="#" onclick="openLightbox('{img_url}'); return false;">
-            <img src="{img_url}" class="profile-pic clickable-img" style="width:100%; max-width:180px; height:180px; object-fit:cover; border-radius:50%; margin-bottom:15px; cursor:pointer; display:block; margin-left:auto; margin-right:auto;">
-        </a>
-        {video_display}
-        <!-- Pill for skills -->
-        {skill_pill}
-        <p><strong>Location:</strong> {district}{village_display}</p>
-        <p><strong>Bio:</strong> {bio}</p>
-        <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
-        {contact_display}
-        <div style="margin-top:10px;">
-            {message_button}
-        </div>
-        <hr>
-        <h3>Reviews ({avg_rating}/5)</h3>
-        <div id="reviews">{reviews_html}</div>
-        {review_form}
-    </div>
-""")
 edit_name_page = base_template.replace("{title}", "Edit Name").replace("{content}", """
     <div class="card">
         <div class="card-header">Edit Your Name</div>
