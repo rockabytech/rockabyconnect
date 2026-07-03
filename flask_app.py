@@ -1575,6 +1575,89 @@ base_template = """
         }
 
         /* ================================================
+           REVIEW FORM – Star Rating & Comment Box
+           ================================================ */
+
+        .review-form {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 16px;
+        }
+
+        .review-form label {
+            font-weight: 600;
+            margin-top: 0;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        /* Star rating */
+        .star-rating {
+            display: flex;
+            flex-direction: row-reverse;
+            justify-content: flex-end;
+            gap: 6px;
+            margin: 8px 0 16px 0;
+        }
+
+        .star-rating input {
+            display: none;
+        }
+
+        .star-rating label {
+            font-size: 2rem;
+            color: var(--border);
+            cursor: pointer;
+            transition: var(--transition);
+            line-height: 1;
+            margin-bottom: 0;
+        }
+
+        .star-rating label:hover,
+        .star-rating label:hover ~ label,
+        .star-rating input:checked ~ label {
+            color: var(--primary);
+        }
+
+        /* Comment textarea */
+        .review-form textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text);
+            font-size: 0.95rem;
+            resize: vertical;
+            min-height: 80px;
+            transition: var(--transition);
+            margin-bottom: 12px;
+        }
+
+        .review-form textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(245, 175, 25, 0.2);
+        }
+
+        .review-form .btn {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+        }
+
+        /* Dark mode */
+        body.dark-mode .review-form textarea {
+            background: rgba(30, 41, 59, 0.6);
+        }
+
+        body.theme-neon .review-form textarea:focus {
+            border-color: #00d4ff;
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.3);
+        }
+
+        /* ================================================
            RESPONSIVE IMAGES
            ================================================ */
         .profile-pic {
@@ -3785,36 +3868,46 @@ def provider_detail(provider_id):
         for rev in reviews:
             stars = ''.join(['★' if i < rev[1] else '☆' for i in range(5)])
             reviews_html += f"""
-            <div class="review-card">
-                <strong>{rev[0]}</strong> - <span class="rating">{stars}</span>
-                <br><small>{rev[3][:10]}</small>
-                <p>{rev[2]}</p>
+            <div class="review-item">
+                <div class="reviewer">
+                    <div class="avatar">{rev[0][0].upper()}</div>
+                    <span class="name">{rev[0]}</span>
+                    <span class="date">{rev[3][:10]}</span>
+                </div>
+                <div class="stars">{stars}</div>
+                <div class="comment">{rev[2]}</div>
             </div>"""
     else:
-        reviews_html = "<p>No reviews yet.</p>"
+        reviews_html = "<p style='color:var(--text-secondary);'>No reviews yet. Be the first to leave a review!</p>"
 
+    # ---- Improved review form ----
     review_form = ""
     if logged_in:
         review_form = f"""
-        <hr>
-        <h4>Leave a Review</h4>
-        <form method="POST" action="/review/{provider_id}">
-            <label>Rating</label>
-            <select name="rating" required>
-                <option value="">Select</option>
-                <option value="5">★★★★★ (5)</option>
-                <option value="4">★★★★☆ (4)</option>
-                <option value="3">★★★☆☆ (3)</option>
-                <option value="2">★★☆☆☆ (2)</option>
-                <option value="1">★☆☆☆☆ (1)</option>
-            </select>
-            <label>Comment</label>
-            <textarea name="comment" rows="2"></textarea>
-            <button type="submit" class="btn btn-small" style="margin-top:10px;">Submit Review</button>
-        </form>
+        <div class="review-form">
+            <h4 style="margin-bottom:12px;">Leave a Review</h4>
+            <form method="POST" action="/review/{provider_id}">
+                <label>Rating</label>
+                <div class="star-rating">
+                    <input type="radio" id="star5" name="rating" value="5" />
+                    <label for="star5" title="5 stars">★</label>
+                    <input type="radio" id="star4" name="rating" value="4" />
+                    <label for="star4" title="4 stars">★</label>
+                    <input type="radio" id="star3" name="rating" value="3" />
+                    <label for="star3" title="3 stars">★</label>
+                    <input type="radio" id="star2" name="rating" value="2" />
+                    <label for="star2" title="2 stars">★</label>
+                    <input type="radio" id="star1" name="rating" value="1" />
+                    <label for="star1" title="1 star">★</label>
+                </div>
+                <label for="comment">Comment</label>
+                <textarea id="comment" name="comment" rows="3" placeholder="Share your experience..."></textarea>
+                <button type="submit" class="btn btn-success">Submit Review</button>
+            </form>
+        </div>
         """
     else:
-        review_form = "<p><a href='/login'>Login</a> to leave a review.</p>"
+        review_form = '<p style="margin-top:12px;"><a href="/login" class="btn btn-small">Login to leave a review</a></p>'
 
     # Build final HTML
     skill_pill = f'<span class="pill-title"><i class="fas fa-tools"></i> {skills}</span>' if skills else ''
