@@ -1,4 +1,7 @@
 import os, sqlite3, re, random, string, json, shutil
+import os
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 from flask import Flask, render_template_string, request, redirect, url_for, session, make_response, send_from_directory, send_file
 from datetime import date, timedelta, datetime
 from collections import defaultdict
@@ -271,6 +274,16 @@ def init_db():
         FOREIGN KEY(receiver_id) REFERENCES users(id)
     )''')
 
+    c.execute('''CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        endpoint TEXT NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
     # ---- VIDEO COLUMN FIX (for existing databases) ----
     for table in ['providers', 'vendors', 'jobs']:
         c.execute(f"PRAGMA table_info({table})")
@@ -481,6 +494,12 @@ def render_user_template(template, title="", active_page="", **kwargs):
         template = template.replace('{title}', title)
     if '{active_page}' in template:
         template = template.replace('{active_page}', active_page)
+    
+    # ---- Replace VAPID public key placeholder ----
+    vapid_public_key = os.environ.get('VAPID_PUBLIC_KEY', '')
+    template = template.replace('{{ VAPID_PUBLIC_KEY }}', vapid_public_key)
+    # --------------------------------------------
+    
     for key, value in kwargs.items():
         template = template.replace(f'{{{key}}}', str(value))
     
@@ -591,7 +610,7 @@ def process_referral(user_id, phone):
 # ============================================================
 
 def add_notification(user_id, type, message, link=None):
-    """Add a notification for a user."""
+    """Add a notification for a user and send a push notification."""
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.execute("PRAGMA busy_timeout = 30000;")
@@ -602,8 +621,24 @@ def add_notification(user_id, type, message, link=None):
         )
         conn.commit()
         conn.close()
+        
+        # Map notification type to a user-friendly title
+        title_map = {
+            'job_application': '📋 New Job Application',
+            'application_status': '🔄 Application Status Updated',
+            'application_note': '📝 New Note on Application',
+            'message': '💬 New Message',
+            'boost_approved': '⭐ Boost Approved',
+            'boost_rejected': '❌ Boost Rejected',
+            'email': '📧 Welcome'
+        }
+        title = title_map.get(type, '🔔 Notification')
+        
+        # Send push notification
+        send_push_notification(user_id, title, message, link or '/')
+        
     except sqlite3.OperationalError as e:
-        print(f"Notification failed: {e}")
+        print(f"Notification DB error: {e}")
 
 def get_unread_notifications(user_id):
     """Get count of unread notifications for a user."""
@@ -663,6 +698,58 @@ def get_user_name(user_id):
     row = c.fetchone()
     conn.close()
     return row[0] if row else 'Unknown'
+
+def send_push_notification(user_id, title, body, url='/'):
+    """Send a push notification to a user's subscribed devices."""
+    try:
+        from webpush import WebPusher
+    except ImportError:
+        print("web-push not installed – skipping push")
+        return
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=?", (user_id,))
+    subscriptions = c.fetchall()
+    conn.close()
+    
+    if not subscriptions:
+        return
+    
+    # Get VAPID keys from environment
+    vapid_private = os.environ.get('VAPID_PRIVATE_KEY', '')
+    vapid_public = os.environ.get('VAPID_PUBLIC_KEY', '')
+    if not vapid_private or not vapid_public:
+        print("VAPID keys not configured – push skipped")
+        return
+    
+    try:
+        webp = WebPusher(
+            vapid_private_key=vapid_private,
+            vapid_public_key=vapid_public,
+            subject='mailto:support@rockabytech.com'
+        )
+        
+        payload = {
+            'title': title,
+            'body': body,
+            'url': url,
+            'icon': '/static/icon-192.png',
+            'badge': '/static/icon-192.png'
+        }
+        
+        for endpoint, p256dh, auth in subscriptions:
+            try:
+                webp.send(
+                    endpoint=endpoint,
+                    p256dh=p256dh,
+                    auth=auth,
+                    data=payload
+                )
+            except Exception as e:
+                print(f"Push send error for {endpoint}: {e}")
+    except Exception as e:
+        print(f"Push notification error: {e}")
 
 def get_unread_count(user_id):
     conn = sqlite3.connect(DB_PATH)
@@ -977,6 +1064,26 @@ base_template = """
             border-radius: 10px;
             float: right;
             margin-top: 2px;
+        }
+
+        /* ===== INSTALL APP BUTTON IN MOBILE MENU ===== */
+        .install-app-btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            transition: var(--transition);
+            display: none;
+        }
+        .install-app-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
         }
 
         /* ================================================
@@ -1452,6 +1559,10 @@ base_template = """
             <a href="/notifications" onclick="closeMobileMenu()">🔔 Notifications <span id="mobileNotifBadge" class="badge"></span></a>
             <a href="/refer" onclick="closeMobileMenu()">🎁 Refer a Friend</a>
             <a href="/settings" onclick="closeMobileMenu()">⚙️ Settings</a>
+            <!-- ===== INSTALL APP BUTTON IN MOBILE MENU ===== -->
+            <button id="installBtnMobile" class="install-app-btn" onclick="installApp()">
+                <i class="fas fa-download"></i> Install App
+            </button>
             <a href="/logout" onclick="closeMobileMenu()" class="logout-link">🚪 Logout</a>
         {% else %}
             <a href="/login" onclick="closeMobileMenu()">🔐 Login</a>
@@ -1516,7 +1627,9 @@ base_template = """
     <a href="https://wa.me/256751318876?text=Hi%20RockabyConnect%20Support" target="_blank" class="whatsapp-float">💬</a>
 
     <script>
-        // ===== MOBILE MENU =====
+        // ============================================================
+        // MOBILE MENU
+        // ============================================================
         function toggleMobileMenu() {
             const menu = document.getElementById('mobileMenu');
             const overlay = document.getElementById('mobileOverlay');
@@ -1532,7 +1645,9 @@ base_template = """
             document.body.style.overflow = 'auto';
         }
 
-        // ===== LIGHTBOX =====
+        // ============================================================
+        // LIGHTBOX
+        // ============================================================
         function openLightbox(src) {
             document.getElementById('lightbox').style.display = 'flex';
             document.getElementById('lightbox-img').src = src;
@@ -1549,7 +1664,9 @@ base_template = """
             if (e.key === 'Escape') closeLightbox();
         });
 
-        // ===== THEME TOGGLE =====
+        // ============================================================
+        // THEME TOGGLE
+        // ============================================================
         function toggleTheme() {
             document.body.classList.toggle('dark-mode');
             const theme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
@@ -1560,7 +1677,9 @@ base_template = """
             document.body.classList.add('dark-mode');
         }
 
-        // ===== UNREAD BADGES =====
+        // ============================================================
+        // UNREAD BADGES
+        // ============================================================
         function updateNotifBadge() {
             fetch('/api/unread-notifications')
                 .then(r => r.json())
@@ -1595,7 +1714,9 @@ base_template = """
                 .catch(err => console.log('Error:', err));
         }
 
-        // ===== INITIALIZE BADGES =====
+        // ============================================================
+        // INITIALIZE BADGES
+        // ============================================================
         if (document.querySelector('#messagesBadge')) {
             updateUnreadBadge();
             setInterval(updateUnreadBadge, 15000);
@@ -1605,7 +1726,101 @@ base_template = """
             setInterval(updateNotifBadge, 15000);
         }
 
-        // ===== CLIENT-SIDE IMAGE COMPRESSION =====
+        // ============================================================
+        // PWA INSTALL PROMPT
+        // ============================================================
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const installBtn = document.getElementById('installBtnMobile');
+            if (installBtn) installBtn.style.display = 'block';
+        });
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((result) => {
+                    if (result.outcome === 'accepted') {
+                        document.getElementById('installBtnMobile').style.display = 'none';
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        }
+
+        window.addEventListener('appinstalled', () => {
+            document.getElementById('installBtnMobile').style.display = 'none';
+        });
+
+        // ============================================================
+        // PUSH NOTIFICATIONS
+        // ============================================================
+        function subscribeToPush() {
+            if (!('serviceWorker' in navigator)) {
+                console.log('Service Worker not supported');
+                return;
+            }
+
+            navigator.serviceWorker.ready.then(registration => {
+                registration.pushManager.getSubscription().then(subscription => {
+                    if (subscription) {
+                        console.log('Already subscribed to push');
+                        return;
+                    }
+
+                    Notification.requestPermission().then(permission => {
+                        if (permission !== 'granted') {
+                            console.log('Push permission denied');
+                            return;
+                        }
+
+                        const applicationServerKey = urlBase64ToUint8Array('{{ VAPID_PUBLIC_KEY }}');
+
+                        registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: applicationServerKey
+                        }).then(subscription => {
+                            fetch('/api/subscribe', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    endpoint: subscription.endpoint,
+                                    keys: {
+                                        p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                                        auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                                    }
+                                })
+                            });
+                        }).catch(err => {
+                            console.log('Push subscription error:', err);
+                        });
+                    });
+                });
+            });
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        // Automatically subscribe if the user is logged in
+        {% if session.user_id %}
+            setTimeout(subscribeToPush, 3000);
+        {% endif %}
+
+        // ============================================================
+        // CLIENT-SIDE IMAGE COMPRESSION
+        // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
             const forms = document.querySelectorAll('form');
             forms.forEach(form => {
@@ -4642,6 +4857,40 @@ def delete_job(job_id):
     conn.commit()
     conn.close()
     return redirect('/dashboard')
+
+@app.route('/api/subscribe', methods=['POST'])
+@login_required
+def subscribe_push():
+    """Subscribe a user to push notifications."""
+    data = request.get_json()
+    if not data or 'endpoint' not in data or 'keys' not in data:
+        return {'error': 'Invalid subscription data'}, 400
+    
+    user_id = session['user_id']
+    endpoint = data['endpoint']
+    p256dh = data['keys']['p256dh']
+    auth = data['keys']['auth']
+    
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        # Check if subscription already exists
+        c.execute("SELECT id FROM push_subscriptions WHERE user_id=? AND endpoint=?", (user_id, endpoint))
+        if c.fetchone():
+            # Update existing
+            c.execute("""
+                UPDATE push_subscriptions 
+                SET p256dh=?, auth=?, created_at=CURRENT_TIMESTAMP
+                WHERE user_id=? AND endpoint=?
+            """, (p256dh, auth, user_id, endpoint))
+        else:
+            # Insert new
+            c.execute("""
+                INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, endpoint, p256dh, auth))
+        conn.commit()
+    
+    return {'status': 'subscribed'}, 201
 
 
 # ============================================================
