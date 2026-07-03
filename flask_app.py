@@ -3417,7 +3417,6 @@ def list_providers():
         feat = '<span class="badge badge-available" style="background:var(--primary);">FEATURED</span>' if active_featured else ''
         location_display = f"{district}{', ' + village if village else ''}"
         
-        # ---- Pill-styled user name ----
         name_display = f'<span class="pill-title"><i class="fas fa-user"></i> {name}</span>'
         
         if logged_in:
@@ -3430,11 +3429,15 @@ def list_providers():
         <div class="provider-card">
             {img_tag}
             <div class="provider-info">
-                <h3>{name_display} <span class="badge badge-{status_class}">{status}</span> {feat}</h3>
+                <h3><a href="/provider/{pid}" style="color:inherit; text-decoration:none;">{name_display}</a> <span class="badge badge-{status_class}">{status}</span> {feat}</h3>
                 <p class="meta"><strong>{skills}</strong> · {location_display}</p>
                 <p>{bio or ''}</p>
                 {phone_display}
                 {wa_button}
+                <!-- View Details Button -->
+                <div style="margin-top:8px;">
+                    <a href="/provider/{pid}" class="btn btn-small btn-outline">View Details</a>
+                </div>
             </div>
         </div>"""
     if not cards_html:
@@ -3531,7 +3534,6 @@ def list_vendors():
         feat_badge = '<span class="badge badge-available" style="background:var(--primary);">FEATURED</span>' if active_feat else ''
         loc_display = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
         
-        # ---- Pill-styled business name ----
         name_display = f'<span class="pill-title"><i class="fas fa-store"></i> {bname}</span>'
         
         if logged_in:
@@ -3542,10 +3544,14 @@ def list_vendors():
         <div class="vendor-card">
             {img_tag}
             <div class="vendor-info">
-                <h3>{name_display} <span class="badge badge-{status_class}">{status}</span> {feat_badge}</h3>
+                <h3><a href="/vendor/{vid}" style="color:inherit; text-decoration:none;">{name_display}</a> <span class="badge badge-{status_class}">{status}</span> {feat_badge}</h3>
                 <p class="meta">{loc_display}</p>
                 <p>{bio or ''}</p>
                 {contact}
+                <!-- View Details Button -->
+                <div style="margin-top:8px;">
+                    <a href="/vendor/{vid}" class="btn btn-small btn-outline">View Details</a>
+                </div>
             </div>
         </div>"""
     if not cards:
