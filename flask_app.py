@@ -3662,7 +3662,7 @@ def list_providers():
     c.execute("UPDATE providers SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
     conn.commit()
     c.execute("""
-        SELECT p.id, u.name, p.skills, u.phone, p.district, p.village, p.bio, p.profile_pic, p.status, p.featured, p.featured_expiry
+        SELECT p.id, u.id as user_id, u.name, p.skills, u.phone, p.district, p.village, p.bio, p.profile_pic, p.status, p.featured, p.featured_expiry
         FROM providers p JOIN users u ON p.user_id = u.id
         ORDER BY CASE WHEN p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= date('now')) THEN 0 ELSE 1 END, p.id DESC
     """)
@@ -3671,7 +3671,7 @@ def list_providers():
 
     cards_html = ""
     for p in providers:
-        pid, name, skills, phone, district, village, bio, pic, status, featured, expiry = p
+        pid, user_id, name, skills, phone, district, village, bio, pic, status, featured, expiry = p
         status_class = status.lower().replace(' ', '-')
         img_tag = f'<img src="/static/uploads/{pic}" class="profile-pic" alt="{name}">' if pic else '<div class="profile-pic" style="background:#ddd; display:flex; align-items:center; justify-content:center; font-size:2rem;">👤</div>'
         active_featured = is_featured_now(featured, expiry)
@@ -3686,6 +3686,12 @@ def list_providers():
         else:
             phone_display = '<p style="margin-top:5px; color:var(--text-secondary);">📞 <a href="/login">Sign in to view contact</a></p>'
             wa_button = ''
+        
+        # ---- Message button (only if logged in and not viewing own profile) ----
+        message_button = ""
+        if logged_in and session['user_id'] != user_id:
+            message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+
         cards_html += f"""
         <div class="provider-card">
             {img_tag}
@@ -3695,9 +3701,9 @@ def list_providers():
                 <p>{bio or ''}</p>
                 {phone_display}
                 {wa_button}
-                <!-- View Details Button -->
-                <div style="margin-top:8px;">
+                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
                     <a href="/provider/{pid}" class="btn btn-small btn-outline">View Details</a>
+                    {message_button}
                 </div>
             </div>
         </div>"""
