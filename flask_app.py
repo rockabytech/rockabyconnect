@@ -2404,29 +2404,30 @@ job_list_page = base_template.replace("{title}", "Jobs").replace("{active_page}"
     </script>
 """)
 
-vendor_detail_template = base_template.replace("{title}", "Vendor Detail").replace("{active_page}", "vendors").replace("{content}", """
+provider_detail_template = base_template.replace("{title}", "Provider Detail").replace("{active_page}", "list").replace("{content}", """
     <div class="card">
         <div class="card-header">
-            {business_name}
-            <a href="/vendors" class="btn btn-small btn-outline">← Back</a>
+            {provider_name}
+            <a href="/list" class="btn btn-small btn-outline">← Back</a>
         </div>
-        <!-- Main image (clickable) -->
+        <!-- Clickable profile photo -->
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
-            <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:300px; min-height:180px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
+            <img src="{img_url}" class="profile-pic clickable-img" style="width:100%; max-width:180px; height:180px; object-fit:cover; border-radius:50%; margin-bottom:15px; cursor:pointer; display:block; margin-left:auto; margin-right:auto;">
         </a>
-        <!-- Extra images (clickable) -->
-        {extra_images}
-        <!-- Video -->
         {video_display}
-        <!-- Pill for business name -->
-        {name_pill}
-        <p><strong>Location:</strong> {district}{village_display}{landmark_display}</p>
-        <p><strong>Description:</strong> {bio}</p>
+        <!-- Pill for skills -->
+        {skill_pill}
+        <p><strong>Location:</strong> {district}{village_display}</p>
+        <p><strong>Bio:</strong> {bio}</p>
         <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
         {contact_display}
         <div style="margin-top:10px;">
             {message_button}
         </div>
+        <hr>
+        <h3>Reviews ({avg_rating}/5)</h3>
+        <div id="reviews">{reviews_html}</div>
+        {review_form}
     </div>
 """)
 
@@ -2464,6 +2465,57 @@ edit_name_page = base_template.replace("{title}", "Edit Name").replace("{content
             <input type="text" name="name" value="{current_name}" required>
             <button type="submit" class="btn" style="margin-top:20px;">Update Name</button>
         </form>
+    </div>
+""")
+
+vendor_detail_template = base_template.replace("{title}", "Vendor Detail").replace("{active_page}", "vendors").replace("{content}", """
+    <div class="card">
+        <div class="card-header">
+            {business_name}
+            <a href="/vendors" class="btn btn-small btn-outline">← Back</a>
+        </div>
+        <!-- Main image (clickable) -->
+        <a href="#" onclick="openLightbox('{img_url}'); return false;">
+            <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:300px; min-height:180px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
+        </a>
+        <!-- Extra images (clickable) -->
+        {extra_images}
+        <!-- Video -->
+        {video_display}
+        <!-- Pill for business name -->
+        {name_pill}
+        <p><strong>Location:</strong> {district}{village_display}{landmark_display}</p>
+        <p><strong>Description:</strong> {bio}</p>
+        <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
+        {contact_display}
+        <div style="margin-top:10px;">
+            {message_button}
+        </div>
+    </div>
+""")
+
+job_detail_template = base_template.replace("{title}", "Job Detail").replace("{active_page}", "jobs").replace("{content}", """
+    <div class="card">
+        <div class="card-header">
+            {job_title}
+            <a href="/jobs" class="btn btn-small btn-outline">← Back</a>
+        </div>
+        <!-- Job image (clickable) -->
+        <a href="#" onclick="openLightbox('{img_url}'); return false;">
+            <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:300px; min-height:180px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
+        </a>
+        {video_display}
+        <!-- Pill for job title -->
+        {title_pill}
+        <p><strong>Company:</strong> {company}</p>
+        <p><strong>Location:</strong> {location_display}</p>
+        <p><strong>Description:</strong> {description}</p>
+        <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
+        <p><strong>Posted:</strong> {posted_date}</p>
+        <p><strong>Employer:</strong> {employer_name} <a href="/messages/{employer_id}" class="btn btn-small btn-whatsapp">💬 Message</a></p>
+        {contact_display}
+        <hr>
+        {apply_button}
     </div>
 """)
 
@@ -3544,7 +3596,7 @@ def provider_detail(provider_id):
     pid, user_id, name, skills, district, village, bio, pic, video, status, featured, expiry, phone = provider
     status_class = status.lower().replace(' ', '-')
     village_display = f", {village}" if village else ""
-    img_url = f"/static/uploads/{pic}" if pic else ""
+    img_url = f"/static/uploads/{pic}" if pic else "/static/placeholder.png"
     active_featured = is_featured_now(featured, expiry)
     feat = '<span class="badge badge-available">FEATURED</span>' if active_featured else ''
     
@@ -3553,17 +3605,15 @@ def provider_detail(provider_id):
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
-    # ---- Message button ----
     message_button = ""
     if logged_in and session['user_id'] != user_id:
         message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
 
-    # ---- Video ----
     video_display = ""
     if video:
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
-    # ---- Reviews ----
+    # Reviews
     c.execute("""
         SELECT u.name, r.rating, r.comment, r.created_at FROM reviews r JOIN users u ON r.reviewer_id = u.id
         WHERE r.provider_id=? ORDER BY r.created_at DESC
@@ -3585,7 +3635,6 @@ def provider_detail(provider_id):
     else:
         reviews_html = "<p>No reviews yet.</p>"
 
-    # ---- Review form ----
     review_form = ""
     if logged_in:
         review_form = f"""
@@ -3609,13 +3658,12 @@ def provider_detail(provider_id):
     else:
         review_form = "<p><a href='/login'>Login</a> to leave a review.</p>"
 
-    # ---- Build final HTML ----
+    # Build final HTML
+    skill_pill = f'<span class="pill-title"><i class="fas fa-tools"></i> {skills}</span>' if skills else ''
     detail_html = provider_detail_template
     detail_html = detail_html.replace("{provider_name}", name)
     detail_html = detail_html.replace("{img_url}", img_url)
     detail_html = detail_html.replace("{video_display}", video_display)
-    # Pill for skills
-    skill_pill = f'<span class="pill-title"><i class="fas fa-tools"></i> {skills}</span>' if skills else ''
     detail_html = detail_html.replace("{skill_pill}", skill_pill)
     detail_html = detail_html.replace("{district}", district)
     detail_html = detail_html.replace("{village_display}", village_display)
@@ -3649,7 +3697,7 @@ def vendor_detail(vendor_id):
     
     vid, user_id, bname, district, village, landmark, bio, img, img2, img3, video, status, featured, expiry, phone = v
     status_class = status.lower()
-    img_url = f"/static/uploads/{img}" if img else ""
+    img_url = f"/static/uploads/{img}" if img else "/static/placeholder.png"
     active_feat = is_featured_now(featured, expiry)
     feat = '<span class="badge badge-available">FEATURED</span>' if active_feat else ''
     village_display = f", {village}" if village else ""
@@ -3660,17 +3708,15 @@ def vendor_detail(vendor_id):
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
-    # ---- Message button ----
     message_button = ""
     if logged_in and session['user_id'] != user_id:
         message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
 
-    # ---- Video ----
     video_display = ""
     if video:
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
-    # ---- Extra images (clickable) ----
+    # Extra images (clickable)
     extra_images = ""
     if img2 or img3:
         extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; margin-bottom:15px;">'
@@ -3680,11 +3726,10 @@ def vendor_detail(vendor_id):
             extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         extra_images += '</div>'
 
-    # ---- Build final HTML ----
+    # Build final HTML
+    name_pill = f'<span class="pill-title"><i class="fas fa-store"></i> {bname}</span>'
     detail_html = vendor_detail_template
     detail_html = detail_html.replace("{business_name}", bname)
-    # Pill for business name
-    name_pill = f'<span class="pill-title"><i class="fas fa-store"></i> {bname}</span>'
     detail_html = detail_html.replace("{name_pill}", name_pill)
     detail_html = detail_html.replace("{img_url}", img_url)
     detail_html = detail_html.replace("{extra_images}", extra_images)
@@ -4726,10 +4771,11 @@ def job_applicants(job_id):
 
 @app.route('/job/<int:job_id>')
 def job_detail(job_id):
+    logged_in = 'user_id' in session
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image,
+        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.video,
                u.name as employer_name, u.phone as employer_phone, j.employer_id
         FROM jobs j
         JOIN users u ON j.employer_id = u.id
@@ -4740,37 +4786,57 @@ def job_detail(job_id):
     if not job:
         return "Job not found.", 404
     
-    job_id, title, company, desc, loc, village, contact, status, posted_date, job_img, employer_name, employer_phone, employer_id = job
+    job_id, title, company, desc, loc, village, contact, status, posted_date, job_img, video, employer_name, employer_phone, employer_id = job
     status_class = status.lower()
     location_display = f"{loc}{', ' + village if village else ''}"
+    img_url = f"/static/uploads/{job_img}" if job_img else "/static/placeholder.png"
+    active_featured = False  # Jobs don't have featured in this query, but you can add if needed
+    feat = ''
+    posted_date_display = posted_date[:10] if posted_date else ''
     
-    # Build apply button (only if user is logged in and not the employer)
+    if logged_in:
+        contact_display = f'<p><strong>Contact:</strong> {contact or employer_phone} <a href="tel:{employer_phone}" class="btn btn-small">📞 Call</a></p>'
+    else:
+        contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
+
+    # Apply button
     apply_button = ""
-    if 'user_id' in session:
+    if logged_in:
         if session['user_id'] == employer_id:
             apply_button = '<p class="alert alert-info">You posted this job.</p>'
-        else:
+        elif status == 'Open':
             apply_button = f'<a href="/apply/{job_id}" class="btn">📝 Apply for this Job</a>'
+        else:
+            apply_button = '<p class="alert alert-warning">This job is no longer open.</p>'
     else:
         apply_button = '<p><a href="/login" class="btn">Login to Apply</a></p>'
+
+    # Video
+    video_display = ""
+    if video:
+        video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
+
+    # Pill title
+    title_pill = f'<span class="pill-title"><i class="fas fa-briefcase"></i> {title}</span>'
+
+    detail_html = job_detail_template
+    detail_html = detail_html.replace("{job_title}", title)
+    detail_html = detail_html.replace("{img_url}", img_url)
+    detail_html = detail_html.replace("{video_display}", video_display)
+    detail_html = detail_html.replace("{title_pill}", title_pill)
+    detail_html = detail_html.replace("{company}", company or 'N/A')
+    detail_html = detail_html.replace("{location_display}", location_display)
+    detail_html = detail_html.replace("{description}", desc)
+    detail_html = detail_html.replace("{status_class}", status_class)
+    detail_html = detail_html.replace("{status}", status)
+    detail_html = detail_html.replace("{feat}", feat)
+    detail_html = detail_html.replace("{posted_date}", posted_date_display)
+    detail_html = detail_html.replace("{employer_name}", employer_name)
+    detail_html = detail_html.replace("{employer_id}", str(employer_id))
+    detail_html = detail_html.replace("{contact_display}", contact_display)
+    detail_html = detail_html.replace("{apply_button}", apply_button)
     
-    content = f'''
-    <div class="card">
-        <div class="card-header">{title}</div>
-        {f'<img src="/static/uploads/{job_img}" class="vendor-img" style="width:100%; max-height:300px; object-fit:cover; border-radius:8px; margin-bottom:15px;">' if job_img else ''}
-        <p><strong>Company:</strong> {company or 'N/A'}</p>
-        <p><strong>Location:</strong> {location_display}</p>
-        <p><strong>Description:</strong> {desc}</p>
-        <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span></p>
-        <p><strong>Posted:</strong> {posted_date[:10]}</p>
-        <p><strong>Employer:</strong> {employer_name} <a href="/messages/{employer_id}" class="btn btn-small btn-whatsapp">💬 Message</a></p>
-        <p><strong>Contact:</strong> {employer_phone}</p>
-        <hr>
-        {apply_button}
-        <p><a href="/jobs" class="btn btn-outline">← Back to Jobs</a></p>
-    </div>
-    '''
-    return render_user_template(base_template, title=f"Job: {title}", active_page="jobs", content=content)
+    return render_user_template(detail_html, title=f"Job: {title}", active_page="jobs")
 
 
 # ============================================================
