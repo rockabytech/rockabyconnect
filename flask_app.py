@@ -2036,27 +2036,37 @@ base_template = """
         }
 
         // ============================================================
-        // UNREAD BADGES
-        // ============================================================
-        function updateUnreadBadge() {
-            fetch('/api/unread-count')
-                .then(r => r.json())
-                .then(data => {
-                    const count = data.count || 0;
-                    // ... existing code for other badges ...
+// UNREAD BADGES – MESSAGES & NOTIFICATIONS (ALL PLACES)
+// ============================================================
+
+function updateUnreadBadge() {
+    fetch('/api/unread-count')
+        .then(r => r.json())
+        .then(data => {
+            const count = data.count || 0;
             
-                    // Bottom nav message badge
-                    const bottomBadge = document.getElementById('bottomMsgBadge');
-                    if (bottomBadge) {
-                        if (count > 0) {
-                            bottomBadge.textContent = count;
-                            bottomBadge.style.display = 'inline-block';
-                        } else {
-                            bottomBadge.style.display = 'none';
-                        }
-                    }
-                })
-                .catch(err => console.log('Error fetching unread count:', err));
+            // 1. Desktop navbar (if exists)
+            const navbarBadge = document.getElementById('messagesBadge');
+            if (navbarBadge) {
+                navbarBadge.textContent = count;
+                navbarBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+            
+            // 2. Mobile menu
+            const mobileBadge = document.getElementById('mobileMsgBadge');
+            if (mobileBadge) {
+                mobileBadge.textContent = count;
+                mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+            
+            // 3. Bottom nav
+            const bottomBadge = document.getElementById('bottomMsgBadge');
+            if (bottomBadge) {
+                bottomBadge.textContent = count;
+                bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+        })
+        .catch(err => console.log('Unread count error:', err));
 }
 
 function updateNotifBadge() {
@@ -2064,50 +2074,41 @@ function updateNotifBadge() {
         .then(r => r.json())
         .then(data => {
             const count = data.count || 0;
-            // ... existing code for other badges ...
             
-            // Bottom nav notification badge
-            const bottomNotif = document.getElementById('bottomNotifBadge');
-            if (bottomNotif) {
-                if (count > 0) {
-                    bottomNotif.textContent = count;
-                    bottomNotif.style.display = 'inline-block';
-                } else {
-                    bottomNotif.style.display = 'none';
-                }
+            // 1. Desktop navbar (if exists)
+            const navbarBadge = document.getElementById('notifBadge');
+            if (navbarBadge) {
+                navbarBadge.textContent = count;
+                navbarBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+            
+            // 2. Mobile menu
+            const mobileBadge = document.getElementById('mobileNotifBadge');
+            if (mobileBadge) {
+                mobileBadge.textContent = count;
+                mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+            
+            // 3. Bottom nav
+            const bottomBadge = document.getElementById('bottomNotifBadge');
+            if (bottomBadge) {
+                bottomBadge.textContent = count;
+                bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
             }
         })
-        .catch(err => console.log('Error fetching unread notifications:', err));
+        .catch(err => console.log('Unread notifications error:', err));
 }
 
-        function updateNotifBadge() {
-            fetch('/api/unread-notifications')
-                .then(r => r.json())
-                .then(data => {
-                    const count = data.count || 0;
-                    // Navbar (desktop)
-                    const badge = document.getElementById('notifBadge');
-                    if (badge) {
-                        if (count > 0) {
-                            badge.textContent = count;
-                            badge.style.display = 'inline-block';
-                        } else {
-                            badge.style.display = 'none';
-                        }
-                    }
-                    // Mobile menu
-                    const mobileBadge = document.getElementById('mobileNotifBadge');
-                    if (mobileBadge) {
-                        if (count > 0) {
-                            mobileBadge.textContent = count;
-                            mobileBadge.style.display = 'inline-block';
-                        } else {
-                            mobileBadge.style.display = 'none';
-                        }
-                    }
-                })
-                .catch(err => console.log('Error fetching unread notifications:', err));
-        }
+// Start polling only if the user is logged in
+{% if session.user_id %}
+    // Initial load
+    updateUnreadBadge();
+    updateNotifBadge();
+    
+    // Poll every 10 seconds (feels more real‑time)
+    setInterval(updateUnreadBadge, 10000);
+    setInterval(updateNotifBadge, 10000);
+{% endif %}
 
         // ============================================================
         // INITIALIZE BADGES
