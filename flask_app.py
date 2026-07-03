@@ -5223,7 +5223,9 @@ def message_conversation(user_id):
                 VALUES (?,?,?)
             """, (current_user, user_id, message))
             conn.commit()
+            # ⬇️⬇️⬇️ DELETE OR COMMENT OUT THIS LINE ⬇️⬇️⬇️
             add_notification(user_id, 'message', f'New message from {session["user_name"]}')
+            # ⬆️⬆️⬆️ DELETE OR COMMENT OUT THIS LINE ⬆️⬆️⬆️
         return redirect(url_for('message_conversation', user_id=user_id))
 
     # Fetch conversation
