@@ -1559,7 +1559,7 @@ base_template = """
             <a href="/notifications" onclick="closeMobileMenu()">🔔 Notifications <span id="mobileNotifBadge" class="badge"></span></a>
             <a href="/refer" onclick="closeMobileMenu()">🎁 Refer a Friend</a>
             <a href="/settings" onclick="closeMobileMenu()">⚙️ Settings</a>
-            <!-- ===== INSTALL APP BUTTON IN MOBILE MENU ===== -->
+            <!-- ===== INSTALL APP BUTTON FOR LOGGED-IN USERS ===== -->
             <button id="installBtnMobile" class="install-app-btn" onclick="installApp()">
                 <i class="fas fa-download"></i> Install App
             </button>
@@ -1567,6 +1567,10 @@ base_template = """
         {% else %}
             <a href="/login" onclick="closeMobileMenu()">🔐 Login</a>
             <a href="/signup" onclick="closeMobileMenu()">📝 Sign Up</a>
+            <!-- ===== INSTALL APP BUTTON FOR GUESTS ===== -->
+            <button id="installBtnMobileGuest" class="install-app-btn" onclick="installApp()">
+                <i class="fas fa-download"></i> Install App
+            </button>
         {% endif %}
     </div>
 
@@ -1733,8 +1737,12 @@ base_template = """
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
+            // Show for logged-in users
             const installBtn = document.getElementById('installBtnMobile');
             if (installBtn) installBtn.style.display = 'block';
+            // Show for guests
+            const installBtnGuest = document.getElementById('installBtnMobileGuest');
+            if (installBtnGuest) installBtnGuest.style.display = 'block';
         });
 
         function installApp() {
@@ -1743,6 +1751,7 @@ base_template = """
                 deferredPrompt.userChoice.then((result) => {
                     if (result.outcome === 'accepted') {
                         document.getElementById('installBtnMobile').style.display = 'none';
+                        document.getElementById('installBtnMobileGuest').style.display = 'none';
                     }
                     deferredPrompt = null;
                 });
@@ -1751,6 +1760,7 @@ base_template = """
 
         window.addEventListener('appinstalled', () => {
             document.getElementById('installBtnMobile').style.display = 'none';
+            document.getElementById('installBtnMobileGuest').style.display = 'none';
         });
 
         // ============================================================
