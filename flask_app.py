@@ -1356,6 +1356,65 @@ base_template = """
         }
 
         /* ================================================
+       PILL STYLING FOR NAMES/TITLES (like homepage chips)
+       ================================================ */
+        .pill-title {
+            display: inline-block;
+            padding: 6px 20px;
+            border-radius: 30px;
+            background: rgba(245, 175, 25, 0.12);
+            color: var(--text);
+            font-size: 0.95rem;
+            font-weight: 600;
+            border: 1px solid rgba(245, 175, 25, 0.15);
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .pill-title i {
+            margin-right: 8px;
+            color: var(--primary);
+        }
+
+        .pill-title:hover {
+            background: rgba(245, 175, 25, 0.2);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(245, 175, 25, 0.15);
+        }
+
+/* Smaller variant for card listings */
+        .pill-title-sm {
+            font-size: 0.8rem;
+            padding: 4px 14px;
+        }
+
+/* Dark mode adjustments */
+        body.dark-mode .pill-title {
+            background: rgba(245, 175, 25, 0.08);
+            border-color: rgba(245, 175, 25, 0.1);
+        }
+
+        body.theme-neon .pill-title {
+            background: rgba(0, 212, 255, 0.12);
+            border-color: rgba(0, 212, 255, 0.2);
+            color: #e0e0ff;
+        }
+        body.theme-neon .pill-title i {
+            color: #00d4ff;
+        }
+        body.theme-neon .pill-title:hover {
+            background: rgba(0, 212, 255, 0.2);
+        }
+
+/* Responsive */
+        @media (max-width: 768px) {
+            .pill-title {
+            font-size: 0.85rem;
+            padding: 4px 14px;
+        }
+    }
+
+        /* ================================================
            RESPONSIVE IMAGES
            ================================================ */
         .profile-pic {
@@ -2352,9 +2411,8 @@ vendor_detail_template = base_template.replace("{title}", "Vendor Detail").repla
             <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:300px; min-height:180px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
         </a>
         {extra_images}
-        <!-- ===== VIDEO DISPLAY ===== -->
         {video_display}
-        <!-- ===== END VIDEO ===== -->
+        <p><span class="pill-title"><i class="fas fa-store"></i> {business_name}</span></p>
         <p><strong>Location:</strong> {district}{village_display}{landmark_display}</p>
         <p><strong>Description:</strong> {bio}</p>
         <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
@@ -2371,10 +2429,8 @@ provider_detail_template = base_template.replace("{title}", "Provider Detail").r
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
             <img src="{img_url}" class="profile-pic clickable-img" style="width:100%; max-width:180px; height:180px; object-fit:cover; border-radius:50%; margin-bottom:15px; cursor:pointer; display:block; margin-left:auto; margin-right:auto;">
         </a>
-        <!-- ===== VIDEO DISPLAY ===== -->
         {video_display}
-        <!-- ===== END VIDEO ===== -->
-        <p><strong>Skills:</strong> {skills}</p>
+        <p><span class="pill-title"><i class="fas fa-tools"></i> {skills}</span></p>
         <p><strong>Location:</strong> {district}{village_display}</p>
         <p><strong>Bio:</strong> {bio}</p>
         <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
@@ -2388,7 +2444,6 @@ provider_detail_template = base_template.replace("{title}", "Provider Detail").r
         {review_form}
     </div>
 """)
-
 edit_name_page = base_template.replace("{title}", "Edit Name").replace("{content}", """
     <div class="card">
         <div class="card-header">Edit Your Name</div>
@@ -2398,6 +2453,30 @@ edit_name_page = base_template.replace("{title}", "Edit Name").replace("{content
             <button type="submit" class="btn" style="margin-top:20px;">Update Name</button>
         </form>
     </div>
+""")
+
+vendor_list_page = base_template.replace("{title}", "Vendors").replace("{active_page}", "vendors").replace("{content}", """
+    <div class="hero" style="padding:25px 20px;">
+        <h1 style="font-size:1.6rem;">🏪 Local Vendors & Shops</h1>
+        <p>Discover businesses and services near you</p>
+    </div>
+    <div class="card">
+        <div class="card-header">Vendors</div>
+        <div class="search-bar" style="margin-bottom:20px;">
+            <input type="text" id="vendorSearch" placeholder="Search by business name, location, landmark..." onkeyup="filterVendors()" style="width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+        </div>
+        <div id="vendorCards" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
+            {cards}
+        </div>
+    </div>
+    <script>
+        function filterVendors() {
+            const q = document.getElementById('vendorSearch').value.toLowerCase();
+            document.querySelectorAll('.vendor-card').forEach(card => {
+                card.style.display = card.innerText.toLowerCase().includes(q) ? 'flex' : 'none';
+            });
+        }
+    </script>
 """)
 
 # ============================================================
@@ -3386,7 +3465,7 @@ def list_jobs():
 def list_vendors():
     logged_in = 'user_id' in session
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
+    conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
     today = date.today().isoformat()
     c.execute("UPDATE vendors SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
@@ -3407,6 +3486,10 @@ def list_vendors():
         active_feat = is_featured_now(featured, expiry)
         feat_badge = '<span class="badge badge-available" style="background:var(--primary);">FEATURED</span>' if active_feat else ''
         loc_display = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
+        
+        # ---- Pill-styled business name ----
+        name_display = f'<span class="pill-title"><i class="fas fa-store"></i> {bname}</span>'
+        
         if logged_in:
             contact = f'<p style="margin-top:5px;">📞 {phone} <a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">WhatsApp</a></p>'
         else:
@@ -3415,7 +3498,7 @@ def list_vendors():
         <div class="vendor-card">
             {img_tag}
             <div class="vendor-info">
-                <h3><a href="/vendor/{vid}" style="color:inherit; text-decoration:none;">{bname}</a> <span class="badge badge-{status_class}">{status}</span> {feat_badge}</h3>
+                <h3>{name_display} <span class="badge badge-{status_class}">{status}</span> {feat_badge}</h3>
                 <p class="meta">{loc_display}</p>
                 <p>{bio or ''}</p>
                 {contact}
@@ -3555,7 +3638,7 @@ def vendor_detail(vendor_id):
     if video:
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
-        # ---- Build extra images – responsive grid ----
+    # ---- Build extra images – using inline styles (avoid missing CSS class) ----
     extra_images = ""
     if img2 or img3:
         extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; margin-bottom:15px;">'
@@ -3565,7 +3648,6 @@ def vendor_detail(vendor_id):
             extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         extra_images += '</div>'
 
-    # ---- Build the final HTML ----
     detail_html = vendor_detail_template
     detail_html = detail_html.replace("{business_name}", bname)
     detail_html = detail_html.replace("{img_url}", img_url)
