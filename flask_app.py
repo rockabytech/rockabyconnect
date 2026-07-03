@@ -3488,6 +3488,7 @@ def vendor_detail(vendor_id):
     if not v:
         conn.close()
         return "Vendor not found.", 404
+    
     vid, user_id, bname, district, village, landmark, bio, img, img2, img3, video, status, featured, expiry, phone = v
     status_class = status.lower()
     img_url = f"/static/uploads/{img}" if img else ""
@@ -3495,6 +3496,7 @@ def vendor_detail(vendor_id):
     feat = '<span class="badge badge-available">FEATURED</span>' if active_feat else ''
     village_display = f", {village}" if village else ""
     landmark_display = f", {landmark}" if landmark else ""
+    
     if logged_in:
         contact_display = f'<p><strong>Contact:</strong> {phone} <a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">WhatsApp</a></p>'
     else:
@@ -3513,13 +3515,14 @@ def vendor_detail(vendor_id):
     # ---- Build extra images – all same size, clickable with lightbox ----
     extra_images = ""
     if img2 or img3:
-    extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:12px; margin-bottom:15px;">'
-    if img2:
-        extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img2}\'); return false;"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
-    if img3:
-        extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
-    extra_images += '</div>'
+        extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:12px; margin-bottom:15px;">'
+        if img2:
+            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img2}\'); return false;"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
+        if img3:
+            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
+        extra_images += '</div>'
 
+    # ---- Build the final HTML ----
     detail_html = vendor_detail_template
     detail_html = detail_html.replace("{business_name}", bname)
     detail_html = detail_html.replace("{img_url}", img_url)
@@ -3534,6 +3537,7 @@ def vendor_detail(vendor_id):
     detail_html = detail_html.replace("{feat}", feat)
     detail_html = detail_html.replace("{contact_display}", contact_display)
     detail_html = detail_html.replace("{message_button}", message_button)
+    
     conn.close()
     return render_user_template(detail_html, title=f"Vendor: {bname}", active_page="vendors")
 
