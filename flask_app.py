@@ -1944,35 +1944,40 @@ base_template = """
 
     <!-- ===== BOTTOM NAVIGATION (Jumia-style) ===== -->
     <div class="bottom-nav">
-        <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">
-            <i class="fas fa-home"></i>
-            <span>Home</span>
+    <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">
+        <i class="fas fa-home"></i>
+        <span>Home</span>
+    </a>
+    <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">
+        <i class="fas fa-search"></i>
+        <span>Find</span>
+    </a>
+    <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">
+        <i class="fas fa-briefcase"></i>
+        <span>Jobs</span>
+    </a>
+    <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">
+        <i class="fas fa-store"></i>
+        <span>Vendors</span>
+    </a>
+    {% if session.user_id %}
+        <a href="/messages" id="bottomMsgLink">
+            <i class="fas fa-envelope"></i>
+            <span>Messages</span>
+            <span id="bottomMsgBadge" class="badge" style="display:none;"></span>
         </a>
-        <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">
-            <i class="fas fa-search"></i>
-            <span>Find</span>
+        <a href="/notifications" id="bottomNotifLink">
+            <i class="fas fa-bell"></i>
+            <span>Alerts</span>
+            <span id="bottomNotifBadge" class="badge" style="display:none;"></span>
         </a>
-        <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">
-            <i class="fas fa-briefcase"></i>
-            <span>Jobs</span>
+    {% else %}
+        <a href="/login">
+            <i class="fas fa-user"></i>
+            <span>Account</span>
         </a>
-        <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">
-            <i class="fas fa-store"></i>
-            <span>Vendors</span>
-        </a>
-        {% if session.user_id %}
-            <a href="/messages" id="bottomMsgLink">
-                <i class="fas fa-envelope"></i>
-                <span>Messages</span>
-                <span id="bottomMsgBadge" class="badge" style="display:none;"></span>
-            </a>
-        {% else %}
-            <a href="/login">
-                <i class="fas fa-user"></i>
-                <span>Account</span>
-            </a>
-        {% endif %}
-    </div>
+    {% endif %}
+</div>
 
     <footer style="text-align:center; padding:16px; color:var(--text-secondary); font-size:0.7rem; border-top:1px solid var(--border); margin-top:20px;">
         &copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬
@@ -2038,27 +2043,9 @@ base_template = """
                 .then(r => r.json())
                 .then(data => {
                     const count = data.count || 0;
-                    // Navbar (desktop)
-                    const badge = document.getElementById('messagesBadge');
-                    if (badge) {
-                        if (count > 0) {
-                            badge.textContent = count;
-                            badge.style.display = 'inline-block';
-                        } else {
-                            badge.style.display = 'none';
-                        }
-                    }
-                    // Mobile menu
-                    const mobileBadge = document.getElementById('mobileMsgBadge');
-                    if (mobileBadge) {
-                        if (count > 0) {
-                            mobileBadge.textContent = count;
-                            mobileBadge.style.display = 'inline-block';
-                        } else {
-                            mobileBadge.style.display = 'none';
-                        }
-                    }
-                    // Bottom nav
+                    // ... existing code for other badges ...
+            
+                    // Bottom nav message badge
                     const bottomBadge = document.getElementById('bottomMsgBadge');
                     if (bottomBadge) {
                         if (count > 0) {
@@ -2070,7 +2057,28 @@ base_template = """
                     }
                 })
                 .catch(err => console.log('Error fetching unread count:', err));
-        }
+}
+
+function updateNotifBadge() {
+    fetch('/api/unread-notifications')
+        .then(r => r.json())
+        .then(data => {
+            const count = data.count || 0;
+            // ... existing code for other badges ...
+            
+            // Bottom nav notification badge
+            const bottomNotif = document.getElementById('bottomNotifBadge');
+            if (bottomNotif) {
+                if (count > 0) {
+                    bottomNotif.textContent = count;
+                    bottomNotif.style.display = 'inline-block';
+                } else {
+                    bottomNotif.style.display = 'none';
+                }
+            }
+        })
+        .catch(err => console.log('Error fetching unread notifications:', err));
+}
 
         function updateNotifBadge() {
             fetch('/api/unread-notifications')
@@ -3744,16 +3752,21 @@ def list_jobs():
         location_display = f"{loc}{', ' + village if village else ''}"
         img_tag = f'<img src="/static/uploads/{image}" class="profile-pic" style="border-radius:8px;" alt="{title}">' if image else ''
         
-        # ---- Pill-styled job title ----
         title_display = f'<span class="pill-title"><i class="fas fa-briefcase"></i> {title}</span>'
         
         applicants_link = ""
         apply_link = ""
+        # ---------- MESSAGE BUTTON (to employer) ----------
+        message_button = ""
         if logged_in:
             if session.get('user_id') == employer_id:
                 applicants_link = f'<a href="/job/{job_id}/applicants" class="btn btn-small" style="background:#17a2b8;">👥 View Applicants</a>'
             elif status == 'Open':
                 apply_link = f'<a href="/apply/{job_id}" class="btn btn-small" style="background:#28a745;">📝 Apply</a>'
+            # Message employer (only if not self)
+            if session['user_id'] != employer_id:
+                message_button = f'<a href="/messages/{employer_id}" class="btn btn-small" style="background:#25D366;">💬 Message</a>'
+        # ------------------------------------------------
 
         jobs_html += f"""
         <div class="job-card">
@@ -3763,10 +3776,11 @@ def list_jobs():
                 <p class="meta">{company or 'N/A'} · {location_display} · {posted_date[:10] if posted_date else ''}</p>
                 <p>{desc}</p>
                 {contact_display}
-                <div style="margin-top:8px;">
+                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
                     {applicants_link}
                     {apply_link}
                     <a href="/job/{job_id}" class="btn btn-small btn-outline">View Details</a>
+                    {message_button}
                 </div>
             </div>
         </div>"""
@@ -3785,7 +3799,7 @@ def list_vendors():
     c.execute("UPDATE vendors SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
     conn.commit()
     c.execute("""
-        SELECT v.id, v.business_name, v.district, v.village, v.landmark, v.bio, v.vendor_image, v.status, v.featured, v.featured_expiry, u.phone
+        SELECT v.id, v.business_name, v.district, v.village, v.landmark, v.bio, v.vendor_image, v.status, v.featured, v.featured_expiry, u.phone, u.id as user_id
         FROM vendors v JOIN users u ON v.user_id = u.id
         ORDER BY CASE WHEN v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= date('now')) THEN 0 ELSE 1 END, v.id DESC
     """)
@@ -3794,7 +3808,7 @@ def list_vendors():
 
     cards = ""
     for v in vendors:
-        vid, bname, district, village, landmark, bio, img, status, featured, expiry, phone = v
+        vid, bname, district, village, landmark, bio, img, status, featured, expiry, phone, user_id = v
         status_class = status.lower()
         img_tag = f'<img src="/static/uploads/{img}" class="vendor-img" alt="{bname}">' if img else '<div class="vendor-img" style="background:#ddd; height:100px; display:flex; align-items:center; justify-content:center;">No Image</div>'
         active_feat = is_featured_now(featured, expiry)
@@ -3807,6 +3821,13 @@ def list_vendors():
             contact = f'<p style="margin-top:5px;">📞 {phone} <a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">WhatsApp</a></p>'
         else:
             contact = '<p style="margin-top:5px; color:var(--text-secondary);">📞 <a href="/login">Sign in to view contact</a></p>'
+
+        # ---------- MESSAGE BUTTON (only for logged-in users, not self) ----------
+        message_button = ""
+        if logged_in and session['user_id'] != user_id:
+            message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+        # -------------------------------------------------------------------------
+
         cards += f"""
         <div class="vendor-card">
             {img_tag}
@@ -3815,9 +3836,9 @@ def list_vendors():
                 <p class="meta">{loc_display}</p>
                 <p>{bio or ''}</p>
                 {contact}
-                <!-- View Details Button -->
-                <div style="margin-top:8px;">
+                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
                     <a href="/vendor/{vid}" class="btn btn-small btn-outline">View Details</a>
+                    {message_button}
                 </div>
             </div>
         </div>"""
