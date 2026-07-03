@@ -2406,13 +2406,20 @@ job_list_page = base_template.replace("{title}", "Jobs").replace("{active_page}"
 
 vendor_detail_template = base_template.replace("{title}", "Vendor Detail").replace("{active_page}", "vendors").replace("{content}", """
     <div class="card">
-        <div class="card-header">{business_name}</div>
+        <div class="card-header">
+            {business_name}
+            <a href="/vendors" class="btn btn-small btn-outline">← Back</a>
+        </div>
+        <!-- Main image (clickable) -->
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
             <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:300px; min-height:180px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
         </a>
+        <!-- Extra images (clickable) -->
         {extra_images}
+        <!-- Video -->
         {video_display}
-        <p><span class="pill-title"><i class="fas fa-store"></i> {business_name}</span></p>
+        <!-- Pill for business name -->
+        {name_pill}
         <p><strong>Location:</strong> {district}{village_display}{landmark_display}</p>
         <p><strong>Description:</strong> {bio}</p>
         <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
@@ -2425,12 +2432,17 @@ vendor_detail_template = base_template.replace("{title}", "Vendor Detail").repla
 
 provider_detail_template = base_template.replace("{title}", "Provider Detail").replace("{active_page}", "list").replace("{content}", """
     <div class="card">
-        <div class="card-header">{provider_name}</div>
+        <div class="card-header">
+            {provider_name}
+            <a href="/list" class="btn btn-small btn-outline">← Back</a>
+        </div>
+        <!-- Clickable profile photo -->
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
             <img src="{img_url}" class="profile-pic clickable-img" style="width:100%; max-width:180px; height:180px; object-fit:cover; border-radius:50%; margin-bottom:15px; cursor:pointer; display:block; margin-left:auto; margin-right:auto;">
         </a>
         {video_display}
-        <p><span class="pill-title"><i class="fas fa-tools"></i> {skills}</span></p>
+        <!-- Pill for skills -->
+        {skill_pill}
         <p><strong>Location:</strong> {district}{village_display}</p>
         <p><strong>Bio:</strong> {bio}</p>
         <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
@@ -3532,20 +3544,21 @@ def provider_detail(provider_id):
     pid, user_id, name, skills, district, village, bio, pic, video, status, featured, expiry, phone = provider
     status_class = status.lower().replace(' ', '-')
     village_display = f", {village}" if village else ""
-    img_url = f"/static/uploads/{pic}" if pic else "https://via.placeholder.com/120"
+    img_url = f"/static/uploads/{pic}" if pic else ""
     active_featured = is_featured_now(featured, expiry)
     feat = '<span class="badge badge-available">FEATURED</span>' if active_featured else ''
+    
     if logged_in:
         contact_display = f'<p><strong>Contact:</strong> {phone} <a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">WhatsApp</a></p>'
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
-    # ---- Message button (only if logged in and not viewing own profile) ----
+    # ---- Message button ----
     message_button = ""
     if logged_in and session['user_id'] != user_id:
         message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
 
-    # ---- Build video HTML ----
+    # ---- Video ----
     video_display = ""
     if video:
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
@@ -3560,14 +3573,24 @@ def provider_detail(provider_id):
     avg_row = c.fetchone()
     avg_rating = round(avg_row[0], 1) if avg_row[0] else 0
     reviews_html = ""
-    for rev in reviews:
-        reviews_html += f"<div class='review-card'><strong>{rev[0]}</strong> - <span class='rating'>{'★'*rev[1]}{'☆'*(5-rev[1])}</span><br><small>{rev[3][:10]}</small><p>{rev[2]}</p></div>"
-    if not reviews:
+    if reviews:
+        for rev in reviews:
+            stars = ''.join(['★' if i < rev[1] else '☆' for i in range(5)])
+            reviews_html += f"""
+            <div class="review-card">
+                <strong>{rev[0]}</strong> - <span class="rating">{stars}</span>
+                <br><small>{rev[3][:10]}</small>
+                <p>{rev[2]}</p>
+            </div>"""
+    else:
         reviews_html = "<p>No reviews yet.</p>"
+
+    # ---- Review form ----
     review_form = ""
     if logged_in:
         review_form = f"""
-        <hr><h4>Leave a Review</h4>
+        <hr>
+        <h4>Leave a Review</h4>
         <form method="POST" action="/review/{provider_id}">
             <label>Rating</label>
             <select name="rating" required>
@@ -3580,17 +3603,20 @@ def provider_detail(provider_id):
             </select>
             <label>Comment</label>
             <textarea name="comment" rows="2"></textarea>
-            <button type="submit" class="btn" style="margin-top:10px;">Submit Review</button>
+            <button type="submit" class="btn btn-small" style="margin-top:10px;">Submit Review</button>
         </form>
         """
     else:
         review_form = "<p><a href='/login'>Login</a> to leave a review.</p>"
 
+    # ---- Build final HTML ----
     detail_html = provider_detail_template
     detail_html = detail_html.replace("{provider_name}", name)
     detail_html = detail_html.replace("{img_url}", img_url)
     detail_html = detail_html.replace("{video_display}", video_display)
-    detail_html = detail_html.replace("{skills}", skills)
+    # Pill for skills
+    skill_pill = f'<span class="pill-title"><i class="fas fa-tools"></i> {skills}</span>' if skills else ''
+    detail_html = detail_html.replace("{skill_pill}", skill_pill)
     detail_html = detail_html.replace("{district}", district)
     detail_html = detail_html.replace("{village_display}", village_display)
     detail_html = detail_html.replace("{bio}", bio or 'No bio')
@@ -3634,17 +3660,17 @@ def vendor_detail(vendor_id):
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
-    # ---- Message button (only if logged in and not viewing own profile) ----
+    # ---- Message button ----
     message_button = ""
     if logged_in and session['user_id'] != user_id:
         message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
 
-    # ---- Build video HTML ----
+    # ---- Video ----
     video_display = ""
     if video:
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
-    # ---- Build extra images – using inline styles (avoid missing CSS class) ----
+    # ---- Extra images (clickable) ----
     extra_images = ""
     if img2 or img3:
         extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; margin-bottom:15px;">'
@@ -3654,8 +3680,12 @@ def vendor_detail(vendor_id):
             extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         extra_images += '</div>'
 
+    # ---- Build final HTML ----
     detail_html = vendor_detail_template
     detail_html = detail_html.replace("{business_name}", bname)
+    # Pill for business name
+    name_pill = f'<span class="pill-title"><i class="fas fa-store"></i> {bname}</span>'
+    detail_html = detail_html.replace("{name_pill}", name_pill)
     detail_html = detail_html.replace("{img_url}", img_url)
     detail_html = detail_html.replace("{extra_images}", extra_images)
     detail_html = detail_html.replace("{video_display}", video_display)
