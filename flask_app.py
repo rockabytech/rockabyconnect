@@ -1356,6 +1356,69 @@ base_template = """
         }
 
         /* ================================================
+           RESPONSIVE IMAGES
+           ================================================ */
+        .profile-pic {
+            width: 100%;
+            max-width: 180px;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+
+        .vendor-img {
+            width: 100%;
+            max-height: 300px;
+            min-height: 180px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .extra-images-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+        .extra-images-grid img {
+            width: 100%;
+            aspect-ratio: 1/1;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .profile-pic {
+                height: 140px;
+                max-width: 140px;
+            }
+            .vendor-img {
+                min-height: 140px;
+                max-height: 200px;
+            }
+            .extra-images-grid {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+                gap: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .profile-pic {
+                height: 100px;
+                max-width: 100px;
+            }
+            .vendor-img {
+                min-height: 100px;
+                max-height: 150px;
+            }
+            .extra-images-grid {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                gap: 6px;
+            }
+        }
+
+        /* ================================================
            LIGHTBOX
            ================================================ */
         #lightbox {
@@ -1684,93 +1747,73 @@ base_template = """
         // ============================================================
         // UNREAD BADGES
         // ============================================================
-        function updateNotifBadge() {
-            fetch('/api/unread-notifications')
+        function updateUnreadBadge() {
+            fetch('/api/unread-count')
                 .then(r => r.json())
                 .then(data => {
-                    const badges = document.querySelectorAll('#notifBadge, #mobileNotifBadge, #bottomMsgBadge');
-                    badges.forEach(badge => {
-                        if (data.count > 0) {
-                            badge.textContent = data.count;
+                    const count = data.count || 0;
+                    // Navbar (desktop)
+                    const badge = document.getElementById('messagesBadge');
+                    if (badge) {
+                        if (count > 0) {
+                            badge.textContent = count;
                             badge.style.display = 'inline-block';
                         } else {
                             badge.style.display = 'none';
                         }
-                    });
+                    }
+                    // Mobile menu
+                    const mobileBadge = document.getElementById('mobileMsgBadge');
+                    if (mobileBadge) {
+                        if (count > 0) {
+                            mobileBadge.textContent = count;
+                            mobileBadge.style.display = 'inline-block';
+                        } else {
+                            mobileBadge.style.display = 'none';
+                        }
+                    }
+                    // Bottom nav
+                    const bottomBadge = document.getElementById('bottomMsgBadge');
+                    if (bottomBadge) {
+                        if (count > 0) {
+                            bottomBadge.textContent = count;
+                            bottomBadge.style.display = 'inline-block';
+                        } else {
+                            bottomBadge.style.display = 'none';
+                        }
+                    }
                 })
-                .catch(err => console.log('Error:', err));
+                .catch(err => console.log('Error fetching unread count:', err));
         }
 
-        // ============================================================
-// UNREAD BADGES (Messages & Notifications)
-// ============================================================
-function updateUnreadBadge() {
-    fetch('/api/unread-count')
-        .then(r => r.json())
-        .then(data => {
-            const count = data.count || 0;
-            // Navbar (desktop)
-            const badge = document.getElementById('messagesBadge');
-            if (badge) {
-                if (count > 0) {
-                    badge.textContent = count;
-                    badge.style.display = 'inline-block';
-                } else {
-                    badge.style.display = 'none';
-                }
-            }
-            // Mobile menu
-            const mobileBadge = document.getElementById('mobileMsgBadge');
-            if (mobileBadge) {
-                if (count > 0) {
-                    mobileBadge.textContent = count;
-                    mobileBadge.style.display = 'inline-block';
-                } else {
-                    mobileBadge.style.display = 'none';
-                }
-            }
-            // Bottom nav
-            const bottomBadge = document.getElementById('bottomMsgBadge');
-            if (bottomBadge) {
-                if (count > 0) {
-                    bottomBadge.textContent = count;
-                    bottomBadge.style.display = 'inline-block';
-                } else {
-                    bottomBadge.style.display = 'none';
-                }
-            }
-        })
-        .catch(err => console.log('Error fetching unread count:', err));
-}
-
-function updateNotifBadge() {
-    fetch('/api/unread-notifications')
-        .then(r => r.json())
-        .then(data => {
-            const count = data.count || 0;
-            // Navbar (desktop)
-            const badge = document.getElementById('notifBadge');
-            if (badge) {
-                if (count > 0) {
-                    badge.textContent = count;
-                    badge.style.display = 'inline-block';
-                } else {
-                    badge.style.display = 'none';
-                }
-            }
-            // Mobile menu
-            const mobileBadge = document.getElementById('mobileNotifBadge');
-            if (mobileBadge) {
-                if (count > 0) {
-                    mobileBadge.textContent = count;
-                    mobileBadge.style.display = 'inline-block';
-                } else {
-                    mobileBadge.style.display = 'none';
-                }
-            }
-        })
-        .catch(err => console.log('Error fetching unread notifications:', err));
-}
+        function updateNotifBadge() {
+            fetch('/api/unread-notifications')
+                .then(r => r.json())
+                .then(data => {
+                    const count = data.count || 0;
+                    // Navbar (desktop)
+                    const badge = document.getElementById('notifBadge');
+                    if (badge) {
+                        if (count > 0) {
+                            badge.textContent = count;
+                            badge.style.display = 'inline-block';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    }
+                    // Mobile menu
+                    const mobileBadge = document.getElementById('mobileNotifBadge');
+                    if (mobileBadge) {
+                        if (count > 0) {
+                            mobileBadge.textContent = count;
+                            mobileBadge.style.display = 'inline-block';
+                        } else {
+                            mobileBadge.style.display = 'none';
+                        }
+                    }
+                })
+                .catch(err => console.log('Error fetching unread notifications:', err));
+        }
 
         // ============================================================
         // INITIALIZE BADGES
@@ -1868,7 +1911,7 @@ function updateNotifBadge() {
 
         function urlBase64ToUint8Array(base64String) {
             const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
             const rawData = window.atob(base64);
             const outputArray = new Uint8Array(rawData.length);
             for (let i = 0; i < rawData.length; ++i) {
@@ -2306,7 +2349,7 @@ vendor_detail_template = base_template.replace("{title}", "Vendor Detail").repla
     <div class="card">
         <div class="card-header">{business_name}</div>
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
-            <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:300px; min-height:250px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
+            <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:300px; min-height:180px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
         </a>
         {extra_images}
         <!-- ===== VIDEO DISPLAY ===== -->
@@ -2326,7 +2369,7 @@ provider_detail_template = base_template.replace("{title}", "Provider Detail").r
     <div class="card">
         <div class="card-header">{provider_name}</div>
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
-            <img src="{img_url}" class="profile-pic clickable-img" style="width:200px; height:200px; margin-bottom:15px; cursor:pointer; object-fit:cover; border-radius:50%;">
+            <img src="{img_url}" class="profile-pic clickable-img" style="width:100%; max-width:180px; height:180px; object-fit:cover; border-radius:50%; margin-bottom:15px; cursor:pointer; display:block; margin-left:auto; margin-right:auto;">
         </a>
         <!-- ===== VIDEO DISPLAY ===== -->
         {video_display}
@@ -3512,14 +3555,14 @@ def vendor_detail(vendor_id):
     if video:
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
-    # ---- Build extra images – all same size, clickable with lightbox ----
+        # ---- Build extra images – responsive grid ----
     extra_images = ""
     if img2 or img3:
-        extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:12px; margin-bottom:15px;">'
+        extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; margin-bottom:15px;">'
         if img2:
-            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img2}\'); return false;"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
+            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img2}\'); return false;"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         if img3:
-            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; height:200px; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
+            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         extra_images += '</div>'
 
     # ---- Build the final HTML ----
