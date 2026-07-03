@@ -5206,9 +5206,9 @@ def message_conversation(user_id):
     if current_user == user_id:
         return "You cannot message yourself.", 400
 
-    # Mark messages as read
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    # Mark incoming messages as read
     c.execute("""
         UPDATE messages SET is_read = 1
         WHERE sender_id = ? AND receiver_id = ?
@@ -5223,9 +5223,8 @@ def message_conversation(user_id):
                 VALUES (?,?,?)
             """, (current_user, user_id, message))
             conn.commit()
-            # ⬇️⬇️⬇️ DELETE OR COMMENT OUT THIS LINE ⬇️⬇️⬇️
-            add_notification(user_id, 'message', f'New message from {session["user_name"]}')
-            # ⬆️⬆️⬆️ DELETE OR COMMENT OUT THIS LINE ⬆️⬆️⬆️
+            # This will both store a notification and trigger a push
+            add_notification(user_id, 'message', f'New message from {session["user_name"]}', link='/messages')
         return redirect(url_for('message_conversation', user_id=user_id))
 
     # Fetch conversation
