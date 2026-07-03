@@ -3357,7 +3357,7 @@ def edit_job(job_id):
 def list_providers():
     logged_in = 'user_id' in session
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
+    conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
     today = date.today().isoformat()
     c.execute("UPDATE providers SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
@@ -3378,6 +3378,10 @@ def list_providers():
         active_featured = is_featured_now(featured, expiry)
         feat = '<span class="badge badge-available" style="background:var(--primary);">FEATURED</span>' if active_featured else ''
         location_display = f"{district}{', ' + village if village else ''}"
+        
+        # ---- Pill-styled user name ----
+        name_display = f'<span class="pill-title"><i class="fas fa-user"></i> {name}</span>'
+        
         if logged_in:
             phone_display = f'<p style="margin-top:5px;">📞 {phone}</p>'
             wa_button = f'<a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">Chat on WhatsApp</a>' if phone else ''
@@ -3388,7 +3392,7 @@ def list_providers():
         <div class="provider-card">
             {img_tag}
             <div class="provider-info">
-                <h3><a href="/provider/{pid}" style="color:inherit; text-decoration:none;">{name}</a> <span class="badge badge-{status_class}">{status}</span> {feat}</h3>
+                <h3>{name_display} <span class="badge badge-{status_class}">{status}</span> {feat}</h3>
                 <p class="meta"><strong>{skills}</strong> · {location_display}</p>
                 <p>{bio or ''}</p>
                 {phone_display}
@@ -3403,7 +3407,7 @@ def list_providers():
 def list_jobs():
     logged_in = 'user_id' in session
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
+    conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
     today = date.today().isoformat()
     c.execute("UPDATE jobs SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
@@ -3432,6 +3436,9 @@ def list_jobs():
         location_display = f"{loc}{', ' + village if village else ''}"
         img_tag = f'<img src="/static/uploads/{image}" class="profile-pic" style="border-radius:8px;" alt="{title}">' if image else ''
         
+        # ---- Pill-styled job title ----
+        title_display = f'<span class="pill-title"><i class="fas fa-briefcase"></i> {title}</span>'
+        
         applicants_link = ""
         apply_link = ""
         if logged_in:
@@ -3440,12 +3447,11 @@ def list_jobs():
             elif status == 'Open':
                 apply_link = f'<a href="/apply/{job_id}" class="btn btn-small" style="background:#28a745;">📝 Apply</a>'
 
-        # Build the job card – use a single f‑string with proper escaping
         jobs_html += f"""
         <div class="job-card">
             {img_tag}
             <div class="job-info">
-                <h3><a href="/job/{job_id}" style="color:inherit; text-decoration:none;">{title}</a> <span class="badge badge-{badge_class}">{status}</span> {feat_badge}</h3>
+                <h3>{title_display} <span class="badge badge-{badge_class}">{status}</span> {feat_badge}</h3>
                 <p class="meta">{company or 'N/A'} · {location_display} · {posted_date[:10] if posted_date else ''}</p>
                 <p>{desc}</p>
                 {contact_display}
