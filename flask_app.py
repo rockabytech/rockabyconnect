@@ -1356,8 +1356,8 @@ base_template = """
         }
 
         /* ================================================
-       PILL STYLING FOR NAMES/TITLES (like homepage chips)
-       ================================================ */
+           PILL STYLING FOR NAMES/TITLES
+           ================================================ */
         .pill-title {
             display: inline-block;
             padding: 6px 20px;
@@ -1382,13 +1382,11 @@ base_template = """
             box-shadow: 0 2px 8px rgba(245, 175, 25, 0.15);
         }
 
-/* Smaller variant for card listings */
         .pill-title-sm {
             font-size: 0.8rem;
             padding: 4px 14px;
         }
 
-/* Dark mode adjustments */
         body.dark-mode .pill-title {
             background: rgba(245, 175, 25, 0.08);
             border-color: rgba(245, 175, 25, 0.1);
@@ -1406,13 +1404,175 @@ base_template = """
             background: rgba(0, 212, 255, 0.2);
         }
 
-/* Responsive */
-        @media (max-width: 768px) {
-            .pill-title {
-            font-size: 0.85rem;
-            padding: 4px 14px;
+        /* ================================================
+           DETAIL PAGE IMPROVEMENTS
+           ================================================ */
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
         }
-    }
+
+        .detail-header h2 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .detail-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .detail-section-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .detail-section-title i {
+            color: var(--primary);
+        }
+
+        .detail-avatar {
+            width: 100%;
+            max-width: 180px;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 4px solid var(--primary);
+            margin: 0 auto 16px;
+            display: block;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .detail-avatar:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 30px rgba(245, 175, 25, 0.3);
+        }
+
+        .detail-image {
+            width: 100%;
+            max-height: 320px;
+            min-height: 200px;
+            object-fit: cover;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .detail-image:hover {
+            transform: scale(1.01);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+        }
+
+        .detail-extra-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .detail-extra-grid img {
+            width: 100%;
+            aspect-ratio: 1/1;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .detail-extra-grid img:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .detail-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 24px;
+            margin: 12px 0;
+        }
+        .detail-info-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+        .detail-info-item i {
+            color: var(--primary);
+            width: 20px;
+            text-align: center;
+        }
+
+        .review-item {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--primary);
+            transition: var(--transition);
+        }
+        .review-item:hover {
+            transform: translateX(4px);
+            box-shadow: var(--shadow);
+        }
+        .review-item .reviewer {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .review-item .reviewer .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+        .review-item .reviewer .name {
+            font-weight: 600;
+        }
+        .review-item .reviewer .date {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-left: auto;
+        }
+        .review-item .stars {
+            color: var(--primary);
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+        }
+        .review-item .comment {
+            margin-top: 6px;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .review-form {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 16px;
+        }
+        .review-form label {
+            font-weight: 600;
+            margin-top: 0;
+        }
+        .review-form select,
+        .review-form textarea {
+            margin-top: 4px;
+        }
 
         /* ================================================
            RESPONSIVE IMAGES
@@ -1431,50 +1591,6 @@ base_template = """
             min-height: 180px;
             object-fit: cover;
             border-radius: 8px;
-        }
-
-        .extra-images-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: 12px;
-            margin-bottom: 15px;
-        }
-        .extra-images-grid img {
-            width: 100%;
-            aspect-ratio: 1/1;
-            object-fit: cover;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-
-        @media (max-width: 768px) {
-            .profile-pic {
-                height: 140px;
-                max-width: 140px;
-            }
-            .vendor-img {
-                min-height: 140px;
-                max-height: 200px;
-            }
-            .extra-images-grid {
-                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-                gap: 8px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .profile-pic {
-                height: 100px;
-                max-width: 100px;
-            }
-            .vendor-img {
-                min-height: 100px;
-                max-height: 150px;
-            }
-            .extra-images-grid {
-                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-                gap: 6px;
-            }
         }
 
         /* ================================================
@@ -1576,6 +1692,23 @@ base_template = """
                 gap: 8px;
                 padding: 8px 0;
             }
+            .detail-header h2 {
+                font-size: 1.3rem;
+            }
+            .detail-avatar {
+                max-width: 140px;
+                height: 140px;
+            }
+            .detail-image {
+                max-height: 220px;
+                min-height: 140px;
+            }
+            .detail-extra-grid {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            }
+            .review-item .reviewer .date {
+                font-size: 0.65rem;
+            }
         }
 
         @media (max-width: 480px) {
@@ -1586,6 +1719,14 @@ base_template = """
             .stat-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
             .stat-card { padding: 12px 8px; }
             .stat-card h3 { font-size: 1.4rem; }
+            .detail-avatar {
+                max-width: 100px;
+                height: 100px;
+            }
+            .detail-image {
+                max-height: 160px;
+                min-height: 100px;
+            }
         }
 
         @media (min-width: 769px) {
@@ -1641,6 +1782,9 @@ base_template = """
         body.theme-neon .bottom-nav a:hover, body.theme-neon .bottom-nav a.active { color: #00d4ff !important; }
         body.theme-neon .chip { background: rgba(0, 212, 255, 0.15) !important; border-color: rgba(0, 212, 255, 0.2) !important; }
         body.theme-neon .chip:hover { background: #00d4ff !important; color: #0a0a1a !important; }
+        body.theme-neon .pill-title { background: rgba(0, 212, 255, 0.12); border-color: rgba(0, 212, 255, 0.2); color: #e0e0ff; }
+        body.theme-neon .pill-title i { color: #00d4ff; }
+        body.theme-neon .pill-title:hover { background: rgba(0, 212, 255, 0.2); }
 
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(30px); }
@@ -2406,28 +2550,41 @@ job_list_page = base_template.replace("{title}", "Jobs").replace("{active_page}"
 
 provider_detail_template = base_template.replace("{title}", "Provider Detail").replace("{active_page}", "list").replace("{content}", """
     <div class="card">
-        <div class="card-header">
-            {provider_name}
+        <div class="detail-header">
+            <h2>{provider_name}</h2>
             <a href="/list" class="btn btn-small btn-outline">← Back</a>
         </div>
+
         <!-- Clickable profile photo -->
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
-            <img src="{img_url}" class="profile-pic clickable-img" style="width:100%; max-width:180px; height:180px; object-fit:cover; border-radius:50%; margin-bottom:15px; cursor:pointer; display:block; margin-left:auto; margin-right:auto;">
+            <img src="{img_url}" class="detail-avatar clickable-img" alt="{provider_name}">
         </a>
+
         {video_display}
+
         <!-- Pill for skills -->
         {skill_pill}
-        <p><strong>Location:</strong> {district}{village_display}</p>
+
+        <div class="detail-info">
+            <span class="detail-info-item"><i class="fas fa-map-marker-alt"></i> {district}{village_display}</span>
+            <span class="detail-info-item"><i class="fas fa-info-circle"></i> Status: <span class="badge badge-{status_class}">{status}</span></span>
+            {feat}
+        </div>
+
         <p><strong>Bio:</strong> {bio}</p>
-        <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
+
         {contact_display}
-        <div style="margin-top:10px;">
+
+        <div style="margin-top:12px;">
             {message_button}
         </div>
-        <hr>
-        <h3>Reviews ({avg_rating}/5)</h3>
-        <div id="reviews">{reviews_html}</div>
-        {review_form}
+
+        <!-- Reviews Section -->
+        <div class="detail-section">
+            <div class="detail-section-title"><i class="fas fa-star"></i> Reviews ({avg_rating}/5)</div>
+            <div id="reviews">{reviews_html}</div>
+            {review_form}
+        </div>
     </div>
 """)
 
@@ -2444,52 +2601,73 @@ edit_name_page = base_template.replace("{title}", "Edit Name").replace("{content
 
 vendor_detail_template = base_template.replace("{title}", "Vendor Detail").replace("{active_page}", "vendors").replace("{content}", """
     <div class="card">
-        <div class="card-header">
-            {business_name}
+        <div class="detail-header">
+            <h2>{business_name}</h2>
             <a href="/vendors" class="btn btn-small btn-outline">← Back</a>
         </div>
+
         <!-- Main image (clickable) -->
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
-            <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:300px; min-height:180px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
+            <img src="{img_url}" class="detail-image clickable-img" alt="{business_name}">
         </a>
+
         <!-- Extra images (clickable) -->
         {extra_images}
-        <!-- Video -->
+
         {video_display}
+
         <!-- Pill for business name -->
         {name_pill}
-        <p><strong>Location:</strong> {district}{village_display}{landmark_display}</p>
+
+        <div class="detail-info">
+            <span class="detail-info-item"><i class="fas fa-map-marker-alt"></i> {district}{village_display}{landmark_display}</span>
+            <span class="detail-info-item"><i class="fas fa-info-circle"></i> Status: <span class="badge badge-{status_class}">{status}</span></span>
+            {feat}
+        </div>
+
         <p><strong>Description:</strong> {bio}</p>
-        <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
+
         {contact_display}
-        <div style="margin-top:10px;">
+
+        <div style="margin-top:12px;">
             {message_button}
         </div>
     </div>
 """)
-
 job_detail_template = base_template.replace("{title}", "Job Detail").replace("{active_page}", "jobs").replace("{content}", """
     <div class="card">
-        <div class="card-header">
-            {job_title}
+        <div class="detail-header">
+            <h2>{job_title}</h2>
             <a href="/jobs" class="btn btn-small btn-outline">← Back</a>
         </div>
+
         <!-- Job image (clickable) -->
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
-            <img src="{img_url}" class="vendor-img clickable-img" style="width:100%; max-height:300px; min-height:180px; object-fit:cover; border-radius:8px; margin-bottom:15px; cursor:pointer;">
+            <img src="{img_url}" class="detail-image clickable-img" alt="{job_title}">
         </a>
+
         {video_display}
+
         <!-- Pill for job title -->
         {title_pill}
-        <p><strong>Company:</strong> {company}</p>
-        <p><strong>Location:</strong> {location_display}</p>
+
+        <div class="detail-info">
+            <span class="detail-info-item"><i class="fas fa-building"></i> {company}</span>
+            <span class="detail-info-item"><i class="fas fa-map-marker-alt"></i> {location_display}</span>
+            <span class="detail-info-item"><i class="fas fa-clock"></i> Posted: {posted_date}</span>
+            <span class="detail-info-item"><i class="fas fa-info-circle"></i> Status: <span class="badge badge-{status_class}">{status}</span></span>
+        </div>
+
         <p><strong>Description:</strong> {description}</p>
-        <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span> {feat}</p>
-        <p><strong>Posted:</strong> {posted_date}</p>
+
         <p><strong>Employer:</strong> {employer_name} <a href="/messages/{employer_id}" class="btn btn-small btn-whatsapp">💬 Message</a></p>
+
         {contact_display}
+
         <hr>
-        {apply_button}
+        <div style="text-align:center;">
+            {apply_button}
+        </div>
     </div>
 """)
 
