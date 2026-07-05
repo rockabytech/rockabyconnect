@@ -1068,7 +1068,6 @@ base_template = """
             margin-top: 2px;
         }
 
-        /* ===== INSTALL APP BUTTON IN MOBILE MENU ===== */
         .install-app-btn {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
@@ -1098,7 +1097,7 @@ base_template = """
         }
 
         /* ================================================
-           BOTTOM NAVIGATION (Jumia-style)
+           BOTTOM NAVIGATION
            ================================================ */
         .bottom-nav {
             position: fixed;
@@ -1358,7 +1357,7 @@ base_template = """
         }
 
         /* ================================================
-           PILL STYLING FOR NAMES/TITLES
+           PILL STYLING
            ================================================ */
         .pill-title {
             display: inline-block;
@@ -1567,25 +1566,6 @@ base_template = """
             padding: 20px;
             margin-top: 16px;
         }
-        .review-form label {
-            font-weight: 600;
-            margin-top: 0;
-        }
-        .review-form select,
-        .review-form textarea {
-            margin-top: 4px;
-        }
-
-        /* ================================================
-           REVIEW FORM – Star Rating & Comment Box
-           ================================================ */
-
-        .review-form {
-            background: var(--bg);
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 16px;
-        }
 
         .review-form label {
             font-weight: 600;
@@ -1594,7 +1574,6 @@ base_template = """
             margin-bottom: 6px;
         }
 
-        /* Star rating */
         .star-rating {
             display: flex;
             flex-direction: row-reverse;
@@ -1622,7 +1601,6 @@ base_template = """
             color: var(--primary);
         }
 
-        /* Comment textarea */
         .review-form textarea {
             width: 100%;
             padding: 12px 16px;
@@ -1649,7 +1627,6 @@ base_template = """
             font-size: 1rem;
         }
 
-        /* Dark mode */
         body.dark-mode .review-form textarea {
             background: rgba(30, 41, 59, 0.6);
         }
@@ -1881,6 +1858,9 @@ base_template = """
     </style>
 </head>
 <body>
+    <!-- VAPID Public Key (hidden) -->
+    <span id="vapid-public-key" style="display:none;">{{ VAPID_PUBLIC_KEY }}</span>
+
     <!-- ===== LIGHTBOX ===== -->
     <div id="lightbox">
         <button class="lightbox-back" onclick="closeLightbox()"><i class="fas fa-arrow-left"></i> <span>Back</span></button>
@@ -1910,7 +1890,6 @@ base_template = """
             <a href="/notifications" onclick="closeMobileMenu()">🔔 Notifications <span id="mobileNotifBadge" class="badge"></span></a>
             <a href="/refer" onclick="closeMobileMenu()">🎁 Refer a Friend</a>
             <a href="/settings" onclick="closeMobileMenu()">⚙️ Settings</a>
-            <!-- ===== INSTALL APP BUTTON FOR LOGGED-IN USERS ===== -->
             <button id="installBtnMobile" class="install-app-btn" onclick="installApp()">
                 <i class="fas fa-download"></i> Install App
             </button>
@@ -1918,7 +1897,6 @@ base_template = """
         {% else %}
             <a href="/login" onclick="closeMobileMenu()">🔐 Login</a>
             <a href="/signup" onclick="closeMobileMenu()">📝 Sign Up</a>
-            <!-- ===== INSTALL APP BUTTON FOR GUESTS ===== -->
             <button id="installBtnMobileGuest" class="install-app-btn" onclick="installApp()">
                 <i class="fas fa-download"></i> Install App
             </button>
@@ -1944,42 +1922,42 @@ base_template = """
         {content}
     </div>
 
-    <!-- ===== BOTTOM NAVIGATION (Jumia-style) ===== -->
+    <!-- ===== BOTTOM NAVIGATION ===== -->
     <div class="bottom-nav">
-    <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">
-        <i class="fas fa-home"></i>
-        <span>Home</span>
-    </a>
-    <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">
-        <i class="fas fa-search"></i>
-        <span>Find</span>
-    </a>
-    <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">
-        <i class="fas fa-briefcase"></i>
-        <span>Jobs</span>
-    </a>
-    <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">
-        <i class="fas fa-store"></i>
-        <span>Vendors</span>
-    </a>
-    {% if session.user_id %}
-        <a href="/messages" id="bottomMsgLink">
-            <i class="fas fa-envelope"></i>
-            <span>Messages</span>
-            <span id="bottomMsgBadge" class="badge" style="display:none;"></span>
+        <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
         </a>
-        <a href="/notifications" id="bottomNotifLink">
-            <i class="fas fa-bell"></i>
-            <span>Alerts</span>
-            <span id="bottomNotifBadge" class="badge" style="display:none;"></span>
+        <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">
+            <i class="fas fa-search"></i>
+            <span>Find</span>
         </a>
-    {% else %}
-        <a href="/login">
-            <i class="fas fa-user"></i>
-            <span>Account</span>
+        <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">
+            <i class="fas fa-briefcase"></i>
+            <span>Jobs</span>
         </a>
-    {% endif %}
-</div>
+        <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">
+            <i class="fas fa-store"></i>
+            <span>Vendors</span>
+        </a>
+        {% if session.user_id %}
+            <a href="/messages" id="bottomMsgLink">
+                <i class="fas fa-envelope"></i>
+                <span>Messages</span>
+                <span id="bottomMsgBadge" class="badge" style="display:none;"></span>
+            </a>
+            <a href="/notifications" id="bottomNotifLink">
+                <i class="fas fa-bell"></i>
+                <span>Alerts</span>
+                <span id="bottomNotifBadge" class="badge" style="display:none;"></span>
+            </a>
+        {% else %}
+            <a href="/login">
+                <i class="fas fa-user"></i>
+                <span>Account</span>
+            </a>
+        {% endif %}
+    </div>
 
     <footer style="text-align:center; padding:16px; color:var(--text-secondary); font-size:0.7rem; border-top:1px solid var(--border); margin-top:20px;">
         &copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬
@@ -2038,90 +2016,60 @@ base_template = """
         }
 
         // ============================================================
-// UNREAD BADGES – MESSAGES & NOTIFICATIONS (ALL PLACES)
-// ============================================================
-
-function updateUnreadBadge() {
-    fetch('/api/unread-count')
-        .then(r => r.json())
-        .then(data => {
-            const count = data.count || 0;
-            
-            // 1. Desktop navbar (if exists)
-            const navbarBadge = document.getElementById('messagesBadge');
-            if (navbarBadge) {
-                navbarBadge.textContent = count;
-                navbarBadge.style.display = count > 0 ? 'inline-block' : 'none';
-            }
-            
-            // 2. Mobile menu
-            const mobileBadge = document.getElementById('mobileMsgBadge');
-            if (mobileBadge) {
-                mobileBadge.textContent = count;
-                mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
-            }
-            
-            // 3. Bottom nav
-            const bottomBadge = document.getElementById('bottomMsgBadge');
-            if (bottomBadge) {
-                bottomBadge.textContent = count;
-                bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
-            }
-        })
-        .catch(err => console.log('Unread count error:', err));
-}
-
-function updateNotifBadge() {
-    fetch('/api/unread-notifications')
-        .then(r => r.json())
-        .then(data => {
-            const count = data.count || 0;
-            
-            // 1. Desktop navbar (if exists)
-            const navbarBadge = document.getElementById('notifBadge');
-            if (navbarBadge) {
-                navbarBadge.textContent = count;
-                navbarBadge.style.display = count > 0 ? 'inline-block' : 'none';
-            }
-            
-            // 2. Mobile menu
-            const mobileBadge = document.getElementById('mobileNotifBadge');
-            if (mobileBadge) {
-                mobileBadge.textContent = count;
-                mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
-            }
-            
-            // 3. Bottom nav
-            const bottomBadge = document.getElementById('bottomNotifBadge');
-            if (bottomBadge) {
-                bottomBadge.textContent = count;
-                bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
-            }
-        })
-        .catch(err => console.log('Unread notifications error:', err));
-}
-
-// Start polling only if the user is logged in
-{% if session.user_id %}
-    // Initial load
-    updateUnreadBadge();
-    updateNotifBadge();
-    
-    // Poll every 10 seconds (feels more real‑time)
-    setInterval(updateUnreadBadge, 10000);
-    setInterval(updateNotifBadge, 10000);
-{% endif %}
-
+        // UNREAD BADGES
         // ============================================================
-        // INITIALIZE BADGES
-        // ============================================================
-        if (document.querySelector('#messagesBadge')) {
-            updateUnreadBadge();
-            setInterval(updateUnreadBadge, 15000);
+        function updateUnreadBadge() {
+            fetch('/api/unread-count')
+                .then(r => r.json())
+                .then(data => {
+                    const count = data.count || 0;
+                    // Desktop navbar
+                    const badge = document.getElementById('messagesBadge');
+                    if (badge) {
+                        badge.textContent = count;
+                        badge.style.display = count > 0 ? 'inline-block' : 'none';
+                    }
+                    // Mobile menu
+                    const mobileBadge = document.getElementById('mobileMsgBadge');
+                    if (mobileBadge) {
+                        mobileBadge.textContent = count;
+                        mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
+                    }
+                    // Bottom nav
+                    const bottomBadge = document.getElementById('bottomMsgBadge');
+                    if (bottomBadge) {
+                        bottomBadge.textContent = count;
+                        bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
+                    }
+                })
+                .catch(err => console.log('Error fetching unread count:', err));
         }
-        if (document.querySelector('#notifBadge')) {
-            updateNotifBadge();
-            setInterval(updateNotifBadge, 15000);
+
+        function updateNotifBadge() {
+            fetch('/api/unread-notifications')
+                .then(r => r.json())
+                .then(data => {
+                    const count = data.count || 0;
+                    // Desktop navbar
+                    const badge = document.getElementById('notifBadge');
+                    if (badge) {
+                        badge.textContent = count;
+                        badge.style.display = count > 0 ? 'inline-block' : 'none';
+                    }
+                    // Mobile menu
+                    const mobileBadge = document.getElementById('mobileNotifBadge');
+                    if (mobileBadge) {
+                        mobileBadge.textContent = count;
+                        mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
+                    }
+                    // Bottom nav
+                    const bottomBadge = document.getElementById('bottomNotifBadge');
+                    if (bottomBadge) {
+                        bottomBadge.textContent = count;
+                        bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
+                    }
+                })
+                .catch(err => console.log('Error fetching unread notifications:', err));
         }
 
         // ============================================================
@@ -2131,10 +2079,8 @@ function updateNotifBadge() {
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            // Show for logged-in users
             const installBtn = document.getElementById('installBtnMobile');
             if (installBtn) installBtn.style.display = 'block';
-            // Show for guests
             const installBtnGuest = document.getElementById('installBtnMobileGuest');
             if (installBtnGuest) installBtnGuest.style.display = 'block';
         });
@@ -2160,6 +2106,18 @@ function updateNotifBadge() {
         // ============================================================
         // PUSH NOTIFICATIONS
         // ============================================================
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
         function subscribeToPush() {
             if (!('serviceWorker' in navigator)) {
                 console.log('Service Worker not supported');
@@ -2179,13 +2137,22 @@ function updateNotifBadge() {
                             return;
                         }
 
-                        const applicationServerKey = urlBase64ToUint8Array('{{ VAPID_PUBLIC_KEY }}');
+                        // Get the VAPID public key from the hidden element
+                        const publicKeyElement = document.getElementById('vapid-public-key');
+                        if (!publicKeyElement) {
+                            console.error('VAPID public key element not found');
+                            return;
+                        }
+                        
+                        const applicationServerKey = urlBase64ToUint8Array(publicKeyElement.textContent.trim());
 
                         registration.pushManager.subscribe({
                             userVisibleOnly: true,
                             applicationServerKey: applicationServerKey
                         }).then(subscription => {
-                            fetch('/api/subscribe', {
+                            console.log('Push subscription created:', subscription);
+                            
+                            return fetch('/api/subscribe', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -2198,7 +2165,9 @@ function updateNotifBadge() {
                                     }
                                 })
                             });
-                        }).catch(err => {
+                        }).then(response => response.json())
+                          .then(data => console.log('Subscription saved:', data))
+                          .catch(err => {
                             console.log('Push subscription error:', err);
                         });
                     });
@@ -2206,18 +2175,19 @@ function updateNotifBadge() {
             });
         }
 
-        function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-}
+        // ============================================================
+        // INITIALIZE BADGES AND PUSH
+        // ============================================================
+        if (document.querySelector('#messagesBadge')) {
+            updateUnreadBadge();
+            setInterval(updateUnreadBadge, 10000);
+        }
+        if (document.querySelector('#notifBadge')) {
+            updateNotifBadge();
+            setInterval(updateNotifBadge, 10000);
+        }
 
-        // Automatically subscribe if the user is logged in
+        // Auto-subscribe to push if logged in
         {% if session.user_id %}
             setTimeout(subscribeToPush, 3000);
         {% endif %}
