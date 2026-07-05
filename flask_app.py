@@ -1858,7 +1858,7 @@ base_template = """
     </style>
 </head>
 <body>
-    <!-- VAPID Public Key (hidden) -->
+    <!-- VAPID Public Key (hidden) - ONLY NEW ADDITION -->
     <span id="vapid-public-key" style="display:none;">{{ VAPID_PUBLIC_KEY }}</span>
 
     <!-- ===== LIGHTBOX ===== -->
@@ -2104,7 +2104,7 @@ base_template = """
         });
 
         // ============================================================
-        // PUSH NOTIFICATIONS
+        // PUSH NOTIFICATIONS - ONLY NEW ADDITION
         // ============================================================
 
         function urlBase64ToUint8Array(base64String) {
@@ -2187,7 +2187,7 @@ base_template = """
             setInterval(updateNotifBadge, 10000);
         }
 
-        // Auto-subscribe to push if logged in
+        // Auto-subscribe to push if logged in (using your existing session check)
         {% if session.user_id %}
             setTimeout(subscribeToPush, 3000);
         {% endif %}
