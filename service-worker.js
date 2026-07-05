@@ -71,9 +71,7 @@ self.addEventListener('push', function(event) {
             data = {
                 title: 'RockabyConnect',
                 body: event.data.text() || 'New update',
-                url: '/',
-                icon: '/static/icon-192.png',
-                badge: '/static/icon-192.png'
+                url: '/'
             };
         }
     } else {
@@ -83,13 +81,15 @@ self.addEventListener('push', function(event) {
     const title = data.title || 'RockabyConnect';
     const options = {
         body: data.body || 'You have a new notification.',
-        icon: data.icon || '/static/icon-192.png',
-        badge: data.badge || '/static/icon-192.png',
+        // Remove icon and badge temporarily to test
         data: {
             url: data.url || '/'
         },
         vibrate: [200, 100, 200],
-        requireInteraction: true
+        requireInteraction: true,
+        // Add these to make it more visible
+        silent: false,
+        renotify: true
     };
     
     console.log('[SW] Showing notification:', title, options);
