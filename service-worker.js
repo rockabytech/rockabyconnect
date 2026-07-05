@@ -13,13 +13,14 @@ const urlsToCache = [
 
 // ----- INSTALL -----
 self.addEventListener('install', event => {
+    console.log('[SW] Install event');
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
-                console.log('Cached app assets');
+                console.log('[SW] Cached app assets');
                 return cache.addAll(urlsToCache);
             })
-            .catch(err => console.log('Cache failed:', err))
+            .catch(err => console.log('[SW] Cache failed:', err))
     );
 });
 
@@ -38,12 +39,14 @@ self.addEventListener('fetch', event => {
 
 // ----- ACTIVATE -----
 self.addEventListener('activate', event => {
+    console.log('[SW] Activate event');
     const cacheWhitelist = [CACHE_NAME];
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
                     if (cacheWhitelist.indexOf(cacheName) === -1) {
+                        console.log('[SW] Deleting old cache:', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
@@ -56,11 +59,15 @@ self.addEventListener('activate', event => {
 // 🔔 PUSH NOTIFICATION HANDLER
 // ==============================================================
 self.addEventListener('push', function(event) {
+    console.log('[SW] 🚀 Push event received!', event);
+    
     let data = {};
     if (event.data) {
         try {
             data = event.data.json();
+            console.log('[SW] Parsed push data:', data);
         } catch (e) {
+            console.log('[SW] Failed to parse JSON, using text:', e);
             data = {
                 title: 'RockabyConnect',
                 body: event.data.text() || 'New update',
@@ -69,6 +76,8 @@ self.addEventListener('push', function(event) {
                 badge: '/static/icon-192.png'
             };
         }
+    } else {
+        console.log('[SW] No data in push event');
     }
 
     const title = data.title || 'RockabyConnect';
@@ -82,9 +91,13 @@ self.addEventListener('push', function(event) {
         vibrate: [200, 100, 200],
         requireInteraction: true
     };
+    
+    console.log('[SW] Showing notification:', title, options);
 
     event.waitUntil(
         self.registration.showNotification(title, options)
+            .then(() => console.log('[SW] ✅ Notification shown successfully'))
+            .catch(err => console.log('[SW] ❌ Failed to show notification:', err))
     );
 });
 
@@ -92,18 +105,17 @@ self.addEventListener('push', function(event) {
 // 👆 NOTIFICATION CLICK HANDLER
 // ==============================================================
 self.addEventListener('notificationclick', function(event) {
+    console.log('[SW] Notification clicked:', event);
     event.notification.close();
     const url = event.notification.data?.url || '/';
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then(windowClients => {
-                // Check if there is already a window/tab open with the target URL
                 for (let client of windowClients) {
                     if (client.url === url && 'focus' in client) {
                         return client.focus();
                     }
                 }
-                // If not, open a new window
                 if (clients.openWindow) {
                     return clients.openWindow(url);
                 }
