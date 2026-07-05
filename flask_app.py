@@ -701,54 +701,57 @@ def get_user_name(user_id):
 def send_push_notification(user_id, title, body, url='/'):
     """Send a push notification to a user's subscribed devices."""
     try:
-        from webpush import WebPusher
+        from pywebpush import webpush, WebPushException
     except ImportError:
-        print("web-push not installed – skipping push")
+        print("pywebpush not installed – skipping push")
         return
-    
+
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=?", (user_id,))
     subscriptions = c.fetchall()
     conn.close()
-    
+
     if not subscriptions:
+        print(f"[DEBUG] No subscriptions found for user {user_id}")
         return
-    
+
     # Get VAPID keys from environment
     vapid_private = os.environ.get('VAPID_PRIVATE_KEY', '')
     vapid_public = os.environ.get('VAPID_PUBLIC_KEY', '')
     if not vapid_private or not vapid_public:
-        print("VAPID keys not configured – push skipped")
+        print("[DEBUG] VAPID keys missing")
         return
-    
-    try:
-        webp = WebPusher(
-            vapid_private_key=vapid_private,
-            vapid_public_key=vapid_public,
-            subject='mailto:support@rockabytech.com'
-        )
-        
-        payload = {
-            'title': title,
-            'body': body,
-            'url': url,
-            'icon': '/static/icon-192.png',
-            'badge': '/static/icon-192.png'
-        }
-        
-        for endpoint, p256dh, auth in subscriptions:
-            try:
-                webp.send(
-                    endpoint=endpoint,
-                    p256dh=p256dh,
-                    auth=auth,
-                    data=payload
-                )
-            except Exception as e:
-                print(f"Push send error for {endpoint}: {e}")
-    except Exception as e:
-        print(f"Push notification error: {e}")
+
+    print(f"[DEBUG] Sending push to {len(subscriptions)} subscriptions")
+
+    payload = {
+        'title': title,
+        'body': body,
+        'url': url,
+        'icon': '/static/icon-192.png',
+        'badge': '/static/icon-192.png'
+    }
+
+    for endpoint, p256dh, auth in subscriptions:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": endpoint,
+                    "keys": {
+                        "p256dh": p256dh,
+                        "auth": auth
+                    }
+                },
+                data=json.dumps(payload),
+                vapid_private_key=vapid_private,
+                vapid_claims={
+                    "sub": "mailto:support@rockabytech.com"
+                }
+            )
+            print(f"[DEBUG] Push sent to {endpoint[:50]}...")
+        except WebPushException as e:
+            print(f"[DEBUG] Push send error for {endpoint}: {e}")
 
 def get_unread_count(user_id):
     conn = sqlite3.connect(DB_PATH)
@@ -2204,15 +2207,15 @@ function updateNotifBadge() {
         }
 
         function urlBase64ToUint8Array(base64String) {
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
-        }
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
 
         // Automatically subscribe if the user is logged in
         {% if session.user_id %}
