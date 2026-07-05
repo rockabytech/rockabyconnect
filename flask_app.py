@@ -610,10 +610,8 @@ def process_referral(user_id, phone):
 # ============================================================
 
 def add_notification(user_id, type, message, link=None):
-    """Add a notification for a user and send a push notification."""
     try:
         conn = sqlite3.connect(DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 30000;")
         c = conn.cursor()
         c.execute(
             "INSERT INTO notifications (user_id, type, message, link, is_read) VALUES (?,?,?,?,0)",
@@ -622,23 +620,25 @@ def add_notification(user_id, type, message, link=None):
         conn.commit()
         conn.close()
         
-        # Map notification type to a user-friendly title
+        print(f"[DEBUG] Notification inserted for user {user_id}, type: {type}")
+        
+        # Map notification type to title
         title_map = {
+            'message': '💬 New Message',
             'job_application': '📋 New Job Application',
             'application_status': '🔄 Application Status Updated',
             'application_note': '📝 New Note on Application',
-            'message': '💬 New Message',
             'boost_approved': '⭐ Boost Approved',
             'boost_rejected': '❌ Boost Rejected',
             'email': '📧 Welcome'
         }
         title = title_map.get(type, '🔔 Notification')
         
-        # Send push notification
+        print(f"[DEBUG] Sending push for {type}: {title} - {message}")
         send_push_notification(user_id, title, message, link or '/')
         
-    except sqlite3.OperationalError as e:
-        print(f"Notification DB error: {e}")
+    except Exception as e:
+        print(f"[DEBUG] Error in add_notification: {e}")
 
 def get_unread_notifications(user_id):
     conn = sqlite3.connect(DB_PATH)
@@ -5200,6 +5200,7 @@ def message_conversation(user_id):
 
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    
     # Mark incoming messages as read
     c.execute("""
         UPDATE messages SET is_read = 1
@@ -5215,8 +5216,11 @@ def message_conversation(user_id):
                 VALUES (?,?,?)
             """, (current_user, user_id, message))
             conn.commit()
-            # This will both store a notification and trigger a push
+            
+            # ⬇️ CRITICAL: This sends the push notification ⬇️
             add_notification(user_id, 'message', f'New message from {session["user_name"]}', link='/messages')
+            # ⬆️ CRITICAL: This sends the push notification ⬆️
+            
         return redirect(url_for('message_conversation', user_id=user_id))
 
     # Fetch conversation
