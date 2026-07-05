@@ -56,40 +56,20 @@ self.addEventListener('activate', event => {
 });
 
 // ==============================================================
-// 🔔 PUSH NOTIFICATION HANDLER
+// 🔔 PUSH NOTIFICATION HANDLER - MINIMAL TEST VERSION
 // ==============================================================
 self.addEventListener('push', function(event) {
     console.log('[SW] 🚀 Push event received!', event);
     
-    let data = {};
-    if (event.data) {
-        try {
-            data = event.data.json();
-            console.log('[SW] Parsed push data:', data);
-        } catch (e) {
-            console.log('[SW] Failed to parse JSON, using text:', e);
-            data = {
-                title: 'RockabyConnect',
-                body: event.data.text() || 'New update',
-                url: '/'
-            };
-        }
-    } else {
-        console.log('[SW] No data in push event');
-    }
-
-    const title = data.title || 'RockabyConnect';
+    // Simple notification with NO icon, NO badge, NO vibrate
+    const title = '🔔 RockabyConnect';
     const options = {
-        body: data.body || 'You have a new notification.',
-        // Remove icon and badge temporarily to test
-        data: {
-            url: data.url || '/'
-        },
-        vibrate: [200, 100, 200],
+        body: 'You have a new notification!',
         requireInteraction: true,
-        // Add these to make it more visible
         silent: false,
-        renotify: true
+        data: {
+            url: '/'
+        }
     };
     
     console.log('[SW] Showing notification:', title, options);
