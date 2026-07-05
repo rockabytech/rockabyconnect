@@ -641,10 +641,9 @@ def add_notification(user_id, type, message, link=None):
         print(f"Notification DB error: {e}")
 
 def get_unread_notifications(user_id):
-    """Get count of unread notifications for a user."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0", (user_id,))
+    c.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0 AND type != 'message'", (user_id,))
     count = c.fetchone()[0]
     conn.close()
     return count
@@ -5464,6 +5463,13 @@ def subscribe_push():
         conn.commit()
     
     return {'status': 'subscribed'}, 201
+
+@app.route('/test-push')
+@login_required
+def test_push():
+    user_id = session['user_id']
+    send_push_notification(user_id, "🧪 Test Push", "If you see this, push works!", "/dashboard")
+    return "✅ Push sent. Check your device (and server logs)."
 
 
 # ============================================================
