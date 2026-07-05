@@ -2119,61 +2119,81 @@ base_template = """
         }
 
         function subscribeToPush() {
-            if (!('serviceWorker' in navigator)) {
-                console.log('Service Worker not supported');
+    if (!('serviceWorker' in navigator)) {
+        console.log('Service Worker not supported');
+        return;
+    }
+
+    navigator.serviceWorker.ready.then(registration => {
+        registration.pushManager.getSubscription().then(subscription => {
+            if (subscription) {
+                console.log('Already subscribed to push');
                 return;
             }
 
-            navigator.serviceWorker.ready.then(registration => {
-                registration.pushManager.getSubscription().then(subscription => {
-                    if (subscription) {
-                        console.log('Already subscribed to push');
-                        return;
+            Notification.requestPermission().then(permission => {
+                if (permission !== 'granted') {
+                    console.log('Push permission denied');
+                    return;
+                }
+
+                // Get the VAPID public key from the hidden element
+                const publicKeyElement = document.getElementById('vapid-public-key');
+                if (!publicKeyElement) {
+                    console.error('VAPID public key element not found');
+                    return;
+                }
+                
+                const publicKey = publicKeyElement.textContent.trim();
+                
+                // Convert and extract the raw key with 0x04 prefix
+                function urlBase64ToUint8Array(base64String) {
+                    base64String = base64String.trim();
+                    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+                    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+                    const rawData = window.atob(base64);
+                    const outputArray = new Uint8Array(rawData.length);
+                    for (let i = 0; i < rawData.length; ++i) {
+                        outputArray[i] = rawData.charCodeAt(i);
                     }
+                    return outputArray;
+                }
+                
+                // Extract the raw key with the 0x04 prefix
+                const fullKey = urlBase64ToUint8Array(publicKey);
+                const rawKeyWithoutPrefix = fullKey.slice(27);
+                const applicationServerKey = new Uint8Array(65);
+                applicationServerKey[0] = 0x04;
+                applicationServerKey.set(rawKeyWithoutPrefix, 1);
 
-                    Notification.requestPermission().then(permission => {
-                        if (permission !== 'granted') {
-                            console.log('Push permission denied');
-                            return;
-                        }
-
-                        // Get the VAPID public key from the hidden element
-                        const publicKeyElement = document.getElementById('vapid-public-key');
-                        if (!publicKeyElement) {
-                            console.error('VAPID public key element not found');
-                            return;
-                        }
-                        
-                        const applicationServerKey = urlBase64ToUint8Array(publicKeyElement.textContent.trim());
-
-                        registration.pushManager.subscribe({
-                            userVisibleOnly: true,
-                            applicationServerKey: applicationServerKey
-                        }).then(subscription => {
-                            console.log('Push subscription created:', subscription);
-                            
-                            return fetch('/api/subscribe', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                    endpoint: subscription.endpoint,
-                                    keys: {
-                                        p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
-                                        auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
-                                    }
-                                })
-                            });
-                        }).then(response => response.json())
-                          .then(data => console.log('Subscription saved:', data))
-                          .catch(err => {
-                            console.log('Push subscription error:', err);
-                        });
+                registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: applicationServerKey
+                }).then(subscription => {
+                    console.log('Push subscription created:', subscription);
+                    
+                    return fetch('/api/subscribe', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            endpoint: subscription.endpoint,
+                            keys: {
+                                p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                                auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                            }
+                        })
                     });
+                }).then(response => response.json())
+                  .then(data => console.log('Subscription saved:', data))
+                  .catch(err => {
+                    console.log('Push subscription error:', err);
                 });
             });
-        }
+        });
+    });
+}
 
         // ============================================================
         // INITIALIZE BADGES AND PUSH
