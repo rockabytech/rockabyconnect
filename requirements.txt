@@ -4,3 +4,4 @@ werkzeug
 Pillow
 python-dotenv
 requests
+web-push
