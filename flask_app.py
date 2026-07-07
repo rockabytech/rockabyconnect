@@ -2852,6 +2852,60 @@ vendor_list_page = base_template.replace("{title}", "Vendors").replace("{active_
     </script>
 """)
 
+
+# ============================================================
+# ADMIN BASE TEMPLATE
+# ============================================================
+admin_base_template = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin – {title}</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .card-header { font-size: 1.2rem; font-weight: bold; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #f5af19; }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-card h3 { margin: 0; font-size: 1.8rem; color: #f5af19; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f5af19; color: white; }
+        .btn { display: inline-block; padding: 6px 12px; background: #f5af19; color: white; text-decoration: none; border-radius: 4px; font-size: 0.9rem; border: none; cursor: pointer; }
+        .btn-outline { background: transparent; border: 1px solid #f5af19; color: #f5af19; }
+        .btn-danger { background: #dc3545; }
+        .btn-small { padding: 4px 8px; font-size: 0.75rem; }
+        .alert { padding: 12px; border-radius: 4px; margin-bottom: 15px; }
+        .alert-error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 4px; }
+        .nav { background: #333; color: white; padding: 10px 20px; margin-bottom: 20px; border-radius: 4px; }
+        .nav a { color: white; text-decoration: none; margin-right: 15px; }
+        .nav a:hover { text-decoration: underline; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/admin/dashboard">Dashboard</a>
+            <a href="/admin/subscriptions">Packages</a>
+            <a href="/admin/subscription-requests">Requests</a>
+            <a href="/admin/backups">Backups</a>
+            <a href="/admin/referral-settings">Referrals</a>
+            <a href="/admin/logout" style="float:right;">Logout</a>
+        </div>
+        <div class="card">
+            {content}
+        </div>
+    </div>
+</body>
+</html>
+"""
+
 # ============================================================
 # CUSTOMER ROUTES (FULL SET)
 # ============================================================
@@ -4318,6 +4372,18 @@ def admin_login():
     </div>
     """
     return render_template_string(admin_base_template.replace("{title}", "Login").replace("{active_page}", "").replace("{content}", content))
+    
+    content = """
+    <div class="card" style="max-width: 500px; margin: 0 auto;">
+        <div class="card-header">🔐 Admin Login</div>
+        <form method="POST">
+            <label>Password</label>
+            <input type="password" name="password" required>
+            <button type="submit" class="btn" style="width:100%; margin-top:20px;">Login</button>
+        </form>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Login").replace("{active_page}", "").replace("{content}", content))
 
 @app.route('/admin')
 def admin_panel_redirect():
@@ -4525,6 +4591,16 @@ def admin_stats():
     </div>
     """
     return render_template_string(admin_base_template.replace("{title}", "Statistics").replace("{active_page}", "stats").replace("{content}", content))
+
+@app.route('/debug-admin')
+def debug_admin():
+    import traceback
+    try:
+        # Simulate rendering the admin login page
+        content = "<div>Test</div>"
+        return render_template_string(admin_base_template.replace("{title}", "Test").replace("{active_page}", "").replace("{content}", content))
+    except Exception as e:
+        return f"<pre>{traceback.format_exc()}</pre>"
 
 # --- Boost approval/rejection ---
 @app.route('/admin/approve-boost/<int:req_id>')
