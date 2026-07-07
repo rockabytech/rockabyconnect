@@ -847,7 +847,7 @@ base_template = """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         /* ================================================
-           DEFAULT STYLES
+           DEFAULT STYLES (unchanged)
            ================================================ */
         * {
             margin: 0;
@@ -896,7 +896,7 @@ base_template = """
         }
 
         /* ================================================
-           TOP NAVBAR
+           TOP NAVBAR (with search bar)
            ================================================ */
         .navbar {
             background: var(--card-bg);
@@ -945,6 +945,41 @@ base_template = """
             gap: 12px;
         }
 
+        /* Search bar */
+        .search-form {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-right: 8px;
+        }
+        .search-form input[type="text"] {
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text);
+            font-size: 0.85rem;
+            width: 140px;
+            transition: width 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .search-form input[type="text"]:focus {
+            width: 200px;
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(245, 175, 25, 0.2);
+        }
+        .search-form button {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 6px 4px;
+        }
+        .search-form button:hover {
+            color: var(--primary);
+        }
+
         .theme-toggle {
             background: rgba(245, 175, 25, 0.1);
             border: 1px solid var(--glass-border);
@@ -973,8 +1008,26 @@ base_template = """
             display: block;
         }
 
+        @media (max-width: 768px) {
+            .search-form input[type="text"] {
+                width: 100px;
+            }
+            .search-form input[type="text"]:focus {
+                width: 130px;
+            }
+        }
+        @media (max-width: 480px) {
+            .search-form input[type="text"] {
+                width: 80px;
+                font-size: 0.75rem;
+            }
+            .search-form input[type="text"]:focus {
+                width: 100px;
+            }
+        }
+
         /* ================================================
-           MOBILE MENU
+           MOBILE MENU (unchanged)
            ================================================ */
         .mobile-menu-overlay {
             display: none;
@@ -1097,7 +1150,7 @@ base_template = """
         }
 
         /* ================================================
-           BOTTOM NAVIGATION
+           BOTTOM NAVIGATION (with message & notification badges)
            ================================================ */
         .bottom-nav {
             position: fixed;
@@ -1169,7 +1222,7 @@ base_template = """
         }
 
         /* ================================================
-           HERO
+           CARDS, HERO, BUTTONS, BADGES, etc. (unchanged)
            ================================================ */
         .hero {
             background: linear-gradient(135deg, rgba(245, 175, 25, 0.15), rgba(26, 115, 232, 0.15));
@@ -1194,9 +1247,6 @@ base_template = """
             margin-bottom: 20px;
         }
 
-        /* ================================================
-           CARDS
-           ================================================ */
         .card {
             background: var(--card-bg);
             backdrop-filter: blur(20px);
@@ -1224,9 +1274,6 @@ base_template = """
             gap: 8px;
         }
 
-        /* ================================================
-           BUTTONS
-           ================================================ */
         .btn {
             display: inline-block;
             padding: 10px 20px;
@@ -1270,9 +1317,6 @@ base_template = """
             background: linear-gradient(135deg, #28a745, #20c997);
         }
 
-        /* ================================================
-           BADGES
-           ================================================ */
         .badge {
             display: inline-block;
             padding: 2px 8px;
@@ -1289,9 +1333,6 @@ base_template = """
         .badge-taken { background: #6f42c1; color: white; }
         .badge-closed { background: #dc3545; color: white; }
 
-        /* ================================================
-           STAT GRID
-           ================================================ */
         .stat-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -1320,9 +1361,6 @@ base_template = """
             font-size: 0.75rem;
         }
 
-        /* ================================================
-           CATEGORY CHIPS
-           ================================================ */
         .category-chips {
             display: flex;
             flex-wrap: wrap;
@@ -1356,9 +1394,6 @@ base_template = """
             transform: scale(0.95);
         }
 
-        /* ================================================
-           PILL STYLING
-           ================================================ */
         .pill-title {
             display: inline-block;
             padding: 6px 20px;
@@ -1405,9 +1440,6 @@ base_template = """
             background: rgba(0, 212, 255, 0.2);
         }
 
-        /* ================================================
-           DETAIL PAGE IMPROVEMENTS
-           ================================================ */
         .detail-header {
             display: flex;
             justify-content: space-between;
@@ -1636,9 +1668,6 @@ base_template = """
             box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.3);
         }
 
-        /* ================================================
-           RESPONSIVE IMAGES
-           ================================================ */
         .profile-pic {
             width: 100%;
             max-width: 180px;
@@ -1655,9 +1684,6 @@ base_template = """
             border-radius: 8px;
         }
 
-        /* ================================================
-           LIGHTBOX
-           ================================================ */
         #lightbox {
             display: none;
             position: fixed;
@@ -1708,9 +1734,6 @@ base_template = """
             cursor: pointer;
         }
 
-        /* ================================================
-           WHATSAPP FLOAT
-           ================================================ */
         .whatsapp-float {
             position: fixed;
             bottom: calc(var(--bottom-nav-height) + 20px);
@@ -1731,9 +1754,6 @@ base_template = """
         }
         .whatsapp-float:hover { transform: scale(1.1); }
 
-        /* ================================================
-           RESPONSIVE
-           ================================================ */
         @media (max-width: 768px) {
             .stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
             .card { padding: 14px; }
@@ -1818,9 +1838,6 @@ base_template = """
             .whatsapp-float { bottom: 20px; }
         }
 
-        /* ================================================
-           NEON THEME
-           ================================================ */
         body.theme-neon {
             --primary: #00d4ff !important;
             --primary-dark: #0099cc !important;
@@ -1858,7 +1875,7 @@ base_template = """
     </style>
 </head>
 <body>
-    <!-- VAPID Public Key (hidden) - ONLY NEW ADDITION -->
+    <!-- VAPID Public Key (hidden) -->
     <span id="vapid-public-key" style="display:none;">{{ VAPID_PUBLIC_KEY }}</span>
 
     <!-- ===== LIGHTBOX ===== -->
@@ -1903,7 +1920,7 @@ base_template = """
         {% endif %}
     </div>
 
-    <!-- ===== TOP NAVBAR ===== -->
+    <!-- ===== TOP NAVBAR (with search bar) ===== -->
     <nav class="navbar">
         <a href="/" class="logo">
             <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
@@ -1913,6 +1930,15 @@ base_template = """
             </div>
         </a>
         <div class="navbar-right">
+            <!-- Search bar -->
+            <form action="/search" method="GET" class="search-form">
+                <input type="text" name="q" placeholder="Search users..." 
+                       value="{{ request.args.get('q', '') }}" 
+                       aria-label="Search users by name">
+                <button type="submit" aria-label="Submit search">
+                    <i class="fas fa-search"></i>
+                </button>
+            </form>
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
             <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
         </div>
@@ -2023,7 +2049,7 @@ base_template = """
                 .then(r => r.json())
                 .then(data => {
                     const count = data.count || 0;
-                    // Desktop navbar
+                    // Desktop navbar (if present)
                     const badge = document.getElementById('messagesBadge');
                     if (badge) {
                         badge.textContent = count;
@@ -2050,19 +2076,16 @@ base_template = """
                 .then(r => r.json())
                 .then(data => {
                     const count = data.count || 0;
-                    // Desktop navbar
                     const badge = document.getElementById('notifBadge');
                     if (badge) {
                         badge.textContent = count;
                         badge.style.display = count > 0 ? 'inline-block' : 'none';
                     }
-                    // Mobile menu
                     const mobileBadge = document.getElementById('mobileNotifBadge');
                     if (mobileBadge) {
                         mobileBadge.textContent = count;
                         mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
                     }
-                    // Bottom nav
                     const bottomBadge = document.getElementById('bottomNotifBadge');
                     if (bottomBadge) {
                         bottomBadge.textContent = count;
@@ -2104,10 +2127,10 @@ base_template = """
         });
 
         // ============================================================
-        // PUSH NOTIFICATIONS - ONLY NEW ADDITION
+        // PUSH NOTIFICATIONS
         // ============================================================
-
         function urlBase64ToUint8Array(base64String) {
+            base64String = base64String.trim();
             const padding = '='.repeat((4 - base64String.length % 4) % 4);
             const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
             const rawData = window.atob(base64);
@@ -2119,81 +2142,60 @@ base_template = """
         }
 
         function subscribeToPush() {
-    if (!('serviceWorker' in navigator)) {
-        console.log('Service Worker not supported');
-        return;
-    }
-
-    navigator.serviceWorker.ready.then(registration => {
-        registration.pushManager.getSubscription().then(subscription => {
-            if (subscription) {
-                console.log('Already subscribed to push');
+            if (!('serviceWorker' in navigator)) {
+                console.log('Service Worker not supported');
                 return;
             }
 
-            Notification.requestPermission().then(permission => {
-                if (permission !== 'granted') {
-                    console.log('Push permission denied');
-                    return;
-                }
-
-                // Get the VAPID public key from the hidden element
-                const publicKeyElement = document.getElementById('vapid-public-key');
-                if (!publicKeyElement) {
-                    console.error('VAPID public key element not found');
-                    return;
-                }
-                
-                const publicKey = publicKeyElement.textContent.trim();
-                
-                // Convert and extract the raw key with 0x04 prefix
-                function urlBase64ToUint8Array(base64String) {
-                    base64String = base64String.trim();
-                    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-                    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-                    const rawData = window.atob(base64);
-                    const outputArray = new Uint8Array(rawData.length);
-                    for (let i = 0; i < rawData.length; ++i) {
-                        outputArray[i] = rawData.charCodeAt(i);
+            navigator.serviceWorker.ready.then(registration => {
+                registration.pushManager.getSubscription().then(subscription => {
+                    if (subscription) {
+                        console.log('Already subscribed to push');
+                        return;
                     }
-                    return outputArray;
-                }
-                
-                // Extract the raw key with the 0x04 prefix
-                const fullKey = urlBase64ToUint8Array(publicKey);
-                const rawKeyWithoutPrefix = fullKey.slice(27);
-                const applicationServerKey = new Uint8Array(65);
-                applicationServerKey[0] = 0x04;
-                applicationServerKey.set(rawKeyWithoutPrefix, 1);
 
-                registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: applicationServerKey
-                }).then(subscription => {
-                    console.log('Push subscription created:', subscription);
-                    
-                    return fetch('/api/subscribe', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            endpoint: subscription.endpoint,
-                            keys: {
-                                p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
-                                auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
-                            }
-                        })
+                    Notification.requestPermission().then(permission => {
+                        if (permission !== 'granted') {
+                            console.log('Push permission denied');
+                            return;
+                        }
+
+                        const publicKeyElement = document.getElementById('vapid-public-key');
+                        if (!publicKeyElement) {
+                            console.error('VAPID public key element not found');
+                            return;
+                        }
+                        
+                        const publicKey = publicKeyElement.textContent.trim();
+                        const fullKey = urlBase64ToUint8Array(publicKey);
+                        const rawKeyWithoutPrefix = fullKey.slice(27);
+                        const applicationServerKey = new Uint8Array(65);
+                        applicationServerKey[0] = 0x04;
+                        applicationServerKey.set(rawKeyWithoutPrefix, 1);
+
+                        registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: applicationServerKey
+                        }).then(subscription => {
+                            console.log('Push subscription created:', subscription);
+                            return fetch('/api/subscribe', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    endpoint: subscription.endpoint,
+                                    keys: {
+                                        p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                                        auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                                    }
+                                })
+                            });
+                        }).then(response => response.json())
+                          .then(data => console.log('Subscription saved:', data))
+                          .catch(err => console.log('Push subscription error:', err));
                     });
-                }).then(response => response.json())
-                  .then(data => console.log('Subscription saved:', data))
-                  .catch(err => {
-                    console.log('Push subscription error:', err);
                 });
             });
-        });
-    });
-}
+        }
 
         // ============================================================
         // INITIALIZE BADGES AND PUSH
@@ -2207,13 +2209,12 @@ base_template = """
             setInterval(updateNotifBadge, 10000);
         }
 
-        // Auto-subscribe to push if logged in (using your existing session check)
         {% if session.user_id %}
             setTimeout(subscribeToPush, 3000);
         {% endif %}
 
         // ============================================================
-        // CLIENT-SIDE IMAGE COMPRESSION
+        // CLIENT-SIDE IMAGE COMPRESSION (unchanged)
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
             const forms = document.querySelectorAll('form');
@@ -5467,6 +5468,26 @@ def test_push():
     user_id = session['user_id']
     send_push_notification(user_id, "🧪 Test Push", "If you see this, push works!", "/dashboard")
     return "✅ Push sent. Check your device (and server logs)."
+
+@app.route('/user/<int:user_id>')
+@login_required
+def user_profile(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT name, phone FROM users WHERE id=?", (user_id,))
+    user = c.fetchone()
+    conn.close()
+    if not user:
+        return "User not found", 404
+    name, phone = user
+    content = f'''
+    <div class="card">
+        <div class="card-header">👤 {name}</div>
+        <p>📞 {phone}</p>
+        <a href="/messages/{user_id}" class="btn">💬 Message</a>
+    </div>
+    '''
+    return render_user_template(base_template, title=f"User: {name}", active_page="", content=content)
 
 
 # ============================================================
