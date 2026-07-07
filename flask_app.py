@@ -370,8 +370,8 @@ def init_db():
         c.execute("INSERT OR IGNORE INTO points_settings (key, value) VALUES (?,?)", (key, val))
 
    # ---- INSERT DEFAULT PACKAGES ----
-c.execute("SELECT COUNT(*) FROM subscription_packages")
-if c.fetchone()[0] == 0:
+    c.execute("SELECT COUNT(*) FROM subscription_packages")
+    if c.fetchone()[0] == 0:
     # FREE package (default for new users)
     c.execute("""INSERT INTO subscription_packages 
         (name, duration_days, price, points_required, is_active) 
