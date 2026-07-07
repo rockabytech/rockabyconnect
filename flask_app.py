@@ -84,7 +84,7 @@ def init_db():
     conn.execute("PRAGMA busy_timeout = 30000;")
     conn.execute("PRAGMA journal_mode=WAL;")
     
-    # ⭐ CREATE CURSOR HERE ⭐
+    # ⭐ CREATE THE CURSOR HERE ⭐
     c = conn.cursor()
     
     # ---- USERS TABLE ----
@@ -115,58 +115,6 @@ def init_db():
         featured_expiry DATE,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
-
-        # ---- POINTS SYSTEM TABLES ----
-    c.execute('''CREATE TABLE IF NOT EXISTS points_settings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        key TEXT UNIQUE,
-        value TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-
-c.execute('''CREATE TABLE IF NOT EXISTS user_points (
-    user_id INTEGER PRIMARY KEY,
-    balance INTEGER DEFAULT 0,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-)''')
-
-c.execute('''CREATE TABLE IF NOT EXISTS points_transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    amount INTEGER NOT NULL,
-    type TEXT NOT NULL,
-    reference_id INTEGER,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-)''')
-
-c.execute('''CREATE TABLE IF NOT EXISTS redemption_requests (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    points_used INTEGER NOT NULL,
-    package_id INTEGER NOT NULL,
-    description TEXT,
-    status TEXT DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    processed_at TIMESTAMP,
-    FOREIGN KEY(user_id) REFERENCES users(id),
-    FOREIGN KEY(package_id) REFERENCES subscription_packages(id)
-)''')
-
-# Add points_required column to subscription_packages
-c.execute("PRAGMA table_info(subscription_packages)")
-cols = [row[1] for row in c.fetchall()]
-if 'points_required' not in cols:
-    c.execute("ALTER TABLE subscription_packages ADD COLUMN points_required INTEGER DEFAULT 0")
-
-# Insert default settings
-defaults = [
-    ('rating_points', '{"1":5,"2":10,"3":15,"4":20,"5":25}'),
-    ('referral_points', '50'),
-]
-for key, val in defaults:
-    c.execute("INSERT OR IGNORE INTO points_settings (key, value) VALUES (?,?)", (key, val))
 
     # ---- VENDORS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS vendors (
@@ -231,7 +179,7 @@ for key, val in defaults:
         FOREIGN KEY(reviewer_id) REFERENCES users(id)
     )''')
 
-    # ---- NOTIFICATIONS TABLE (with is_read and link) ----
+    # ---- NOTIFICATIONS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -243,7 +191,6 @@ for key, val in defaults:
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
-    # Add is_read column if missing
     c.execute("PRAGMA table_info(notifications)")
     cols = [row[1] for row in c.fetchall()]
     if 'is_read' not in cols:
@@ -328,6 +275,7 @@ for key, val in defaults:
         FOREIGN KEY(receiver_id) REFERENCES users(id)
     )''')
 
+    # ---- PUSH SUBSCRIPTIONS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS push_subscriptions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -338,17 +286,29 @@ for key, val in defaults:
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
-        # ---- SUBSCRIPTION PACKAGES TABLE ----
+    # ---- VIDEO COLUMN FIX ----
+    for table in ['providers', 'vendors', 'jobs']:
+        c.execute(f"PRAGMA table_info({table})")
+        existing = [row[1] for row in c.fetchall()]
+        if 'video' not in existing:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
+
+    # ============================================================
+    # ⭐ NEW: SUBSCRIPTION & POINTS TABLES ⭐
+    # ============================================================
+    
+    # ---- SUBSCRIPTION PACKAGES TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS subscription_packages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         duration_days INTEGER NOT NULL,
         price INTEGER NOT NULL,
+        points_required INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
-# ---- USER SUBSCRIPTIONS TABLE ----
+    # ---- USER SUBSCRIPTIONS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS user_subscriptions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -357,26 +317,66 @@ for key, val in defaults:
         start_date DATE,
         end_date DATE,
         is_active INTEGER DEFAULT 0,
-        status TEXT DEFAULT 'pending', -- pending, active, expired, cancelled
+        status TEXT DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id),
         FOREIGN KEY(package_id) REFERENCES subscription_packages(id)
     )''')
 
-        # Insert default package if none exist
+    # ---- POINTS SYSTEM TABLES ----
+    c.execute('''CREATE TABLE IF NOT EXISTS points_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS user_points (
+        user_id INTEGER PRIMARY KEY,
+        balance INTEGER DEFAULT 0,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS points_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        reference_id INTEGER,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS redemption_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        points_used INTEGER NOT NULL,
+        package_id INTEGER NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        processed_at TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id),
+        FOREIGN KEY(package_id) REFERENCES subscription_packages(id)
+    )''')
+
+    # ---- INSERT DEFAULT SETTINGS ----
+    defaults = [
+        ('rating_points', '{"1":5,"2":10,"3":15,"4":20,"5":25}'),
+        ('referral_points', '50'),
+    ]
+    for key, val in defaults:
+        c.execute("INSERT OR IGNORE INTO points_settings (key, value) VALUES (?,?)", (key, val))
+
+    # ---- INSERT DEFAULT PACKAGES ----
     c.execute("SELECT COUNT(*) FROM subscription_packages")
     if c.fetchone()[0] == 0:
-        c.execute("INSERT INTO subscription_packages (name, duration_days, price) VALUES ('1 Week', 7, 1000)")
-        c.execute("INSERT INTO subscription_packages (name, duration_days, price) VALUES ('1 Month', 30, 3000)")
-        c.execute("INSERT INTO subscription_packages (name, duration_days, price) VALUES ('3 Months', 90, 7000)")
+        c.execute("INSERT INTO subscription_packages (name, duration_days, price, points_required) VALUES ('1 Week', 7, 1000, 50)")
+        c.execute("INSERT INTO subscription_packages (name, duration_days, price, points_required) VALUES ('1 Month', 30, 3000, 120)")
+        c.execute("INSERT INTO subscription_packages (name, duration_days, price, points_required) VALUES ('3 Months', 90, 7000, 300)")
 
-    # ---- VIDEO COLUMN FIX (for existing databases) ----
-    for table in ['providers', 'vendors', 'jobs']:
-        c.execute(f"PRAGMA table_info({table})")
-        existing = [row[1] for row in c.fetchall()]
-        if 'video' not in existing:
-            c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
-
+    # ---- COMMIT & CLOSE ----
     conn.commit()
     conn.close()
 
