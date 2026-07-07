@@ -114,6 +114,58 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+        # ---- POINTS SYSTEM TABLES ----
+c.execute('''CREATE TABLE IF NOT EXISTS points_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT UNIQUE,
+    value TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)''')
+
+c.execute('''CREATE TABLE IF NOT EXISTS user_points (
+    user_id INTEGER PRIMARY KEY,
+    balance INTEGER DEFAULT 0,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+)''')
+
+c.execute('''CREATE TABLE IF NOT EXISTS points_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    amount INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    reference_id INTEGER,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+)''')
+
+c.execute('''CREATE TABLE IF NOT EXISTS redemption_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    points_used INTEGER NOT NULL,
+    package_id INTEGER NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    FOREIGN KEY(package_id) REFERENCES subscription_packages(id)
+)''')
+
+# Add points_required column to subscription_packages
+c.execute("PRAGMA table_info(subscription_packages)")
+cols = [row[1] for row in c.fetchall()]
+if 'points_required' not in cols:
+    c.execute("ALTER TABLE subscription_packages ADD COLUMN points_required INTEGER DEFAULT 0")
+
+# Insert default settings
+defaults = [
+    ('rating_points', '{"1":5,"2":10,"3":15,"4":20,"5":25}'),
+    ('referral_points', '50'),
+]
+for key, val in defaults:
+    c.execute("INSERT OR IGNORE INTO points_settings (key, value) VALUES (?,?)", (key, val))
+
     # ---- VENDORS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS vendors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -351,6 +403,48 @@ def get_db_connection():
     finally:
         conn.close()
 # ===== END INSERT =====
+
+def get_points_setting(key):
+    """Get a points setting value (as string)."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT value FROM points_settings WHERE key=?", (key,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+def get_user_points(user_id):
+    """Get user's current points balance."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT balance FROM user_points WHERE user_id=?", (user_id,))
+    row = c.fetchone()
+    if not row:
+        c.execute("INSERT INTO user_points (user_id, balance) VALUES (?,0)", (user_id,))
+        conn.commit()
+        balance = 0
+    else:
+        balance = row[0]
+    conn.close()
+    return balance
+
+def add_points(user_id, amount, type, ref_id=None, description=''):
+    """Add points to a user and log transaction."""
+    if amount == 0:
+        return
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    # Update balance
+    c.execute("UPDATE user_points SET balance = balance + ? WHERE user_id=?", (amount, user_id))
+    if c.rowcount == 0:
+        c.execute("INSERT INTO user_points (user_id, balance) VALUES (?,?)", (user_id, amount))
+    # Log transaction
+    c.execute("""
+        INSERT INTO points_transactions (user_id, amount, type, reference_id, description)
+        VALUES (?,?,?,?,?)
+    """, (user_id, amount, type, ref_id, description))
+    conn.commit()
+    conn.close()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -624,54 +718,45 @@ def get_referral_stats(user_id):
     }
 
 def process_referral(user_id, phone):
-    """
-    Check if there's a referral code in session, and if so,
-    create a referral record for the new user signing up.
-    """
     if 'referral_code' not in session:
         return False
-    
     ref_code = session['referral_code']
-    
     with get_db_connection() as conn:
         c = conn.cursor()
-        
-        # Find the referrer (user who owns this referral code)
         c.execute("SELECT user_id FROM referral_codes WHERE code = ?", (ref_code,))
         referrer = c.fetchone()
         if not referrer:
             return False
-        
         referrer_id = referrer[0]
-        
-        # Prevent self-referral
         if referrer_id == user_id:
             return False
-        
-        # Check if this user has already been referred by this referrer
+        # Check existing
         c.execute("SELECT id FROM referrals WHERE referrer_id = ? AND referred_user_id = ?", (referrer_id, user_id))
         if c.fetchone():
             return False
-        
-        # Get referral settings
+        # Get settings
         c.execute("SELECT reward_percentage, reward_type, max_referrals FROM referral_settings WHERE is_active=1 LIMIT 1")
         settings = c.fetchone()
         if not settings:
             settings = (10, 'discount', 10)
-        
         reward_percentage, reward_type, max_referrals = settings
-        
-        # Count completed referrals for this referrer
         count = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status IN ('completed', 'rewarded')", (referrer_id,)).fetchone()[0]
         if count >= max_referrals:
             return False
-        
-        # Insert pending referral
+        # Insert referral (pending)
         c.execute("""
             INSERT INTO referrals (referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type)
             VALUES (?, ?, ?, 'pending', 0, ?)
         """, (referrer_id, user_id, phone, reward_type))
+        ref_id = c.lastrowid
         conn.commit()
+        
+        # ---- AWARD POINTS TO REFERRER ----
+        referral_points = int(get_points_setting('referral_points') or 0)
+        if referral_points > 0:
+            add_points(referrer_id, referral_points, 'referral', ref_id, f'Referral of {phone}')
+    session.pop('referral_code', None)
+    return True
     
     # Clear the session
     session.pop('referral_code', None)
@@ -903,6 +988,96 @@ def admin_referral_settings_page():  # ← Renamed to avoid conflict
     </div>
     '''
     return render_template_string(admin_base_template.replace("{title}", "Referral Settings").replace("{active_page}", "stats").replace("{content}", content))
+
+@app.route('/admin/redemption-requests')
+def admin_redemption_requests():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT r.id, u.name, u.phone, r.points_used, p.name as package_name, r.status, r.created_at
+        FROM redemption_requests r
+        JOIN users u ON r.user_id = u.id
+        JOIN subscription_packages p ON r.package_id = p.id
+        WHERE r.status = 'pending'
+        ORDER BY r.created_at DESC
+    """)
+    requests = c.fetchall()
+    conn.close()
+    rows = ""
+    for req in requests:
+        rid, name, phone, pts, pkg, status, created = req
+        rows += f"""
+        <tr>
+            <td>{name}<br><small>{phone}</small></td>
+            <td>{pts}</td>
+            <td>{pkg}</td>
+            <td><small>{created[:16]}</small></td>
+            <td>
+                <a href="/admin/approve-redemption/{rid}" class="btn btn-small" style="background:#28a745;">Approve</a>
+                <a href="/admin/reject-redemption/{rid}" class="btn btn-small btn-danger">Reject</a>
+            </td>
+        </tr>"""
+    if not rows:
+        rows = "<tr><td colspan='5'>No pending redemption requests.</td></tr>"
+    content = f"""
+    <div class="card">
+        <div class="card-header">🔄 Pending Redemption Requests</div>
+        <table>
+            <thead><tr><th>User</th><th>Points</th><th>Package</th><th>Date</th><th>Action</th></tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+        <a href="/admin/dashboard" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Redemption Requests").replace("{active_page}", "redemptions").replace("{content}", content))
+
+@app.route('/admin/approve-redemption/<int:req_id>')
+def admin_approve_redemption(req_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT user_id, points_used, package_id FROM redemption_requests WHERE id=? AND status='pending'", (req_id,))
+    req = c.fetchone()
+    if req:
+        user_id, points_used, package_id = req
+        # Deduct points (should match)
+        c.execute("UPDATE user_points SET balance = balance - ? WHERE user_id=?", (points_used, user_id))
+        # Log transaction
+        c.execute("""
+            INSERT INTO points_transactions (user_id, amount, type, reference_id, description)
+            VALUES (?,?,?,?,?)
+        """, (user_id, -points_used, 'redemption', req_id, f'Redeemed for subscription package {package_id}'))
+        # Create subscription (active)
+        c.execute("SELECT duration_days FROM subscription_packages WHERE id=?", (package_id,))
+        pkg = c.fetchone()
+        if pkg:
+            duration = pkg[0]
+            start_date = date.today()
+            end_date = start_date + timedelta(days=duration)
+            c.execute("""
+                INSERT INTO user_subscriptions (user_id, package_id, start_date, end_date, status, transaction_id)
+                VALUES (?,?,?,?,'active',?)
+            """, (user_id, package_id, start_date, end_date, f'redemption_{req_id}'))
+        # Update request status
+        c.execute("UPDATE redemption_requests SET status='approved', processed_at=CURRENT_TIMESTAMP WHERE id=?", (req_id,))
+        conn.commit()
+        add_notification(user_id, 'redemption_approved', f'Your redemption request has been approved! You now have an active subscription.')
+    conn.close()
+    return redirect('/admin/redemption-requests')
+
+@app.route('/admin/reject-redemption/<int:req_id>')
+def admin_reject_redemption(req_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE redemption_requests SET status='rejected', processed_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'", (req_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/redemption-requests')
 
 # ============================================================
 # BASE TEMPLATE (UNCHANGED)
@@ -2858,49 +3033,243 @@ vendor_list_page = base_template.replace("{title}", "Vendors").replace("{active_
 # ============================================================
 admin_base_template = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin – {title}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .card-header { font-size: 1.2rem; font-weight: bold; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #f5af19; }
-        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .stat-card { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
-        .stat-card h3 { margin: 0; font-size: 1.8rem; color: #f5af19; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background: #f5af19; color: white; }
-        .btn { display: inline-block; padding: 6px 12px; background: #f5af19; color: white; text-decoration: none; border-radius: 4px; font-size: 0.9rem; border: none; cursor: pointer; }
-        .btn-outline { background: transparent; border: 1px solid #f5af19; color: #f5af19; }
-        .btn-danger { background: #dc3545; }
-        .btn-small { padding: 4px 8px; font-size: 0.75rem; }
-        .alert { padding: 12px; border-radius: 4px; margin-bottom: 15px; }
-        .alert-error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
-        label { display: block; margin-top: 10px; font-weight: bold; }
-        input, select, textarea { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 4px; }
-        .nav { background: #333; color: white; padding: 10px 20px; margin-bottom: 20px; border-radius: 4px; }
-        .nav a { color: white; text-decoration: none; margin-right: 15px; }
-        .nav a:hover { text-decoration: underline; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: bold; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f4f8;
+            color: #1a1a1a;
+            min-height: 100vh;
+        }
+        .admin-nav {
+            background: #1a1a2e;
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .admin-nav .brand {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #f5af19;
+        }
+        .admin-nav .brand span { color: white; }
+        .admin-nav a {
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+        .admin-nav a:hover,
+        .admin-nav a.active {
+            background: rgba(245, 175, 25, 0.2);
+            color: #f5af19;
+        }
+        .admin-nav .nav-links {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .admin-nav .logout-link {
+            color: #dc3545;
+        }
+        .admin-nav .logout-link:hover {
+            background: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 16px;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            border: 1px solid #e0e0e0;
+        }
+        .card-header {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f5af19;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px 12px;
+            text-align: center;
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .stat-card h3 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #f5af19;
+            margin-bottom: 2px;
+        }
+        .stat-card small {
+            color: #666;
+            font-size: 0.75rem;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #f5af19;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
+        }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #f5af19;
+            color: #f5af19;
+        }
+        .btn-outline:hover {
+            background: rgba(245, 175, 25, 0.1);
+        }
+        .btn-small {
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            border-radius: 6px;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th {
+            background: #f8f9fa;
+            text-align: left;
+            padding: 10px 12px;
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        tr:hover td {
+            background: #f8f9fa;
+        }
+        label {
+            display: block;
+            margin-top: 12px;
+            font-weight: 600;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid #ced4da;
+            font-size: 0.95rem;
+            margin-top: 4px;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #f5af19;
+            box-shadow: 0 0 0 3px rgba(245, 175, 25, 0.2);
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        @media (max-width: 768px) {
+            .admin-nav .nav-links {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            .admin-nav a {
+                font-size: 0.8rem;
+                padding: 4px 10px;
+            }
+            .stat-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+            .stat-card h3 {
+                font-size: 1.4rem;
+            }
+        }
     </style>
 </head>
 <body>
+    <nav class="admin-nav">
+        <div class="brand">⚙️ ROCKABY<span>ADMIN</span></div>
+        <div class="nav-links">
+            <a href="/admin/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">📊 Dashboard</a>
+            <a href="/admin/points-settings" class="{{ 'active' if active_page == 'points' else '' }}">⭐ Points</a>
+            <a href="/admin/subscription-requests" class="{{ 'active' if active_page == 'subscriptions' else '' }}">📦 Requests</a>
+            <a href="/admin/subscriptions" class="{{ 'active' if active_page == 'packages' else '' }}">📦 Packages</a>
+            <a href="/admin/backups" class="{{ 'active' if active_page == 'backups' else '' }}">💾 Backups</a>
+            <a href="/admin/stats" class="{{ 'active' if active_page == 'stats' else '' }}">📊 Stats</a>
+            <a href="/admin/referral-settings" class="{{ 'active' if active_page == 'referrals' else '' }}">🎁 Referrals</a>
+            <a href="/admin/logout" class="logout-link">🚪 Logout</a>
+        </div>
+    </nav>
     <div class="container">
-        <div class="nav">
-            <a href="/admin/dashboard">Dashboard</a>
-            <a href="/admin/subscriptions">Packages</a>
-            <a href="/admin/subscription-requests">Requests</a>
-            <a href="/admin/backups">Backups</a>
-            <a href="/admin/referral-settings">Referrals</a>
-            <a href="/admin/logout" style="float:right;">Logout</a>
-        </div>
-        <div class="card">
-            {content}
-        </div>
+        {content}
     </div>
 </body>
 </html>
@@ -3040,6 +3409,37 @@ def home():
         content = content[:hero_end] + carousel_html + content[hero_end:]
 
     return render_user_template(content, title="Home", active_page="home")
+
+@app.route('/points-history')
+@login_required
+def points_history():
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT amount, type, description, created_at
+        FROM points_transactions
+        WHERE user_id=?
+        ORDER BY created_at DESC
+        LIMIT 50
+    """, (user_id,))
+    transactions = c.fetchall()
+    conn.close()
+    rows = ""
+    for t in transactions:
+        sign = '+' if t[0] > 0 else ''
+        rows += f"<tr><td>{t[3][:16]}</td><td>{t[1]}</td><td>{sign}{t[0]}</td><td>{t[2]}</td></tr>"
+    content = f"""
+    <div class="card">
+        <div class="card-header">📊 Points History</div>
+        <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Description</th></tr></thead>
+            <tbody>{rows or '<tr><td colspan="4">No transactions yet.</td></tr>'}</tbody>
+        </table>
+        <a href="/dashboard" class="btn btn-outline">Back</a>
+    </div>
+    """
+    return render_user_template(base_template, title="Points History", content=content)
 
 # ============================================================
 # NOTIFICATION API & PAGE
@@ -3189,6 +3589,11 @@ def update_name():
 @login_required
 def dashboard():
     user_id = session['user_id']
+    
+    # ---- GET USER POINTS ----
+    points = get_user_points(user_id)
+    # -------------------------
+    
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
@@ -3202,6 +3607,26 @@ def dashboard():
     c.execute("SELECT id, title, status FROM jobs WHERE employer_id=? ORDER BY id DESC", (user_id,))
     jobs = c.fetchall()
     conn.close()
+
+    # ---- POINTS CARD ----
+    points_card = f"""
+    <div class="card" style="background:linear-gradient(135deg, #f5af19, #f7c35c); color:white; border:none;">
+        <div class="card-header" style="border-bottom-color:rgba(255,255,255,0.3); color:white; padding-bottom:8px;">
+            ⭐ Your Points
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+            <div>
+                <h2 style="font-size:2.5rem; margin:0; color:white;">{points}</h2>
+                <p style="margin:0; opacity:0.9; font-size:0.9rem;">Earn points by receiving ratings and referring friends!</p>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <a href="/redeem" class="btn" style="background:white; color:#f5af19; font-weight:700;">🔄 Redeem Points</a>
+                <a href="/points-history" class="btn" style="background:rgba(255,255,255,0.2); color:white; border:1px solid rgba(255,255,255,0.3);">📊 History</a>
+            </div>
+        </div>
+    </div>
+    """
+    # ---------------------------------
 
     # ---- Freelancer Profile Section ----
     profile_section = ""
@@ -3288,6 +3713,7 @@ def dashboard():
         title="Dashboard",
         active_page="dashboard",
         user_name=session['user_name'],
+        points_card=points_card,
         profile_section=profile_section,
         vendor_section=vendor_section,
         jobs_html=jobs_html
@@ -4178,7 +4604,24 @@ def add_review(provider_id):
     c = conn.cursor()
     c.execute("INSERT INTO reviews (provider_id, reviewer_id, rating, comment) VALUES (?,?,?,?)",
               (provider_id, session['user_id'], rating, comment))
+    review_id = c.lastrowid
     conn.commit()
+    
+    # ---- AWARD POINTS TO PROVIDER ----
+    # Get provider's user_id
+    c.execute("SELECT user_id FROM providers WHERE id=?", (provider_id,))
+    prov = c.fetchone()
+    if prov:
+        provider_user_id = prov[0]
+        rating_points_json = get_points_setting('rating_points')
+        if rating_points_json:
+            try:
+                rating_points = json.loads(rating_points_json)
+                points = rating_points.get(str(rating), 0)
+                if points > 0:
+                    add_points(provider_user_id, points, 'rating', review_id, f'{rating}-star rating')
+            except:
+                pass
     conn.close()
     return redirect(f'/provider/{provider_id}')
 
@@ -4436,12 +4879,13 @@ def admin_dashboard():
                     total_revenue += 40000
             except:
                 pass
-    conn.close()
+    
+    # ---- PENDING SUBSCRIPTION REQUESTS ----
+    c.execute("SELECT COUNT(*) FROM boost_requests WHERE boost_type='subscription' AND status='pending'")
+    pending_subs = c.fetchone()[0]
+    # -----------------------------------------
 
     # Pending boost requests
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
-    c = conn.cursor()
     c.execute("""
         SELECT br.id, u.phone, u.name, br.transaction_id, br.plan, br.boost_type, br.item_id, br.request_date
         FROM boost_requests br JOIN users u ON br.user_id = u.id
@@ -4479,7 +4923,19 @@ def admin_dashboard():
             <div class="stat-card"><h3>{job_stats.get('Open', 0)}</h3><small>Open Jobs</small></div>
             <div class="stat-card"><h3>{pending_boosts}</h3><small>Pending Boosts</small></div>
             <div class="stat-card"><h3>{approved_boosts}</h3><small>Approved Boosts</small></div>
+            <div class="stat-card"><h3>{pending_subs}</h3><small>Pending Subscriptions</small></div>
             <div class="stat-card"><h3>UGX {total_revenue:,}</h3><small>Total Revenue</small></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">⚙️ Admin Tools</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a href="/admin/points-settings" class="btn" style="background:#fd7e14; color:white;">⭐ Points Settings</a>
+            <a href="/admin/subscription-requests" class="btn" style="background:#17a2b8; color:white;">📦 Subscription Requests</a>
+            <a href="/admin/subscriptions" class="btn" style="background:#28a745; color:white;">📦 Manage Packages</a>
+            <a href="/admin/backups" class="btn" style="background:#6c757d; color:white;">💾 Backups</a>
+            <a href="/admin/stats" class="btn" style="background:#6f42c1; color:white;">📊 Detailed Stats</a>
         </div>
     </div>
 
@@ -4494,8 +4950,6 @@ def admin_dashboard():
         <div style="margin-top:20px;">
             <a href="/admin/stats" class="btn btn-outline">📊 Detailed Statistics</a>
             <a href="/admin/referral-settings" class="btn" style="background:#fd7e14; color:white;">🎁 Referral Settings</a>
-            <a href="/admin/subscriptions" class="btn" style="background:#28a745; color:white;">📦 Packages</a>
-            <a href="/admin/subscription-requests" class="btn" style="background:#17a2b8; color:white;">🔄 Requests</a>
         </div>
     </div>
     """
@@ -5017,6 +5471,64 @@ def admin_reject_subscription(req_id):
     conn.close()
     return redirect('/admin/subscription-requests')
 
+@app.route('/admin/points-settings', methods=['GET', 'POST'])
+def admin_points_settings():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    if request.method == 'POST':
+        # Update rating points (JSON)
+        rating_points = {
+            '1': int(request.form.get('star1', 5)),
+            '2': int(request.form.get('star2', 10)),
+            '3': int(request.form.get('star3', 15)),
+            '4': int(request.form.get('star4', 20)),
+            '5': int(request.form.get('star5', 25))
+        }
+        c.execute("INSERT OR REPLACE INTO points_settings (key, value) VALUES ('rating_points', ?)", (json.dumps(rating_points),))
+        referral_points = int(request.form.get('referral_points', 50))
+        c.execute("INSERT OR REPLACE INTO points_settings (key, value) VALUES ('referral_points', ?)", (str(referral_points),))
+        conn.commit()
+        conn.close()
+        return redirect('/admin/points-settings')
+    
+    # Get current values
+    rating_points_json = get_points_setting('rating_points')
+    if rating_points_json:
+        try:
+            rating_points = json.loads(rating_points_json)
+        except:
+            rating_points = {'1':5, '2':10, '3':15, '4':20, '5':25}
+    else:
+        rating_points = {'1':5, '2':10, '3':15, '4':20, '5':25}
+    referral_points = int(get_points_setting('referral_points') or 50)
+    
+    conn.close()
+    
+    content = f"""
+    <div class="card">
+        <div class="card-header">⭐ Points Settings</div>
+        <form method="POST">
+            <h3>Points per Star Rating</h3>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
+                <div><label>⭐1: <input type="number" name="star1" value="{rating_points.get('1',5)}" min="0"></label></div>
+                <div><label>⭐2: <input type="number" name="star2" value="{rating_points.get('2',10)}" min="0"></label></div>
+                <div><label>⭐3: <input type="number" name="star3" value="{rating_points.get('3',15)}" min="0"></label></div>
+                <div><label>⭐4: <input type="number" name="star4" value="{rating_points.get('4',20)}" min="0"></label></div>
+                <div><label>⭐5: <input type="number" name="star5" value="{rating_points.get('5',25)}" min="0"></label></div>
+            </div>
+            <label>Referral Points (per successful referral):</label>
+            <input type="number" name="referral_points" value="{referral_points}" min="0">
+            <button type="submit" class="btn" style="margin-top:20px;">Save Settings</button>
+        </form>
+        <a href="/admin/dashboard" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Points Settings").replace("{active_page}", "points").replace("{content}", content))
+
 @app.route('/admin/logout')
 def admin_logout():
     session.pop('admin', None)
@@ -5308,6 +5820,95 @@ def view_application(app_id):
     '''
     conn.close()
     return render_user_template(base_template, title="Application Details", active_page="jobs", content=content)
+
+@app.route('/redeem', methods=['GET', 'POST'])
+@login_required
+def redeem_points():
+    user_id = session['user_id']
+    balance = get_user_points(user_id)
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, name, duration_days, price, points_required 
+        FROM subscription_packages 
+        WHERE is_active=1 AND points_required > 0
+        ORDER BY points_required
+    """)
+    packages = c.fetchall()
+    conn.close()
+    
+    if request.method == 'POST':
+        package_id = request.form.get('package_id')
+        if not package_id:
+            return "Please select a package", 400
+        
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT points_required, name, duration_days FROM subscription_packages WHERE id=?", (package_id,))
+        pkg = c.fetchone()
+        if not pkg:
+            conn.close()
+            return "Invalid package", 400
+        
+        required_points, pkg_name, duration_days = pkg
+        
+        if balance < required_points:
+            conn.close()
+            return f"Insufficient points. You need {required_points} points, you have {balance}.", 400
+        
+        # ---- INSTANT REDEMPTION ----
+        # 1. Deduct points
+        c.execute("UPDATE user_points SET balance = balance - ? WHERE user_id=?", (required_points, user_id))
+        # 2. Log transaction
+        c.execute("""
+            INSERT INTO points_transactions (user_id, amount, type, reference_id, description)
+            VALUES (?,?,?,?,?)
+        """, (user_id, -required_points, 'redemption', None, f'Redeemed for {pkg_name}'))
+        # 3. Create subscription (active immediately)
+        start_date = date.today()
+        end_date = start_date + timedelta(days=duration_days)
+        c.execute("""
+            INSERT INTO user_subscriptions (user_id, package_id, start_date, end_date, status, transaction_id)
+            VALUES (?,?,?,?,'active',?)
+        """, (user_id, package_id, start_date, end_date, f'points_redemption_{int(datetime.now().timestamp())}'))
+        conn.commit()
+        conn.close()
+        
+        add_notification(user_id, 'redemption_approved', f'You successfully redeemed {pkg_name} using {required_points} points! Your subscription is now active.')
+        return redirect('/redeem?success=1')
+    
+    # GET – show packages and balance
+    success = request.args.get('success')
+    success_html = '<div class="alert alert-success" style="background:#d4edda; color:#155724; padding:10px; border-radius:8px; margin-bottom:10px;">✅ Redemption successful! Your subscription is now active.</div>' if success else ''
+    
+    packages_html = ""
+    for pkg in packages:
+        pid, name, duration, price, pts = pkg
+        packages_html += f"""
+        <div style="border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:12px;">
+            <h3>{name}</h3>
+            <p>Duration: {duration} days</p>
+            <p>Price: UGX {price:,}</p>
+            <p>Points Required: <strong>{pts}</strong></p>
+            <input type="radio" name="package_id" value="{pid}" required>
+        </div>
+        """
+    content = f"""
+    <div class="card">
+        <div class="card-header">🔄 Redeem Points (Automatic)</div>
+        {success_html}
+        <p>Your balance: <strong>{balance}</strong> points</p>
+        <hr>
+        <form method="POST">
+            <label>Select a subscription package to redeem:</label>
+            {packages_html}
+            <button type="submit" class="btn" style="margin-top:20px;">Redeem Instantly</button>
+        </form>
+        <a href="/dashboard" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_user_template(base_template, title="Redeem Points", content=content)
 
 
 @app.route('/application/<int:app_id>/status', methods=['POST'])
