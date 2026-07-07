@@ -284,6 +284,38 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+        # ---- SUBSCRIPTION PACKAGES TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS subscription_packages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        duration_days INTEGER NOT NULL,
+        price INTEGER NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+# ---- USER SUBSCRIPTIONS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS user_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        package_id INTEGER NOT NULL,
+        transaction_id TEXT,
+        start_date DATE,
+        end_date DATE,
+        is_active INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'pending', -- pending, active, expired, cancelled
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id),
+        FOREIGN KEY(package_id) REFERENCES subscription_packages(id)
+    )''')
+
+        # Insert default package if none exist
+    c.execute("SELECT COUNT(*) FROM subscription_packages")
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT INTO subscription_packages (name, duration_days, price) VALUES ('1 Week', 7, 1000)")
+        c.execute("INSERT INTO subscription_packages (name, duration_days, price) VALUES ('1 Month', 30, 3000)")
+        c.execute("INSERT INTO subscription_packages (name, duration_days, price) VALUES ('3 Months', 90, 7000)")
+
     # ---- VIDEO COLUMN FIX (for existing databases) ----
     for table in ['providers', 'vendors', 'jobs']:
         c.execute(f"PRAGMA table_info({table})")
@@ -437,6 +469,46 @@ ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'}
 
 def allowed_video(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_VIDEO_EXTENSIONS
+
+def is_subscription_active(user_id):
+    """Check if a user has an active subscription."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    today = date.today().isoformat()
+    c.execute("""
+        SELECT id FROM user_subscriptions 
+        WHERE user_id=? AND status='active' AND end_date >= ?
+        LIMIT 1
+    """, (user_id, today))
+    result = c.fetchone()
+    conn.close()
+    return result is not None
+
+def get_user_subscription(user_id):
+    """Get the active subscription for a user (or None)."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    today = date.today().isoformat()
+    c.execute("""
+        SELECT us.*, p.name, p.duration_days, p.price 
+        FROM user_subscriptions us
+        JOIN subscription_packages p ON us.package_id = p.id
+        WHERE us.user_id=? AND us.status='active' AND us.end_date >= ?
+        ORDER BY us.end_date DESC
+        LIMIT 1
+    """, (user_id, today))
+    result = c.fetchone()
+    conn.close()
+    return result
+
+def get_subscription_packages():
+    """Get all active packages."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id, name, duration_days, price FROM subscription_packages WHERE is_active=1 ORDER BY price")
+    packages = c.fetchall()
+    conn.close()
+    return packages
 
 # ============================================================
 # THEME HELPERS
@@ -3657,6 +3729,8 @@ def edit_job(job_id):
 @app.route('/list')
 def list_providers():
     logged_in = 'user_id' in session
+    has_subscription = is_subscription_active(session['user_id']) if logged_in else False
+    
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
@@ -3689,10 +3763,13 @@ def list_providers():
             phone_display = '<p style="margin-top:5px; color:var(--text-secondary);">📞 <a href="/login">Sign in to view contact</a></p>'
             wa_button = ''
         
-        # ---- Message button (only if logged in and not viewing own profile) ----
+        # ---- Message button (subscription check) ----
         message_button = ""
         if logged_in and session['user_id'] != user_id:
-            message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+            if has_subscription:
+                message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+            else:
+                message_button = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Message</a>'
 
         cards_html += f"""
         <div class="provider-card">
@@ -3716,6 +3793,8 @@ def list_providers():
 @app.route('/jobs')
 def list_jobs():
     logged_in = 'user_id' in session
+    has_subscription = is_subscription_active(session['user_id']) if logged_in else False
+    
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
@@ -3750,17 +3829,22 @@ def list_jobs():
         
         applicants_link = ""
         apply_link = ""
-        # ---------- MESSAGE BUTTON (to employer) ----------
+        # ---- Message button (to employer) with subscription check ----
         message_button = ""
         if logged_in:
             if session.get('user_id') == employer_id:
                 applicants_link = f'<a href="/job/{job_id}/applicants" class="btn btn-small" style="background:#17a2b8;">👥 View Applicants</a>'
             elif status == 'Open':
-                apply_link = f'<a href="/apply/{job_id}" class="btn btn-small" style="background:#28a745;">📝 Apply</a>'
-            # Message employer (only if not self)
+                if has_subscription:
+                    apply_link = f'<a href="/apply/{job_id}" class="btn btn-small" style="background:#28a745;">📝 Apply</a>'
+                else:
+                    apply_link = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Apply</a>'
+            # Message employer (only if not self and has subscription)
             if session['user_id'] != employer_id:
-                message_button = f'<a href="/messages/{employer_id}" class="btn btn-small" style="background:#25D366;">💬 Message</a>'
-        # ------------------------------------------------
+                if has_subscription:
+                    message_button = f'<a href="/messages/{employer_id}" class="btn btn-small" style="background:#25D366;">💬 Message</a>'
+                else:
+                    message_button = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Message</a>'
 
         jobs_html += f"""
         <div class="job-card">
@@ -3786,6 +3870,8 @@ def list_jobs():
 @app.route('/vendors')
 def list_vendors():
     logged_in = 'user_id' in session
+    has_subscription = is_subscription_active(session['user_id']) if logged_in else False
+    
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
@@ -3816,11 +3902,13 @@ def list_vendors():
         else:
             contact = '<p style="margin-top:5px; color:var(--text-secondary);">📞 <a href="/login">Sign in to view contact</a></p>'
 
-        # ---------- MESSAGE BUTTON (only for logged-in users, not self) ----------
+        # ---- Message button (subscription check) ----
         message_button = ""
         if logged_in and session['user_id'] != user_id:
-            message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
-        # -------------------------------------------------------------------------
+            if has_subscription:
+                message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+            else:
+                message_button = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Message</a>'
 
         cards += f"""
         <div class="vendor-card">
@@ -3844,6 +3932,8 @@ def list_vendors():
 @app.route('/provider/<int:provider_id>')
 def provider_detail(provider_id):
     logged_in = 'user_id' in session
+    has_subscription = is_subscription_active(session['user_id']) if logged_in else False
+    
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
@@ -3867,9 +3957,13 @@ def provider_detail(provider_id):
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
+    # ---- Message button (subscription check) ----
     message_button = ""
     if logged_in and session['user_id'] != user_id:
-        message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+        if has_subscription:
+            message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+        else:
+            message_button = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Message</a>'
 
     video_display = ""
     if video:
@@ -3901,7 +3995,6 @@ def provider_detail(provider_id):
     else:
         reviews_html = "<p style='color:var(--text-secondary);'>No reviews yet. Be the first to leave a review!</p>"
 
-    # ---- Improved review form ----
     review_form = ""
     if logged_in:
         review_form = f"""
@@ -3930,7 +4023,6 @@ def provider_detail(provider_id):
     else:
         review_form = '<p style="margin-top:12px;"><a href="/login" class="btn btn-small">Login to leave a review</a></p>'
 
-    # Build final HTML
     skill_pill = f'<span class="pill-title"><i class="fas fa-tools"></i> {skills}</span>' if skills else ''
     detail_html = provider_detail_template
     detail_html = detail_html.replace("{provider_name}", name)
@@ -3954,6 +4046,8 @@ def provider_detail(provider_id):
 @app.route('/vendor/<int:vendor_id>')
 def vendor_detail(vendor_id):
     logged_in = 'user_id' in session
+    has_subscription = is_subscription_active(session['user_id']) if logged_in else False
+    
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
@@ -3980,15 +4074,18 @@ def vendor_detail(vendor_id):
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
+    # ---- Message button (subscription check) ----
     message_button = ""
     if logged_in and session['user_id'] != user_id:
-        message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+        if has_subscription:
+            message_button = f'<a href="/messages/{user_id}" class="btn btn-small" style="background:#28a745;">💬 Message</a>'
+        else:
+            message_button = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Message</a>'
 
     video_display = ""
     if video:
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
-    # Extra images (clickable)
     extra_images = ""
     if img2 or img3:
         extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; margin-bottom:15px;">'
@@ -3998,7 +4095,6 @@ def vendor_detail(vendor_id):
             extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         extra_images += '</div>'
 
-    # Build final HTML
     name_pill = f'<span class="pill-title"><i class="fas fa-store"></i> {bname}</span>'
     detail_html = vendor_detail_template
     detail_html = detail_html.replace("{business_name}", bname)
@@ -4633,6 +4729,215 @@ def admin_restore():
     """
     return render_template_string(admin_base_template.replace("{title}", "Restore Database").replace("{active_page}", "backups").replace("{content}", content))
 
+@app.route('/admin/subscriptions')
+def admin_subscriptions():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id, name, duration_days, price, is_active FROM subscription_packages ORDER BY price")
+    packages = c.fetchall()
+    conn.close()
+    rows = ""
+    for p in packages:
+        active_status = "✅ Active" if p[4] else "❌ Inactive"
+        rows += f"""
+        <tr>
+            <td>{p[1]}</td>
+            <td>{p[2]} days</td>
+            <td>UGX {p[3]:,}</td>
+            <td>{active_status}</td>
+            <td>
+                <a href="/admin/edit-package/{p[0]}" class="btn btn-small">Edit</a>
+                <a href="/admin/toggle-package/{p[0]}" class="btn btn-small">{'Deactivate' if p[4] else 'Activate'}</a>
+                <a href="/admin/delete-package/{p[0]}" class="btn btn-small btn-danger" onclick="return confirm('Delete this package?')">Delete</a>
+            </td>
+        </tr>"""
+    if not rows:
+        rows = "<tr><td colspan='5'>No packages yet.</td></tr>"
+    content = f"""
+    <div class="card">
+        <div class="card-header">📦 Subscription Packages</div>
+        <a href="/admin/add-package" class="btn" style="margin-bottom:15px;">+ Add Package</a>
+        <table>
+            <thead><tr><th>Name</th><th>Duration</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+        <div style="margin-top:20px;">
+            <a href="/admin/dashboard" class="btn btn-outline">Back to Dashboard</a>
+        </div>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Subscriptions").replace("{active_page}", "subscriptions").replace("{content}", content))
+
+@app.route('/admin/add-package', methods=['GET', 'POST'])
+def admin_add_package():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        duration = int(request.form['duration'])
+        price = int(request.form['price'])
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("INSERT INTO subscription_packages (name, duration_days, price) VALUES (?,?,?)", (name, duration, price))
+        conn.commit()
+        conn.close()
+        return redirect('/admin/subscriptions')
+    content = """
+    <div class="card">
+        <div class="card-header">➕ Add Package</div>
+        <form method="POST">
+            <label>Package Name</label>
+            <input type="text" name="name" required>
+            <label>Duration (days)</label>
+            <input type="number" name="duration" required min="1">
+            <label>Price (UGX)</label>
+            <input type="number" name="price" required min="0">
+            <button type="submit" class="btn" style="margin-top:20px;">Create Package</button>
+        </form>
+        <a href="/admin/subscriptions" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Add Package").replace("{active_page}", "subscriptions").replace("{content}", content))
+
+@app.route('/admin/subscription-requests')
+def admin_subscription_requests():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT br.id, u.name, u.phone, br.transaction_id, br.plan, br.item_id, br.request_date
+        FROM boost_requests br
+        JOIN users u ON br.user_id = u.id
+        WHERE br.boost_type='subscription' AND br.status='pending'
+        ORDER BY br.request_date DESC
+    """)
+    requests = c.fetchall()
+    conn.close()
+    rows = ""
+    for req in requests:
+        rid, name, phone, trans, plan, package_id, rdate = req
+        rows += f"""
+        <tr>
+            <td>{name}<br><small>{phone}</small></td>
+            <td>{trans}</td>
+            <td>{plan} days</td>
+            <td><small>{rdate[:16] if rdate else ''}</small></td>
+            <td>
+                <a href="/admin/approve-subscription/{rid}" class="btn btn-small" style="background:#28a745;">Approve</a>
+                <a href="/admin/reject-subscription/{rid}" class="btn btn-small btn-danger">Reject</a>
+            </td>
+        </tr>"""
+    if not rows:
+        rows = "<tr><td colspan='5'>No pending subscription requests.</td></tr>"
+    content = f"""
+    <div class="card">
+        <div class="card-header">🔄 Pending Subscription Requests</div>
+        <table>
+            <thead><tr><th>User</th><th>Transaction</th><th>Plan</th><th>Date</th><th>Action</th></tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+        <a href="/admin/dashboard" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Subscription Requests").replace("{active_page}", "subscriptions").replace("{content}", content))
+
+@app.route('/admin/approve-subscription/<int:req_id>')
+def admin_approve_subscription(req_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT user_id, item_id, plan FROM boost_requests WHERE id=? AND boost_type='subscription'", (req_id,))
+    req = c.fetchone()
+    if req:
+        user_id, package_id, duration_days = req
+        start_date = date.today()
+        end_date = start_date + timedelta(days=int(duration_days))
+        c.execute("""
+            INSERT INTO user_subscriptions (user_id, package_id, start_date, end_date, status, transaction_id)
+            VALUES (?,?,?,?,'active', (SELECT transaction_id FROM boost_requests WHERE id=?))
+        """, (user_id, package_id, start_date, end_date, req_id))
+        c.execute("UPDATE boost_requests SET status='approved' WHERE id=?", (req_id,))
+        conn.commit()
+        add_notification(user_id, 'subscription_approved', f'Your subscription for {duration_days} days is now active!')
+    conn.close()
+    return redirect('/admin/subscription-requests')
+
+@app.route('/admin/reject-subscription/<int:req_id>')
+def admin_reject_subscription(req_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE boost_requests SET status='rejected' WHERE id=? AND boost_type='subscription'", (req_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/subscription-requests')
+
+
+@app.route('/admin/edit-package/<int:package_id>', methods=['GET', 'POST'])
+def admin_edit_package(package_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        duration = int(request.form['duration'])
+        price = int(request.form['price'])
+        c.execute("UPDATE subscription_packages SET name=?, duration_days=?, price=? WHERE id=?", (name, duration, price, package_id))
+        conn.commit()
+        conn.close()
+        return redirect('/admin/subscriptions')
+    c.execute("SELECT id, name, duration_days, price FROM subscription_packages WHERE id=?", (package_id,))
+    p = c.fetchone()
+    conn.close()
+    if not p:
+        return "Package not found", 404
+    content = f"""
+    <div class="card">
+        <div class="card-header">✏️ Edit Package</div>
+        <form method="POST">
+            <label>Package Name</label>
+            <input type="text" name="name" value="{p[1]}" required>
+            <label>Duration (days)</label>
+            <input type="number" name="duration" value="{p[2]}" required min="1">
+            <label>Price (UGX)</label>
+            <input type="number" name="price" value="{p[3]}" required min="0">
+            <button type="submit" class="btn" style="margin-top:20px;">Update Package</button>
+        </form>
+        <a href="/admin/subscriptions" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Edit Package").replace("{active_page}", "subscriptions").replace("{content}", content))
+
+
+@app.route('/admin/toggle-package/<int:package_id>')
+def admin_toggle_package(package_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE subscription_packages SET is_active = 1 - is_active WHERE id=?", (package_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/subscriptions')
+
+@app.route('/admin/delete-package/<int:package_id>')
+def admin_delete_package(package_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM subscription_packages WHERE id=?", (package_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/subscriptions')
+
+
 @app.route('/admin/logout')
 def admin_logout():
     session.pop('admin', None)
@@ -5044,6 +5349,8 @@ def job_applicants(job_id):
 @app.route('/job/<int:job_id>')
 def job_detail(job_id):
     logged_in = 'user_id' in session
+    has_subscription = is_subscription_active(session['user_id']) if logged_in else False
+    
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
@@ -5062,8 +5369,6 @@ def job_detail(job_id):
     status_class = status.lower()
     location_display = f"{loc}{', ' + village if village else ''}"
     img_url = f"/static/uploads/{job_img}" if job_img else "/static/placeholder.png"
-    active_featured = False  # Jobs don't have featured in this query, but you can add if needed
-    feat = ''
     posted_date_display = posted_date[:10] if posted_date else ''
     
     if logged_in:
@@ -5071,17 +5376,28 @@ def job_detail(job_id):
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
-    # Apply button
+    # ---- Apply button (subscription check) ----
     apply_button = ""
     if logged_in:
         if session['user_id'] == employer_id:
             apply_button = '<p class="alert alert-info">You posted this job.</p>'
         elif status == 'Open':
-            apply_button = f'<a href="/apply/{job_id}" class="btn">📝 Apply for this Job</a>'
+            if has_subscription:
+                apply_button = f'<a href="/apply/{job_id}" class="btn">📝 Apply for this Job</a>'
+            else:
+                apply_button = '<a href="/subscribe" class="btn" style="background:#6c757d; color:white;">🔒 Subscribe to Apply</a>'
         else:
             apply_button = '<p class="alert alert-warning">This job is no longer open.</p>'
     else:
         apply_button = '<p><a href="/login" class="btn">Login to Apply</a></p>'
+
+    # ---- Message button (to employer) with subscription check ----
+    message_button = ""
+    if logged_in and session['user_id'] != employer_id:
+        if has_subscription:
+            message_button = f'<a href="/messages/{employer_id}" class="btn btn-small" style="background:#25D366;">💬 Message</a>'
+        else:
+            message_button = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Message</a>'
 
     # Video
     video_display = ""
@@ -5101,12 +5417,14 @@ def job_detail(job_id):
     detail_html = detail_html.replace("{description}", desc)
     detail_html = detail_html.replace("{status_class}", status_class)
     detail_html = detail_html.replace("{status}", status)
-    detail_html = detail_html.replace("{feat}", feat)
+    detail_html = detail_html.replace("{feat}", '')
     detail_html = detail_html.replace("{posted_date}", posted_date_display)
     detail_html = detail_html.replace("{employer_name}", employer_name)
     detail_html = detail_html.replace("{employer_id}", str(employer_id))
     detail_html = detail_html.replace("{contact_display}", contact_display)
     detail_html = detail_html.replace("{apply_button}", apply_button)
+    # Add message button to the template (if you have a placeholder)
+    detail_html = detail_html.replace("{message_button}", message_button)
     
     return render_user_template(detail_html, title=f"Job: {title}", active_page="jobs")
 
@@ -5296,6 +5614,90 @@ def message_conversation(user_id):
     </script>
     '''
     return render_user_template(base_template, title=f"Chat with {partner_name}", active_page="messages", content=content)
+
+@app.route('/subscribe', methods=['GET', 'POST'])
+@login_required
+def subscribe():
+    user_id = session['user_id']
+    # Check if already subscribed
+    if is_subscription_active(user_id):
+        # Show current subscription info
+        sub = get_user_subscription(user_id)
+        if sub:
+            content = f"""
+            <div class="card">
+                <div class="card-header">✅ You are subscribed</div>
+                <p>Package: {sub[7]}</p>
+                <p>Valid until: {sub[5]}</p>
+                <a href="/dashboard" class="btn">Back to Dashboard</a>
+            </div>
+            """
+            return render_user_template(base_template, title="My Subscription", content=content)
+    
+    packages = get_subscription_packages()
+    if not packages:
+        content = "<div class='card'><p>No subscription packages available at the moment. Please check back later.</p></div>"
+        return render_user_template(base_template, title="Subscribe", content=content)
+    
+    if request.method == 'POST':
+        package_id = request.form.get('package_id')
+        trans_id = request.form.get('trans_id', '').strip()
+        if not package_id or not trans_id:
+            return "Please select a package and provide a transaction ID.", 400
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT duration_days FROM subscription_packages WHERE id=?", (package_id,))
+        pkg = c.fetchone()
+        if not pkg:
+            conn.close()
+            return "Invalid package", 400
+        duration_days = pkg[0]
+        c.execute("""
+            INSERT INTO boost_requests (user_id, transaction_id, plan, status, boost_type, item_id)
+            VALUES (?,?,?,'pending','subscription',?)
+        """, (user_id, trans_id, duration_days, package_id))
+        conn.commit()
+        conn.close()
+        add_notification(user_id, 'subscription_request', f'Your subscription request for {duration_days} days has been submitted for approval.')
+        content = """
+        <div class="card">
+            <div class="card-header">📩 Request Submitted</div>
+            <p>Your subscription request has been sent for admin approval. You'll receive a notification once it's approved.</p>
+            <a href="/dashboard" class="btn">Back to Dashboard</a>
+        </div>
+        """
+        return render_user_template(base_template, title="Subscription Requested", content=content)
+    
+    # GET – show packages form
+    packages_html = ""
+    for pkg in packages:
+        pid, name, duration, price = pkg
+        packages_html += f"""
+        <div style="border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:12px;">
+            <h3>{name}</h3>
+            <p><strong>Duration:</strong> {duration} days</p>
+            <p><strong>Price:</strong> UGX {price:,}</p>
+            <input type="radio" name="package_id" value="{pid}" required>
+        </div>
+        """
+    content = f"""
+    <div class="card">
+        <div class="card-header">📦 Choose a Subscription Package</div>
+        <p>Subscribe to access messaging and job application features.</p>
+        <hr>
+        <form method="POST">
+            <label>Select Package:</label>
+            {packages_html}
+            <label>Mobile Money Transaction ID *</label>
+            <input type="text" name="trans_id" required placeholder="e.g., MTN-1234567890">
+            <button type="submit" class="btn" style="margin-top:20px;">Submit Request</button>
+        </form>
+        <p style="margin-top:10px; font-size:0.8rem; color:var(--text-secondary);">
+            Send payment to: <strong>MTN: 0785686404</strong> or <strong>Airtel: 0751318876</strong> (Name: Rocky Peter Abayo)
+        </p>
+    </div>
+    """
+    return render_user_template(base_template, title="Subscribe", content=content)
 
 # ============================================================
 # PWA ROUTES
