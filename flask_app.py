@@ -369,24 +369,24 @@ def init_db():
     for key, val in defaults:
         c.execute("INSERT OR IGNORE INTO points_settings (key, value) VALUES (?,?)", (key, val))
 
-   # ---- INSERT DEFAULT PACKAGES ----
+    # ---- INSERT DEFAULT PACKAGES ----
     c.execute("SELECT COUNT(*) FROM subscription_packages")
     if c.fetchone()[0] == 0:
-    # FREE package (default for new users)
-    c.execute("""INSERT INTO subscription_packages 
-        (name, duration_days, price, points_required, is_active) 
-        VALUES ('Free Trial', 7, 0, 0, 1)""")
-    
-    # Paid packages
-    c.execute("""INSERT INTO subscription_packages 
-        (name, duration_days, price, points_required, is_active) 
-        VALUES ('1 Week', 7, 1000, 50, 1)""")
-    c.execute("""INSERT INTO subscription_packages 
-        (name, duration_days, price, points_required, is_active) 
-        VALUES ('1 Month', 30, 3000, 120, 1)""")
-    c.execute("""INSERT INTO subscription_packages 
-        (name, duration_days, price, points_required, is_active) 
-        VALUES ('3 Months', 90, 7000, 300, 1)""")
+        # FREE package (default for new users)
+        c.execute("""INSERT INTO subscription_packages 
+            (name, duration_days, price, points_required, is_active) 
+            VALUES ('Free Trial', 7, 0, 0, 1)""")
+        
+        # Paid packages
+        c.execute("""INSERT INTO subscription_packages 
+            (name, duration_days, price, points_required, is_active) 
+            VALUES ('1 Week', 7, 1000, 50, 1)""")
+        c.execute("""INSERT INTO subscription_packages 
+            (name, duration_days, price, points_required, is_active) 
+            VALUES ('1 Month', 30, 3000, 120, 1)""")
+        c.execute("""INSERT INTO subscription_packages 
+            (name, duration_days, price, points_required, is_active) 
+            VALUES ('3 Months', 90, 7000, 300, 1)""")
 
     # ---- COMMIT & CLOSE ----
     conn.commit()
