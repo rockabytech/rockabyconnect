@@ -369,12 +369,24 @@ def init_db():
     for key, val in defaults:
         c.execute("INSERT OR IGNORE INTO points_settings (key, value) VALUES (?,?)", (key, val))
 
-    # ---- INSERT DEFAULT PACKAGES ----
-    c.execute("SELECT COUNT(*) FROM subscription_packages")
-    if c.fetchone()[0] == 0:
-        c.execute("INSERT INTO subscription_packages (name, duration_days, price, points_required) VALUES ('1 Week', 7, 1000, 50)")
-        c.execute("INSERT INTO subscription_packages (name, duration_days, price, points_required) VALUES ('1 Month', 30, 3000, 120)")
-        c.execute("INSERT INTO subscription_packages (name, duration_days, price, points_required) VALUES ('3 Months', 90, 7000, 300)")
+   # ---- INSERT DEFAULT PACKAGES ----
+c.execute("SELECT COUNT(*) FROM subscription_packages")
+if c.fetchone()[0] == 0:
+    # FREE package (default for new users)
+    c.execute("""INSERT INTO subscription_packages 
+        (name, duration_days, price, points_required, is_active) 
+        VALUES ('Free Trial', 7, 0, 0, 1)""")
+    
+    # Paid packages
+    c.execute("""INSERT INTO subscription_packages 
+        (name, duration_days, price, points_required, is_active) 
+        VALUES ('1 Week', 7, 1000, 50, 1)""")
+    c.execute("""INSERT INTO subscription_packages 
+        (name, duration_days, price, points_required, is_active) 
+        VALUES ('1 Month', 30, 3000, 120, 1)""")
+    c.execute("""INSERT INTO subscription_packages 
+        (name, duration_days, price, points_required, is_active) 
+        VALUES ('3 Months', 90, 7000, 300, 1)""")
 
     # ---- COMMIT & CLOSE ----
     conn.commit()
@@ -3524,18 +3536,34 @@ def signup():
             return "All fields required. <a href='/signup'>Back</a>"
         hashed = generate_password_hash(password)
         try:
-            # Use the context manager to ensure connection is closed
             with get_db_connection() as conn:
                 c = conn.cursor()
                 c.execute("INSERT INTO users (phone, name, password_hash) VALUES (?, ?, ?)", (phone, name, hashed))
                 user_id = c.lastrowid
+                
+                # ---- AUTO-ASSIGN FREE SUBSCRIPTION ----
+                # Get the Free Trial package
+                c.execute("SELECT id, duration_days FROM subscription_packages WHERE name='Free Trial' AND is_active=1 LIMIT 1")
+                free_pkg = c.fetchone()
+                if free_pkg:
+                    package_id, duration_days = free_pkg
+                    start_date = date.today()
+                    end_date = start_date + timedelta(days=duration_days)
+                    c.execute("""
+                        INSERT INTO user_subscriptions (user_id, package_id, start_date, end_date, status, transaction_id)
+                        VALUES (?,?,?,?,'active',?)
+                    """, (user_id, package_id, start_date, end_date, f'free_trial_{datetime.now().timestamp()}'))
+                    print(f"[DEBUG] Free trial assigned to user {user_id} for {duration_days} days")
+                else:
+                    print("[WARNING] No Free Trial package found. Please create one in admin panel.")
+                # --------------------------------------------
+                
                 conn.commit()
             
             # ---- PROCESS REFERRAL ----
             process_referral(user_id, phone)
             
-            # ---- add notification with link ----
-            add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready.', link='/dashboard')
+            add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready with a 7-day free trial.', link='/dashboard')
             
             return redirect(url_for('login'))
         except sqlite3.IntegrityError:
@@ -5273,21 +5301,23 @@ def admin_subscriptions():
         return redirect('/admin/login')
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT id, name, duration_days, price, is_active FROM subscription_packages ORDER BY price")
+    c.execute("SELECT id, name, duration_days, price, points_required, is_active FROM subscription_packages ORDER BY price")
     packages = c.fetchall()
     conn.close()
     rows = ""
     for p in packages:
-        active_status = "✅ Active" if p[4] else "❌ Inactive"
+        active_status = "✅ Active" if p[5] else "❌ Inactive"
+        price_display = "FREE" if p[3] == 0 else f"UGX {p[3]:,}"
         rows += f"""
         <tr>
             <td>{p[1]}</td>
             <td>{p[2]} days</td>
-            <td>UGX {p[3]:,}</td>
+            <td>{price_display}</td>
+            <td>{p[4]} pts</td>
             <td>{active_status}</td>
             <td>
                 <a href="/admin/edit-package/{p[0]}" class="btn btn-small">Edit</a>
-                <a href="/admin/toggle-package/{p[0]}" class="btn btn-small">{'Deactivate' if p[4] else 'Activate'}</a>
+                <a href="/admin/toggle-package/{p[0]}" class="btn btn-small">{'Deactivate' if p[5] else 'Activate'}</a>
                 <a href="/admin/delete-package/{p[0]}" class="btn btn-small btn-danger" onclick="return confirm('Delete this package?')">Delete</a>
             </td>
         </tr>"""
@@ -5316,12 +5346,18 @@ def admin_add_package():
         name = request.form['name'].strip()
         duration = int(request.form['duration'])
         price = int(request.form['price'])
+        points_required = int(request.form.get('points_required', 0))
+        is_active = 1 if request.form.get('is_active') else 0
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("INSERT INTO subscription_packages (name, duration_days, price) VALUES (?,?,?)", (name, duration, price))
+        c.execute("""
+            INSERT INTO subscription_packages (name, duration_days, price, points_required, is_active) 
+            VALUES (?,?,?,?,?)
+        """, (name, duration, price, points_required, is_active))
         conn.commit()
         conn.close()
         return redirect('/admin/subscriptions')
+    
     content = """
     <div class="card">
         <div class="card-header">➕ Add Package</div>
@@ -5330,14 +5366,19 @@ def admin_add_package():
             <input type="text" name="name" required>
             <label>Duration (days)</label>
             <input type="number" name="duration" required min="1">
-            <label>Price (UGX)</label>
+            <label>Price (UGX) — Use 0 for free</label>
             <input type="number" name="price" required min="0">
+            <label>Points Required (0 for free/paid packages)</label>
+            <input type="number" name="points_required" value="0" min="0">
+            <label style="margin-top:10px;">
+                <input type="checkbox" name="is_active" checked> Active
+            </label>
             <button type="submit" class="btn" style="margin-top:20px;">Create Package</button>
         </form>
         <a href="/admin/subscriptions" class="btn btn-outline" style="margin-top:10px;">Back</a>
     </div>
     """
-    return render_template_string(admin_base_template.replace("{title}", "Add Package").replace("{active_page}", "subscriptions").replace("{content}", content))
+    return render_template_string(admin_base_template.replace("{title}", "Add Package").replace("{active_page}", "packages").replace("{content}", content))
 
 @app.route('/admin/edit-package/<int:package_id>', methods=['GET', 'POST'])
 def admin_edit_package(package_id):
