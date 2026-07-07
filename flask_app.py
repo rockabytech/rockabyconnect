@@ -4428,6 +4428,8 @@ def admin_dashboard():
         <div style="margin-top:20px;">
             <a href="/admin/stats" class="btn btn-outline">📊 Detailed Statistics</a>
             <a href="/admin/referral-settings" class="btn" style="background:#fd7e14; color:white;">🎁 Referral Settings</a>
+            <a href="/admin/subscriptions" class="btn" style="background:#28a745; color:white;">📦 Packages</a>
+            <a href="/admin/subscription-requests" class="btn" style="background:#17a2b8; color:white;">🔄 Requests</a>
         </div>
     </div>
     """
@@ -4729,6 +4731,10 @@ def admin_restore():
     """
     return render_template_string(admin_base_template.replace("{title}", "Restore Database").replace("{active_page}", "backups").replace("{content}", content))
 
+# ============================================================
+# ADMIN SUBSCRIPTION ROUTES
+# ============================================================
+
 @app.route('/admin/subscriptions')
 def admin_subscriptions():
     if not session.get('admin'):
@@ -4800,6 +4806,64 @@ def admin_add_package():
     </div>
     """
     return render_template_string(admin_base_template.replace("{title}", "Add Package").replace("{active_page}", "subscriptions").replace("{content}", content))
+
+@app.route('/admin/edit-package/<int:package_id>', methods=['GET', 'POST'])
+def admin_edit_package(package_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        duration = int(request.form['duration'])
+        price = int(request.form['price'])
+        c.execute("UPDATE subscription_packages SET name=?, duration_days=?, price=? WHERE id=?", (name, duration, price, package_id))
+        conn.commit()
+        conn.close()
+        return redirect('/admin/subscriptions')
+    c.execute("SELECT id, name, duration_days, price FROM subscription_packages WHERE id=?", (package_id,))
+    p = c.fetchone()
+    conn.close()
+    if not p:
+        return "Package not found", 404
+    content = f"""
+    <div class="card">
+        <div class="card-header">✏️ Edit Package</div>
+        <form method="POST">
+            <label>Package Name</label>
+            <input type="text" name="name" value="{p[1]}" required>
+            <label>Duration (days)</label>
+            <input type="number" name="duration" value="{p[2]}" required min="1">
+            <label>Price (UGX)</label>
+            <input type="number" name="price" value="{p[3]}" required min="0">
+            <button type="submit" class="btn" style="margin-top:20px;">Update Package</button>
+        </form>
+        <a href="/admin/subscriptions" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Edit Package").replace("{active_page}", "subscriptions").replace("{content}", content))
+
+@app.route('/admin/toggle-package/<int:package_id>')
+def admin_toggle_package(package_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE subscription_packages SET is_active = 1 - is_active WHERE id=?", (package_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/subscriptions')
+
+@app.route('/admin/delete-package/<int:package_id>')
+def admin_delete_package(package_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM subscription_packages WHERE id=?", (package_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/subscriptions')
 
 @app.route('/admin/subscription-requests')
 def admin_subscription_requests():
@@ -4876,67 +4940,6 @@ def admin_reject_subscription(req_id):
     conn.commit()
     conn.close()
     return redirect('/admin/subscription-requests')
-
-
-@app.route('/admin/edit-package/<int:package_id>', methods=['GET', 'POST'])
-def admin_edit_package(package_id):
-    if not session.get('admin'):
-        return redirect('/admin/login')
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    if request.method == 'POST':
-        name = request.form['name'].strip()
-        duration = int(request.form['duration'])
-        price = int(request.form['price'])
-        c.execute("UPDATE subscription_packages SET name=?, duration_days=?, price=? WHERE id=?", (name, duration, price, package_id))
-        conn.commit()
-        conn.close()
-        return redirect('/admin/subscriptions')
-    c.execute("SELECT id, name, duration_days, price FROM subscription_packages WHERE id=?", (package_id,))
-    p = c.fetchone()
-    conn.close()
-    if not p:
-        return "Package not found", 404
-    content = f"""
-    <div class="card">
-        <div class="card-header">✏️ Edit Package</div>
-        <form method="POST">
-            <label>Package Name</label>
-            <input type="text" name="name" value="{p[1]}" required>
-            <label>Duration (days)</label>
-            <input type="number" name="duration" value="{p[2]}" required min="1">
-            <label>Price (UGX)</label>
-            <input type="number" name="price" value="{p[3]}" required min="0">
-            <button type="submit" class="btn" style="margin-top:20px;">Update Package</button>
-        </form>
-        <a href="/admin/subscriptions" class="btn btn-outline" style="margin-top:10px;">Back</a>
-    </div>
-    """
-    return render_template_string(admin_base_template.replace("{title}", "Edit Package").replace("{active_page}", "subscriptions").replace("{content}", content))
-
-
-@app.route('/admin/toggle-package/<int:package_id>')
-def admin_toggle_package(package_id):
-    if not session.get('admin'):
-        return redirect('/admin/login')
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("UPDATE subscription_packages SET is_active = 1 - is_active WHERE id=?", (package_id,))
-    conn.commit()
-    conn.close()
-    return redirect('/admin/subscriptions')
-
-@app.route('/admin/delete-package/<int:package_id>')
-def admin_delete_package(package_id):
-    if not session.get('admin'):
-        return redirect('/admin/login')
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("DELETE FROM subscription_packages WHERE id=?", (package_id,))
-    conn.commit()
-    conn.close()
-    return redirect('/admin/subscriptions')
-
 
 @app.route('/admin/logout')
 def admin_logout():
