@@ -5489,6 +5489,88 @@ def user_profile(user_id):
     '''
     return render_user_template(base_template, title=f"User: {name}", active_page="", content=content)
 
+@app.route('/search')
+@login_required
+def search_users():
+    query = request.args.get('q', '').strip()
+    if not query:
+        return redirect('/')
+    
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    
+    # Search for users by name (case-insensitive partial match)
+    c.execute("""
+        SELECT id, name, phone
+        FROM users
+        WHERE name LIKE ?
+        ORDER BY name ASC
+        LIMIT 30
+    """, ('%' + query + '%',))
+    
+    users = c.fetchall()
+    conn.close()
+    
+    # Build results HTML
+    results_html = ""
+    if users:
+        for user in users:
+            uid, name, phone = user
+            # Check if user has a provider or vendor profile to link
+            conn2 = sqlite3.connect(DB_PATH)
+            c2 = conn2.cursor()
+            c2.execute("SELECT id FROM providers WHERE user_id=?", (uid,))
+            provider = c2.fetchone()
+            c2.execute("SELECT id FROM vendors WHERE user_id=?", (uid,))
+            vendor = c2.fetchone()
+            conn2.close()
+            
+            # Determine profile link
+            profile_link = '#'
+            if provider:
+                profile_link = f'/provider/{provider[0]}'
+            elif vendor:
+                profile_link = f'/vendor/{vendor[0]}'
+            else:
+                profile_link = f'/user/{uid}'
+            
+            # Message button (if not self)
+            message_btn = ""
+            if session['user_id'] != uid:
+                message_btn = f'<a href="/messages/{uid}" class="btn btn-small" style="background:#28a745; color:white;">💬 Message</a>'
+            
+            results_html += f"""
+            <div class="provider-card">
+                <div class="provider-info">
+                    <h3><a href="{profile_link}" style="color:inherit; text-decoration:none;">{name}</a></h3>
+                    <p class="meta">📞 {phone}</p>
+                    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                        <a href="{profile_link}" class="btn btn-small btn-outline">View Profile</a>
+                        {message_btn}
+                    </div>
+                </div>
+            </div>
+            """
+    else:
+        results_html = "<p>No users found matching your search.</p>"
+    
+    # Prepare the page content
+    content = f'''
+    <div class="hero" style="padding:25px 20px;">
+        <h1 style="font-size:1.6rem;">🔍 Search Results for: "{query}"</h1>
+        <p>Found {len(users)} users</p>
+    </div>
+    <div class="card">
+        <div class="card-header">Users</div>
+        <div id="searchResults" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
+            {results_html}
+        </div>
+    </div>
+    '''
+    
+    return render_user_template(base_template, title="Search", active_page="search", content=content)
+
 
 # ============================================================
 # RUN APP
