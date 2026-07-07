@@ -82,9 +82,11 @@ def save_resized_image(file, max_width=800):
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 30000;")
-    conn.execute("PRAGMA journal_mode=WAL;")   # <-- ADD THIS
-    c = conn.cursor()   # <-- THIS LINE MUST BE PRESENT
-
+    conn.execute("PRAGMA journal_mode=WAL;")
+    
+    # ⭐ CREATE CURSOR HERE ⭐
+    c = conn.cursor()
+    
     # ---- USERS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,12 +117,12 @@ def init_db():
     )''')
 
         # ---- POINTS SYSTEM TABLES ----
-c.execute('''CREATE TABLE IF NOT EXISTS points_settings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    key TEXT UNIQUE,
-    value TEXT,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS points_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
 
 c.execute('''CREATE TABLE IF NOT EXISTS user_points (
     user_id INTEGER PRIMARY KEY,
