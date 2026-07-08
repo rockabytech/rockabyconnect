@@ -3439,16 +3439,27 @@ def points_history():
     """, (user_id,))
     transactions = c.fetchall()
     conn.close()
+    
     rows = ""
     for t in transactions:
         sign = '+' if t[0] > 0 else ''
-        rows += f"<tr><td>{t[3][:16]}</td><td>{t[1]}</td><td>{sign}{t[0]}</td><td>{t[2]}</td></tr>"
+        rows += f"""
+        <tr>
+            <td>{t[3][:16]}</td>
+            <td>{t[1]}</td>
+            <td><strong>{sign}{t[0]}</strong></td>
+            <td>{t[2]}</td>
+        </tr>
+        """
+    if not rows:
+        rows = "<tr><td colspan='4'>No transactions yet.</td></tr>"
+    
     content = f"""
     <div class="card">
         <div class="card-header">📊 Points History</div>
         <table>
-            <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Description</th></tr></thead>
-            <tbody>{rows or '<tr><td colspan="4">No transactions yet.</td></tr>'}</tbody>
+            <thead><tr><th>Date</th><th>Type</th><th>Points</th><th>Description</th></tr></thead>
+            <tbody>{rows}</tbody>
         </table>
         <a href="/dashboard" class="btn btn-outline">Back</a>
     </div>
