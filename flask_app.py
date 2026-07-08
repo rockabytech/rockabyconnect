@@ -1,3 +1,6 @@
+# ============================================================
+# IMPORTS
+# ============================================================
 import os
 import sqlite3
 import re
@@ -26,13 +29,34 @@ VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 
 # ============================================================
-# BACKUP CONFIGURATION
+# APP CONFIGURATION
+# ============================================================
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB
+app.secret_key = 'rockabytech-secret-key-change-in-production-2025'
+app.permanent_session_lifetime = timedelta(days=30)
+
+ADMIN_PASSWORD = 'Trythorous2909@1707#!'
+
+# ============================================================
+# PATHS (BASE_DIR AND UPLOAD_FOLDER MUST BE DEFINED HERE)
+# ============================================================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'providers.db')
+
+# Upload folder
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# ============================================================
+# BACKUP CONFIGURATION (MUST COME AFTER PATHS)
 # ============================================================
 BACKUP_REPO = 'rockabytech/rockabyconnect-backup'
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 BACKUP_FILE = 'providers_backup.db'
 UPLOADS_BACKUP_FILE = 'uploads_backup.zip'
-UPLOADS_PATH = UPLOAD_FOLDER  # ✅ Uses existing path
+UPLOADS_PATH = UPLOAD_FOLDER  # ✅ Now UPLOAD_FOLDER is defined
 
 def backup_to_github():
     """Upload SQLite database to GitHub using VACUUM INTO for a fast, consistent backup."""
