@@ -2665,6 +2665,7 @@ dashboard_template = base_template.replace("{title}", "Dashboard").replace("{act
             </div>
         </div>
     </div>
+    {points_card}   <!-- ⭐ THIS MUST BE HERE ⭐ -->
     {profile_section}
     {vendor_section}
     <div class="card">
