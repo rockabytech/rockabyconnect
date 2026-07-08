@@ -2573,37 +2573,37 @@ base_template = """
     <!-- ===== MOBILE MENU OVERLAY ===== -->
     <div class="mobile-menu-overlay" id="mobileOverlay" onclick="closeMobileMenu()"></div>
 
-    <!-- ===== MOBILE SIDE MENU ===== -->
+   <!-- ===== MOBILE SIDE MENU ===== -->
     <div class="mobile-menu" id="mobileMenu">
         <button class="close-btn" onclick="closeMobileMenu()">&times;</button>
         <div class="user-section">
             {% if session.user_id %}
-                <div class="name">👋 {{ session.user_name }}</div>
-                <div class="phone">{{ session.user_phone }}</div>
-            {% else %}
-                <div class="name">Guest</div>
-            {% endif %}
-        </div>
-        <a href="/" onclick="closeMobileMenu()">🏠 Home</a>
-        {% if session.user_id %}
-            <a href="/dashboard" onclick="closeMobileMenu()">📊 Dashboard</a>
-            <a href="/my-applications" onclick="closeMobileMenu()">📋 My Applications</a>
-            <a href="/messages" onclick="closeMobileMenu()">📨 Messages <span id="mobileMsgBadge" class="badge"></span></a>
-            <a href="/notifications" onclick="closeMobileMenu()">🔔 Notifications <span id="mobileNotifBadge" class="badge"></span></a>
-            <a href="/refer" onclick="closeMobileMenu()">🎁 Refer a Friend</a>
-            <a href="/settings" onclick="closeMobileMenu()">⚙️ Settings</a>
-            <button id="installBtnMobile" class="install-app-btn" onclick="installApp()">
-                <i class="fas fa-download"></i> Install App
-            </button>
-            <a href="/logout" onclick="closeMobileMenu()" class="logout-link">🚪 Logout</a>
+            <div class="name">👋 {{ session.user_name }}</div>
+            <div class="phone">{{ session.user_phone }}</div>
         {% else %}
-            <a href="/login" onclick="closeMobileMenu()">🔐 Login</a>
-            <a href="/signup" onclick="closeMobileMenu()">📝 Sign Up</a>
-            <button id="installBtnMobileGuest" class="install-app-btn" onclick="installApp()">
-                <i class="fas fa-download"></i> Install App
-            </button>
+            <div class="name">Guest</div>
         {% endif %}
     </div>
+    
+    {% if session.user_id %}
+        <!-- Logged-in User Menu -->
+        <a href="/dashboard" onclick="closeMobileMenu()">📊 Dashboard</a>
+        <a href="/refer" onclick="closeMobileMenu()">🎁 Refer a Friend</a>
+        <a href="/settings" onclick="closeMobileMenu()">⚙️ Settings</a>
+        <a href="/points-history" onclick="closeMobileMenu()">⭐ My Points</a>
+        <button id="installBtnMobile" class="install-app-btn" onclick="installApp()">
+            <i class="fas fa-download"></i> Install App
+        </button>
+        <a href="/logout" onclick="closeMobileMenu()" class="logout-link">🚪 Logout</a>
+    {% else %}
+        <!-- Guest Menu -->
+        <a href="/login" onclick="closeMobileMenu()">🔐 Login</a>
+        <a href="/signup" onclick="closeMobileMenu()">📝 Sign Up</a>
+        <button id="installBtnMobileGuest" class="install-app-btn" onclick="installApp()">
+            <i class="fas fa-download"></i> Install App
+        </button>
+    {% endif %}
+</div>
 
     <!-- ===== TOP NAVBAR (with search bar) ===== -->
     <nav class="navbar">
@@ -2614,26 +2614,32 @@ base_template = """
                 <div class="logo-sub">Connecting Skills, Building Uganda</div>
             </div>
         </a>
-        <div class="navbar-right">
-    <!-- Search bar -->
-    <form action="/search" method="GET" class="search-form">
-        <input type="text" name="q" placeholder="Search users..." value="{{ request.args.get('q', '') }}">
-        <button type="submit"><i class="fas fa-search"></i></button>
+    <div class="navbar-right">
+        <!-- Search bar -->
+        <form action="/search" method="GET" class="search-form">
+            <input type="text" name="q" placeholder="Search users..." 
+                   value="{{ request.args.get('q', '') }}" 
+                   aria-label="Search users by name">
+            <button type="submit" aria-label="Submit search">
+                <i class="fas fa-search"></i>
+            </button>
     </form>
     
-    <!-- Messages Badge -->
-    <a href="/messages" style="position:relative; color:var(--text-secondary);">
-        <i class="fas fa-envelope" style="font-size:1.2rem;"></i>
-        <span id="messagesBadge" class="badge" style="background:#dc3545; color:white; font-size:0.6rem; padding:2px 6px; border-radius:10px; position:absolute; top:-8px; right:-10px; display:none;">0</span>
-    </a>
+    {% if session.user_id %}
+        <!-- Messages Badge -->
+        <a href="/messages" style="position:relative; color:var(--text-secondary); text-decoration:none; margin-right:4px;">
+            <i class="fas fa-envelope" style="font-size:1.2rem;"></i>
+            <span id="messagesBadge" class="badge" style="background:#dc3545; color:white; font-size:0.6rem; padding:2px 6px; border-radius:10px; position:absolute; top:-8px; right:-10px; display:none;">0</span>
+        </a>
+        
+        <!-- Notifications Badge -->
+        <a href="/notifications" style="position:relative; color:var(--text-secondary); text-decoration:none; margin-right:4px;">
+            <i class="fas fa-bell" style="font-size:1.2rem;"></i>
+            <span id="notifBadge" class="badge" style="background:#dc3545; color:white; font-size:0.6rem; padding:2px 6px; border-radius:10px; position:absolute; top:-8px; right:-10px; display:none;">0</span>
+        </a>
+    {% endif %}
     
-    <!-- Notifications Badge -->
-    <a href="/notifications" style="position:relative; color:var(--text-secondary);">
-        <i class="fas fa-bell" style="font-size:1.2rem;"></i>
-        <span id="notifBadge" class="badge" style="background:#dc3545; color:white; font-size:0.6rem; padding:2px 6px; border-radius:10px; position:absolute; top:-8px; right:-10px; display:none;">0</span>
-    </a>
-    
-    <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
     <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
 </div>
     </nav>
@@ -2661,16 +2667,10 @@ base_template = """
             <span>Vendors</span>
         </a>
         {% if session.user_id %}
-        <a href="/messages" id="bottomMsgLink">
-            <i class="fas fa-envelope"></i>
-            <span>Messages</span>
-            <span id="bottomMsgBadge" class="badge" style="display:none;"></span>
-        </a>
-        <a href="/notifications" id="bottomNotifLink">
-            <i class="fas fa-bell"></i>
-            <span>Alerts</span>
-            <span id="bottomNotifBadge" class="badge" style="display:none;"></span>
-        </a>
+            <a href="/my-applications" class="{{ 'active' if active_page == 'my-applications' else '' }}">
+                <i class="fas fa-file-alt"></i>
+                <span>My Apps</span>
+            </a>
         {% else %}
             <a href="/login">
                 <i class="fas fa-user"></i>
