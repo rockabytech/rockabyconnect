@@ -949,7 +949,13 @@ def render_user_template(template, title="", active_page="", **kwargs):
     for key, value in kwargs.items():
         template = template.replace(f'{{{key}}}', str(value))
     
-    return render_template_string(template)
+    # ⭐ CRITICAL FIX: Pass session and request to the template ⭐
+    return render_template_string(
+        template,
+        session=session,  # ⭐ THIS IS THE KEY FIX
+        request=request,   # ⭐ Also pass request for form data access
+        **kwargs
+    )
 
 # ============================================================
 # REFERRAL HELPERS
@@ -3872,7 +3878,10 @@ admin_base_template = """
 
 @app.route('/')
 def home():
-    print(f"[DEBUG] user_id in session: {session.get('user_id')}")
+    # Debug log
+    user_id = session.get('user_id')
+    print(f"[DEBUG] Home route - User ID: {user_id}")
+    
     # ---- REFERRAL CODE DETECTION ----
     ref_code = request.args.get('ref', '')
     if ref_code:
