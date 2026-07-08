@@ -365,31 +365,32 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
-    # ---- JOBS TABLE ----
-c.execute('''CREATE TABLE IF NOT EXISTS jobs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employer_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    company TEXT,
-    description TEXT,
-    location TEXT,
-    village TEXT,
-    contact TEXT,
-    status TEXT DEFAULT 'Open',
-    posted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    job_image TEXT,
-    video TEXT,
-    featured INTEGER DEFAULT 0,
-    featured_expiry DATE,
-    FOREIGN KEY(employer_id) REFERENCES users(id)
-)''')
+    # ---- JOBS TABLE (WITH URGENT COLUMN) ----
+    c.execute('''CREATE TABLE IF NOT EXISTS jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employer_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        company TEXT,
+        description TEXT,
+        location TEXT,
+        village TEXT,
+        contact TEXT,
+        status TEXT DEFAULT 'Open',
+        posted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        job_image TEXT,
+        video TEXT,
+        featured INTEGER DEFAULT 0,
+        featured_expiry DATE,
+        urgent INTEGER DEFAULT 0,
+        FOREIGN KEY(employer_id) REFERENCES users(id)
+    )''')
 
-# ---- Add 'urgent' column if missing ----
-c.execute("PRAGMA table_info(jobs)")
-columns = [col[1] for col in c.fetchall()]
-if 'urgent' not in columns:
-    c.execute("ALTER TABLE jobs ADD COLUMN urgent INTEGER DEFAULT 0")
-    print("[DB] Added 'urgent' column to jobs table")
+    # ---- Add 'urgent' column if missing (for existing databases) ----
+    c.execute("PRAGMA table_info(jobs)")
+    columns = [col[1] for col in c.fetchall()]
+    if 'urgent' not in columns:
+        c.execute("ALTER TABLE jobs ADD COLUMN urgent INTEGER DEFAULT 0")
+        print("[DB] Added 'urgent' column to jobs table")
 
     # ---- BOOST REQUESTS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS boost_requests (
@@ -629,6 +630,7 @@ if 'urgent' not in columns:
     conn.commit()
     conn.close()
 
+# ⭐ CALL THE FUNCTION ⭐
 init_db()
 
 # ============================================================
