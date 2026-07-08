@@ -22,7 +22,7 @@ from PIL import Image
 # ============================================================
 # BACKUP CONFIGURATION
 # ============================================================
-BACKUP_REPO = 'YOUR_GITHUB_USERNAME/rockabyconnect-backup'  # ⚠️ CHANGE THIS
+BACKUP_REPO = 'rockabytech/rockabyconnect-backup'  # ✅ Your repo
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 BACKUP_FILE = 'providers_backup.db'
 
