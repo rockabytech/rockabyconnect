@@ -1,43 +1,38 @@
-import os, sqlite3, re, random, string, json, shutil
-import os
-VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
-VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 import os
 import sqlite3
+import re
+import random
+import string
 import json
+import shutil
+import zipfile
+import io
 import threading
 import time
-import shutil
 from datetime import datetime, date, timedelta
-from github import Github
-from flask import Flask, render_template_string, request, redirect, url_for, session, make_response, send_from_directory, send_file
-from datetime import date, timedelta, datetime
 from collections import defaultdict
-from flask import Flask, render_template_string, request, redirect, url_for, session, make_response, send_from_directory
+from functools import wraps
+from github import Github
+
+from flask import Flask, render_template_string, request, redirect, url_for, session, make_response, send_from_directory, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from functools import wraps
 from PIL import Image
+
+# ============================================================
+# VAPID KEYS (from environment)
+# ============================================================
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 
 # ============================================================
 # BACKUP CONFIGURATION
 # ============================================================
-import zipfile
-import io
-import os
-import shutil
-from github import Github
-from datetime import datetime
-
-BACKUP_REPO = 'rockabytech/rockabyconnect-backup'  # ✅ Your repo
+BACKUP_REPO = 'rockabytech/rockabyconnect-backup'
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 BACKUP_FILE = 'providers_backup.db'
 UPLOADS_BACKUP_FILE = 'uploads_backup.zip'
-UPLOADS_PATH = os.path.join(BASE_DIR, 'static', 'uploads')
-
-# ============================================================
-# DATABASE BACKUP
-# ============================================================
+UPLOADS_PATH = UPLOAD_FOLDER  # ✅ Uses existing path
 
 def backup_to_github():
     """Upload SQLite database to GitHub using VACUUM INTO for a fast, consistent backup."""
@@ -53,24 +48,18 @@ def backup_to_github():
     temp_backup_path = '/tmp/backup.db'
     
     try:
-        # Connect to the database
         conn = sqlite3.connect(DB_PATH)
-        
-        # Create a consistent snapshot without blocking writes for long
         conn.execute("VACUUM INTO ?", (temp_backup_path,))
         conn.close()
         conn = None
         print(f"[BACKUP] 🔒 Database snapshot created at {datetime.now().isoformat()}")
         
-        # Read the backup file
         with open(temp_backup_path, 'rb') as f:
             db_content = f.read()
         
-        # Upload to GitHub
         g = Github(GITHUB_TOKEN)
         repo = g.get_repo(BACKUP_REPO)
         
-        # Check if backup file exists
         try:
             contents = repo.get_contents(BACKUP_FILE)
             repo.update_file(
@@ -108,7 +97,6 @@ def backup_to_github():
                 conn.close()
             except:
                 pass
-        # Clean up temporary file
         if os.path.exists(temp_backup_path):
             try:
                 os.remove(temp_backup_path)
@@ -122,16 +110,13 @@ def restore_from_github():
         return False
     
     try:
-        # Connect to GitHub
         g = Github(GITHUB_TOKEN)
         repo = g.get_repo(BACKUP_REPO)
         
-        # Get the backup file
         try:
             contents = repo.get_contents(BACKUP_FILE)
             db_content = contents.decoded_content
             
-            # Write to the database path
             with open(DB_PATH, 'wb') as f:
                 f.write(db_content)
             
@@ -144,10 +129,6 @@ def restore_from_github():
         print(f"[BACKUP] ❌ Database restore failed: {e}")
         return False
 
-# ============================================================
-# UPLOADS FOLDER BACKUP (Images, Videos, etc.)
-# ============================================================
-
 def backup_uploads_to_github():
     """Zip and upload the uploads folder to GitHub."""
     if not GITHUB_TOKEN:
@@ -159,7 +140,6 @@ def backup_uploads_to_github():
         return
     
     try:
-        # Create ZIP in memory
         zip_buffer = io.BytesIO()
         file_count = 0
         total_size = 0
@@ -176,7 +156,6 @@ def backup_uploads_to_github():
         zip_buffer.seek(0)
         zip_data = zip_buffer.read()
         
-        # Upload to GitHub
         g = Github(GITHUB_TOKEN)
         repo = g.get_repo(BACKUP_REPO)
         
@@ -207,19 +186,15 @@ def restore_uploads_from_github():
         return False
     
     try:
-        # Connect to GitHub
         g = Github(GITHUB_TOKEN)
         repo = g.get_repo(BACKUP_REPO)
         
-        # Get the uploads backup file
         try:
             contents = repo.get_contents(UPLOADS_BACKUP_FILE)
             zip_data = contents.decoded_content
             
-            # Ensure uploads directory exists
             os.makedirs(UPLOADS_PATH, exist_ok=True)
             
-            # Extract ZIP
             with zipfile.ZipFile(io.BytesIO(zip_data), 'r') as zip_file:
                 zip_file.extractall(UPLOADS_PATH)
             
@@ -235,31 +210,12 @@ def restore_uploads_from_github():
         print(f"[BACKUP] ❌ Uploads restore failed: {e}")
         return False
 
-# ============================================================
-# SCHEDULER & STARTUP
-# ============================================================
-
 def schedule_github_backup():
     """Run GitHub backup every 30 minutes (database + uploads)."""
     print("[BACKUP] 🕐 Running scheduled backup...")
     backup_to_github()
     backup_uploads_to_github()
-    # Schedule next run
     threading.Timer(1800, schedule_github_backup).start()  # 1800 seconds = 30 minutes
-
-# ============================================================
-# ADD THIS TO YOUR APP STARTUP (replace existing restore calls)
-# ============================================================
-# 
-# # ---- RESTORE BACKUP ON STARTUP ----
-# print("[STARTUP] Attempting to restore from backup...")
-# restore_from_github()
-# restore_uploads_from_github()
-# 
-# # ---- START BACKUP SCHEDULER ----
-# print("[STARTUP] Starting backup scheduler (every 30 minutes)...")
-# schedule_github_backup()
-# 
 
 # ============================================================
 # APP CONFIGURATION (DYNAMIC FOR RENDER)
