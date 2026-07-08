@@ -4639,6 +4639,75 @@ def post_job():
     form = form.replace("{urgent_checked}", "")
     return render_user_template(form, title="Post a Job", active_page="jobs")
 
+@app.route('/edit-job/<int:job_id>', methods=['GET', 'POST'])
+@login_required
+def edit_job(job_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT title, company, description, location, village, contact, status, employer_id, job_image, video, urgent FROM jobs WHERE id=?", (job_id,))
+    job = c.fetchone()
+    
+    if not job:
+        conn.close()
+        return "Job not found", 404
+    
+    if job[7] != session['user_id']:
+        conn.close()
+        return "You are not the employer of this job.", 403
+
+    if request.method == 'POST':
+        title = request.form['title']
+        company = request.form.get('company', '')
+        description = request.form['description']
+        location = request.form['location']
+        village = request.form.get('village', '')
+        contact = request.form.get('contact', '')
+        status = request.form.get('status', 'Open')
+        urgent = 1 if request.form.get('urgent') else 0
+        file = request.files.get('job_image')
+        video_file = request.files.get('video')
+
+        filename = job[8]  # current job_image
+        video_filename = job[9]  # current video
+        
+        if file and allowed_file(file.filename):
+            filename = save_resized_image(file, max_width=800, max_height=600)
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
+
+        c.execute("""
+            UPDATE jobs SET 
+                title=?, company=?, description=?, location=?, village=?, 
+                contact=?, status=?, job_image=?, video=?, urgent=?
+            WHERE id=?
+        """, (title, company, description, location, village, contact, status, filename, video_filename, urgent, job_id))
+        conn.commit()
+        conn.close()
+        return redirect('/dashboard')
+
+    # GET – populate form
+    form = job_form_template.replace("{job_form_title}", "Edit Job").replace("{form_header}", "Edit Job Posting")
+    form = form.replace("{title_val}", job[0]).replace("{company_val}", job[1] or '')
+    form = form.replace("{description_val}", job[2] or '').replace("{location_val}", job[3] or '')
+    form = form.replace("{village_val}", job[4] or '').replace("{contact_val}", job[5] or '')
+    form = form.replace("{submit_button}", "Update Job")
+    form = form.replace("{urgent_checked}", 'checked' if job[10] else '')
+    
+    # Status dropdown
+    status_dropdown = f"""
+        <label>Status</label>
+        <select name="status">
+            <option value="Open" {"selected" if job[6]=='Open' else ''}>Open</option>
+            <option value="Taken" {"selected" if job[6]=='Taken' else ''}>Taken</option>
+            <option value="Closed" {"selected" if job[6]=='Closed' else ''}>Closed</option>
+        </select>
+    """
+    form = form.replace('</form>', f'{status_dropdown}\n</form>')
+    conn.close()
+    return render_user_template(form, title="Edit Job", active_page="jobs")
+
 # ---------- Public Listing ----------
 @app.route('/list')
 def list_providers():
