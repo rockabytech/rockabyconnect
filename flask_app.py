@@ -657,6 +657,33 @@ def get_db_connection():
         conn.close()
 # ===== END INSERT =====
 
+def get_matching_providers_for_job(job_id, title, description, employer_id):
+    """Find freelancers whose skills match the job title/description."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    # Get all providers with skills (excluding the job poster)
+    c.execute("""
+        SELECT p.user_id, p.skills, u.name
+        FROM providers p
+        JOIN users u ON p.user_id = u.id
+        WHERE p.skills IS NOT NULL AND p.skills != ''
+        AND p.user_id != ?
+    """, (employer_id,))
+    providers = c.fetchall()
+    conn.close()
+    
+    # Combine title and description for searching (case-insensitive)
+    text_to_search = (title + ' ' + description).lower()
+    matches = []
+    for user_id, skills, name in providers:
+        # Split skills by comma
+        skill_list = [s.strip().lower() for s in skills.split(',') if s.strip()]
+        for skill in skill_list:
+            if skill in text_to_search:
+                matches.append(user_id)
+                break  # Only one notification per provider per job
+    return matches
+
 def get_points_setting(key):
     """Get a points setting value (as string)."""
     conn = sqlite3.connect(DB_PATH)
@@ -1040,7 +1067,11 @@ def add_notification(user_id, type, message, link=None):
             'application_note': '📝 New Note on Application',
             'boost_approved': '⭐ Boost Approved',
             'boost_rejected': '❌ Boost Rejected',
-            'email': '📧 Welcome'
+            'email': '📧 Welcome',
+            'job_alert': '🚨 New Job Matching Your Skills',  # <-- ADD THIS
+            'subscription_request': '📩 Subscription Request',
+            'subscription_approved': '✅ Subscription Approved',
+            'redemption_approved': '✅ Redemption Approved'
         }
         title = title_map.get(type, '🔔 Notification')
         
@@ -4561,7 +4592,7 @@ def post_job():
         location = request.form['location']
         village = request.form.get('village', '')
         contact = request.form.get('contact', '')
-        urgent = 1 if request.form.get('urgent') else 0  # ⭐ NEW
+        urgent = 1 if request.form.get('urgent') else 0
         file = request.files.get('job_image')
         video_file = request.files.get('video')
 
@@ -4580,16 +4611,32 @@ def post_job():
             INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image, video, urgent)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, (session['user_id'], title, company, description, location, village, contact, 'Open', filename, video_filename, urgent))
+        
+        job_id = c.lastrowid
         conn.commit()
+
+        # ---- NOTIFY MATCHING FREELANCERS ----
+        matching_users = get_matching_providers_for_job(job_id, title, description, session['user_id'])
+        job_link = f'/job/{job_id}'
+        for user_id in matching_users:
+            add_notification(
+                user_id,
+                'job_alert',
+                f'New job posted: "{title}" matches your skills.',
+                link=job_link
+            )
+        print(f"[NOTIFY] Sent {len(matching_users)} job alerts for job #{job_id}")
+        # ------------------------------------
+
         conn.close()
         return redirect('/dashboard')
 
-    # GET form
+    # GET form (unchanged)
     form = job_form_template.replace("{job_form_title}", "Post a Job").replace("{form_header}", "Post a New Job")
     form = form.replace("{title_val}", "").replace("{company_val}", "").replace("{description_val}", "")
     form = form.replace("{location_val}", "").replace("{village_val}", "").replace("{contact_val}", "")
     form = form.replace("{submit_button}", "Post Job")
-    form = form.replace("{urgent_checked}", "")  # ⭐ NEW
+    form = form.replace("{urgent_checked}", "")
     return render_user_template(form, title="Post a Job", active_page="jobs")
 
 # ---------- Public Listing ----------
