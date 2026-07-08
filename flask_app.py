@@ -2,6 +2,14 @@ import os, sqlite3, re, random, string, json, shutil
 import os
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+import os
+import sqlite3
+import json
+import threading
+import time
+import shutil
+from datetime import datetime, date, timedelta
+from github import Github
 from flask import Flask, render_template_string, request, redirect, url_for, session, make_response, send_from_directory, send_file
 from datetime import date, timedelta, datetime
 from collections import defaultdict
@@ -10,6 +18,124 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from functools import wraps
 from PIL import Image
+
+# ============================================================
+# BACKUP CONFIGURATION
+# ============================================================
+BACKUP_REPO = 'YOUR_GITHUB_USERNAME/rockabyconnect-backup'  # ⚠️ CHANGE THIS
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+BACKUP_FILE = 'providers_backup.db'
+
+def backup_to_github():
+    """Upload SQLite database to GitHub using VACUUM INTO for a fast, consistent backup."""
+    if not GITHUB_TOKEN:
+        print("[BACKUP] No GitHub token, skipping backup")
+        return
+    
+    if not os.path.exists(DB_PATH):
+        print("[BACKUP] Database file not found, skipping backup")
+        return
+    
+    conn = None
+    temp_backup_path = '/tmp/backup.db'
+    
+    try:
+        # Connect to the database
+        conn = sqlite3.connect(DB_PATH)
+        
+        # Create a consistent snapshot without blocking writes for long
+        conn.execute("VACUUM INTO ?", (temp_backup_path,))
+        conn.close()
+        conn = None
+        print(f"[BACKUP] 🔒 Database snapshot created at {datetime.now().isoformat()}")
+        
+        # Read the backup file
+        with open(temp_backup_path, 'rb') as f:
+            db_content = f.read()
+        
+        # Upload to GitHub
+        g = Github(GITHUB_TOKEN)
+        repo = g.get_repo(BACKUP_REPO)
+        
+        # Check if backup file exists
+        try:
+            contents = repo.get_contents(BACKUP_FILE)
+            repo.update_file(
+                contents.path,
+                f"Backup from {datetime.now().isoformat()}",
+                db_content,
+                contents.sha
+            )
+        except:
+            repo.create_file(
+                BACKUP_FILE,
+                f"Initial backup from {datetime.now().isoformat()}",
+                db_content
+            )
+        
+        print(f"[BACKUP] ✅ Backup completed successfully at {datetime.now().isoformat()}")
+        
+    except sqlite3.OperationalError as e:
+        print(f"[BACKUP] ⚠️ Database busy, will retry later: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except:
+                pass
+    except Exception as e:
+        print(f"[BACKUP] ❌ Backup failed: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except:
+                pass
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+        # Clean up temporary file
+        if os.path.exists(temp_backup_path):
+            try:
+                os.remove(temp_backup_path)
+            except:
+                pass
+
+def restore_from_github():
+    """Download the latest backup from GitHub and restore."""
+    if not GITHUB_TOKEN:
+        print("[BACKUP] No GitHub token, skipping restore")
+        return False
+    
+    try:
+        # Connect to GitHub
+        g = Github(GITHUB_TOKEN)
+        repo = g.get_repo(BACKUP_REPO)
+        
+        # Get the backup file
+        try:
+            contents = repo.get_contents(BACKUP_FILE)
+            db_content = contents.decoded_content
+            
+            # Write to the database path
+            with open(DB_PATH, 'wb') as f:
+                f.write(db_content)
+            
+            print(f"[BACKUP] ✅ Database restored from GitHub backup")
+            return True
+        except:
+            print("[BACKUP] No existing backup found, starting fresh")
+            return False
+    except Exception as e:
+        print(f"[BACKUP] ❌ Restore failed: {e}")
+        return False
+
+def schedule_github_backup():
+    """Run GitHub backup every 30 minutes."""
+    backup_to_github()
+    # Schedule next run
+    threading.Timer(1800, schedule_github_backup).start()  # 1800 seconds = 30 minutes
 
 # ============================================================
 # APP CONFIGURATION (DYNAMIC FOR RENDER)
@@ -6745,9 +6871,40 @@ def search_users():
     
     return render_user_template(base_template, title="Search", active_page="search", content=content)
 
+# ============================================================
+# APP STARTUP
+# ============================================================
+
+# ---- RESTORE BACKUP ON STARTUP ----
+print("[STARTUP] Attempting to restore database from backup...")
+restore_from_github()
+
+# ---- INIT DB (only if restore fails or no tables exist) ----
+def ensure_db():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        if not c.fetchone():
+            print("[STARTUP] No users table found — initializing fresh DB")
+            conn.close()
+            init_db()
+        else:
+            print("[STARTUP] Database already has tables — skipping init")
+        conn.close()
+    except Exception as e:
+        print(f"[STARTUP] ❌ DB check failed: {e}")
+        init_db()
+
+ensure_db()
+
+# ---- START BACKUP SCHEDULER ----
+print("[STARTUP] Starting backup scheduler (every 30 minutes)...")
+schedule_github_backup()
+
 
 # ============================================================
 # RUN APP
 # ============================================================
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=10000, debug=False)
