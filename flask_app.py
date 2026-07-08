@@ -2249,7 +2249,7 @@ base_template = """
     <footer style="text-align:center; padding:16px; color:var(--text-secondary); font-size:0.7rem; border-top:1px solid var(--border); margin-top:20px;">
         &copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬
     </footer>
-    <a href="https://wa.me/256751318876?text=Hi%20RockabyConnect%20Support" target="_blank" class="whatsapp-float">💬</a>
+    <a href="https://wa.me/256785686404?text=Hi%20RockabyConnect%20Support" target="_blank" class="whatsapp-float">💬</a>
 
     <script>
         // ============================================================
@@ -5581,7 +5581,7 @@ def admin_points_settings():
             '5': int(request.form.get('star5', 25))
         }
         c.execute("INSERT OR REPLACE INTO points_settings (key, value) VALUES ('rating_points', ?)", (json.dumps(rating_points),))
-        referral_points = int(request.form.get('referral_points', 50))
+        referral_points = int(request.form.get('referral_points', 10))
         c.execute("INSERT OR REPLACE INTO points_settings (key, value) VALUES ('referral_points', ?)", (str(referral_points),))
         conn.commit()
         conn.close()
