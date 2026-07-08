@@ -2695,17 +2695,16 @@ base_template = """
     </div>
     
     {% if session.user_id %}
-        <!-- Logged-in User Menu -->
         <a href="/dashboard" onclick="closeMobileMenu()">📊 Dashboard</a>
         <a href="/refer" onclick="closeMobileMenu()">🎁 Refer a Friend</a>
         <a href="/settings" onclick="closeMobileMenu()">⚙️ Settings</a>
         <a href="/points-history" onclick="closeMobileMenu()">⭐ My Points</a>
+        <a href="/redeem" onclick="closeMobileMenu()">🔄 Redeem Points</a>
         <button id="installBtnMobile" class="install-app-btn" onclick="installApp()">
             <i class="fas fa-download"></i> Install App
         </button>
         <a href="/logout" onclick="closeMobileMenu()" class="logout-link">🚪 Logout</a>
     {% else %}
-        <!-- Guest Menu -->
         <a href="/login" onclick="closeMobileMenu()">🔐 Login</a>
         <a href="/signup" onclick="closeMobileMenu()">📝 Sign Up</a>
         <button id="installBtnMobileGuest" class="install-app-btn" onclick="installApp()">
@@ -3873,6 +3872,7 @@ admin_base_template = """
 
 @app.route('/')
 def home():
+    print(f"[DEBUG] user_id in session: {session.get('user_id')}")
     # ---- REFERRAL CODE DETECTION ----
     ref_code = request.args.get('ref', '')
     if ref_code:
