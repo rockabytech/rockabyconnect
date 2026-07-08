@@ -1427,135 +1427,244 @@ base_template = """
         }
 
         /* ================================================
-           TOP NAVBAR (with search bar)
-           ================================================ */
-        .navbar {
-            background: var(--card-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--glass-border);
-            padding: 10px 16px;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
+   TOP NAVBAR (Mobile Responsive)
+   ================================================ */
+.navbar {
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--glass-border);
+    padding: 8px 12px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    flex-wrap: nowrap;
+}
 
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            text-decoration: none;
-        }
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    flex-shrink: 0;
+}
 
-        .logo img {
-            height: 35px;
-            width: 35px;
-            border-radius: 10px;
-            object-fit: cover;
-            box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
-        }
+.logo img {
+    height: 28px;
+    width: 28px;
+    border-radius: 8px;
+    object-fit: cover;
+}
 
-        .logo-text {
-            font-size: 1.1rem;
-            font-weight: 800;
-            line-height: 1.2;
-        }
-        .logo-text span { color: var(--primary); }
-        .logo-sub {
-            font-size: 0.5rem;
-            color: var(--text-secondary);
-            line-height: 1;
-        }
+.logo-text {
+    font-size: 0.85rem;
+    font-weight: 800;
+    line-height: 1.1;
+}
+.logo-sub {
+    font-size: 0.4rem;
+    color: var(--text-secondary);
+    line-height: 1;
+}
 
-        .navbar-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+.navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
 
-        /* Search bar */
-        .search-form {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-right: 8px;
-        }
-        .search-form input[type="text"] {
-            padding: 6px 12px;
-            border-radius: 20px;
-            border: 1px solid var(--border);
-            background: var(--card-bg);
-            color: var(--text);
-            font-size: 0.85rem;
-            width: 140px;
-            transition: width 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-        }
-        .search-form input[type="text"]:focus {
-            width: 200px;
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(245, 175, 25, 0.2);
-        }
-        .search-form button {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 1rem;
-            padding: 6px 4px;
-        }
-        .search-form button:hover {
-            color: var(--primary);
-        }
+/* Search bar - compact */
+.search-form {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-right: 2px;
+}
+.search-form input[type="text"] {
+    padding: 4px 8px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text);
+    font-size: 0.7rem;
+    width: 80px;
+    transition: width 0.3s ease, border-color 0.3s ease;
+}
+.search-form input[type="text"]:focus {
+    width: 120px;
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(245, 175, 25, 0.2);
+}
+.search-form button {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 4px 2px;
+}
 
-        .theme-toggle {
-            background: rgba(245, 175, 25, 0.1);
-            border: 1px solid var(--glass-border);
-            border-radius: 50%;
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: var(--transition);
-            color: var(--text);
-        }
-        .theme-toggle:hover {
-            background: rgba(245, 175, 25, 0.2);
-            transform: scale(1.05);
-        }
+/* Navbar icons (messages, notifications, theme, menu) */
+.nav-icon {
+    position: relative;
+    color: var(--text-secondary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    padding: 4px;
+    border-radius: 50%;
+    transition: var(--transition);
+    width: 30px;
+    height: 30px;
+}
+.nav-icon:hover {
+    background: rgba(245, 175, 25, 0.1);
+    color: var(--primary);
+}
+.nav-icon .badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #dc3545;
+    color: white;
+    font-size: 0.5rem;
+    padding: 1px 5px;
+    border-radius: 10px;
+    min-width: 14px;
+    text-align: center;
+    display: none;
+}
 
-        .menu-toggle {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--text);
-            display: block;
-        }
+.theme-toggle {
+    background: rgba(245, 175, 25, 0.1);
+    border: 1px solid var(--glass-border);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: var(--transition);
+    color: var(--text);
+    flex-shrink: 0;
+}
+.theme-toggle:hover {
+    background: rgba(245, 175, 25, 0.2);
+    transform: scale(1.05);
+}
 
-        @media (max-width: 768px) {
-            .search-form input[type="text"] {
-                width: 100px;
-            }
-            .search-form input[type="text"]:focus {
-                width: 130px;
-            }
-        }
-        @media (max-width: 480px) {
-            .search-form input[type="text"] {
-                width: 80px;
-                font-size: 0.75rem;
-            }
-            .search-form input[type="text"]:focus {
-                width: 100px;
-            }
-        }
+.menu-toggle {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: var(--text);
+    display: block;
+    padding: 4px;
+    flex-shrink: 0;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .navbar {
+        padding: 6px 8px;
+        gap: 2px;
+    }
+    .logo img {
+        height: 24px;
+        width: 24px;
+    }
+    .logo-text {
+        font-size: 0.75rem;
+    }
+    .logo-sub {
+        font-size: 0.35rem;
+    }
+    .search-form input[type="text"] {
+        width: 60px;
+        font-size: 0.65rem;
+        padding: 3px 6px;
+    }
+    .search-form input[type="text"]:focus {
+        width: 90px;
+    }
+    .search-form button {
+        font-size: 0.75rem;
+    }
+    .nav-icon {
+        width: 26px;
+        height: 26px;
+        font-size: 0.85rem;
+    }
+    .nav-icon .badge {
+        font-size: 0.4rem;
+        min-width: 12px;
+        padding: 1px 4px;
+    }
+    .theme-toggle {
+        width: 26px;
+        height: 26px;
+        font-size: 0.75rem;
+    }
+    .menu-toggle {
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .navbar {
+        padding: 4px 6px;
+        gap: 2px;
+    }
+    .logo img {
+        height: 20px;
+        width: 20px;
+    }
+    .logo-text {
+        font-size: 0.65rem;
+    }
+    .logo-sub {
+        display: none; /* Hide sub-text on very small screens */
+    }
+    .search-form input[type="text"] {
+        width: 50px;
+        font-size: 0.6rem;
+        padding: 2px 4px;
+    }
+    .search-form input[type="text"]:focus {
+        width: 70px;
+    }
+    .nav-icon {
+        width: 22px;
+        height: 22px;
+        font-size: 0.75rem;
+    }
+    .nav-icon .badge {
+        font-size: 0.35rem;
+        min-width: 10px;
+        padding: 1px 3px;
+        top: -4px;
+        right: -4px;
+    }
+    .theme-toggle {
+        width: 22px;
+        height: 22px;
+        font-size: 0.65rem;
+    }
+    .menu-toggle {
+        font-size: 0.9rem;
+    }
+}
 
         /* ================================================
            MOBILE MENU (unchanged)
@@ -2574,10 +2683,10 @@ base_template = """
     <div class="mobile-menu-overlay" id="mobileOverlay" onclick="closeMobileMenu()"></div>
 
    <!-- ===== MOBILE SIDE MENU ===== -->
-    <div class="mobile-menu" id="mobileMenu">
-        <button class="close-btn" onclick="closeMobileMenu()">&times;</button>
-        <div class="user-section">
-            {% if session.user_id %}
+<div class="mobile-menu" id="mobileMenu">
+    <button class="close-btn" onclick="closeMobileMenu()">&times;</button>
+    <div class="user-section">
+        {% if session.user_id %}
             <div class="name">👋 {{ session.user_name }}</div>
             <div class="phone">{{ session.user_phone }}</div>
         {% else %}
@@ -2605,79 +2714,78 @@ base_template = """
     {% endif %}
 </div>
 
-    <!-- ===== TOP NAVBAR (with search bar) ===== -->
+    <!-- ===== TOP NAVBAR (Compact) ===== -->
     <nav class="navbar">
         <a href="/" class="logo">
             <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
             <div>
-                <div class="logo-text">ROCKABY<span>CONNECT</span></div>
-                <div class="logo-sub">Connecting Skills, Building Uganda</div>
-            </div>
-        </a>
+            <div class="logo-text">ROCKABY<span>CONNECT</span></div>
+            <div class="logo-sub">Connecting Skills, Building Uganda</div>
+        </div>
+    </a>
     <div class="navbar-right">
         <!-- Search bar -->
         <form action="/search" method="GET" class="search-form">
-            <input type="text" name="q" placeholder="Search users..." 
+            <input type="text" name="q" placeholder="Search..." 
                    value="{{ request.args.get('q', '') }}" 
-                   aria-label="Search users by name">
-            <button type="submit" aria-label="Submit search">
+                   aria-label="Search">
+            <button type="submit" aria-label="Search">
                 <i class="fas fa-search"></i>
             </button>
-    </form>
-    
-    {% if session.user_id %}
-        <!-- Messages Badge -->
-        <a href="/messages" style="position:relative; color:var(--text-secondary); text-decoration:none; margin-right:4px;">
-            <i class="fas fa-envelope" style="font-size:1.2rem;"></i>
-            <span id="messagesBadge" class="badge" style="background:#dc3545; color:white; font-size:0.6rem; padding:2px 6px; border-radius:10px; position:absolute; top:-8px; right:-10px; display:none;">0</span>
-        </a>
+        </form>
         
-        <!-- Notifications Badge -->
-        <a href="/notifications" style="position:relative; color:var(--text-secondary); text-decoration:none; margin-right:4px;">
-            <i class="fas fa-bell" style="font-size:1.2rem;"></i>
-            <span id="notifBadge" class="badge" style="background:#dc3545; color:white; font-size:0.6rem; padding:2px 6px; border-radius:10px; position:absolute; top:-8px; right:-10px; display:none;">0</span>
-        </a>
-    {% endif %}
-    
-    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
-    <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
-</div>
-    </nav>
+        {% if session.user_id %}
+            <!-- Messages -->
+            <a href="/messages" class="nav-icon" title="Messages">
+                <i class="fas fa-envelope"></i>
+                <span id="messagesBadge" class="badge">0</span>
+            </a>
+            <!-- Notifications -->
+            <a href="/notifications" class="nav-icon" title="Notifications">
+                <i class="fas fa-bell"></i>
+                <span id="notifBadge" class="badge">0</span>
+            </a>
+        {% endif %}
+        
+        <button class="theme-toggle" onclick="toggleTheme()" title="Theme">🌓</button>
+        <button class="menu-toggle" onclick="toggleMobileMenu()" aria-label="Menu">☰</button>
+    </div>
+</nav>
 
     <div class="container">
         {content}
     </div>
 
     <!-- ===== BOTTOM NAVIGATION ===== -->
-    <div class="bottom-nav">
-        <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">
-            <i class="fas fa-home"></i>
-            <span>Home</span>
+<div class="bottom-nav">
+    <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">
+        <i class="fas fa-home"></i>
+        <span>Home</span>
+    </a>
+    <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">
+        <i class="fas fa-search"></i>
+        <span>Find</span>
+    </a>
+    <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">
+        <i class="fas fa-briefcase"></i>
+        <span>Jobs</span>
+    </a>
+    <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">
+        <i class="fas fa-store"></i>
+        <span>Vendors</span>
+    </a>
+    {% if session.user_id %}
+        <a href="/my-applications" class="{{ 'active' if active_page == 'my-applications' else '' }}">
+            <i class="fas fa-file-alt"></i>
+            <span>My Apps</span>
         </a>
-        <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">
-            <i class="fas fa-search"></i>
-            <span>Find</span>
+    {% else %}
+        <a href="/login">
+            <i class="fas fa-user"></i>
+            <span>Account</span>
         </a>
-        <a href="/jobs" class="{{ 'active' if active_page == 'jobs' else '' }}">
-            <i class="fas fa-briefcase"></i>
-            <span>Jobs</span>
-        </a>
-        <a href="/vendors" class="{{ 'active' if active_page == 'vendors' else '' }}">
-            <i class="fas fa-store"></i>
-            <span>Vendors</span>
-        </a>
-        {% if session.user_id %}
-            <a href="/my-applications" class="{{ 'active' if active_page == 'my-applications' else '' }}">
-                <i class="fas fa-file-alt"></i>
-                <span>My Apps</span>
-            </a>
-        {% else %}
-            <a href="/login">
-                <i class="fas fa-user"></i>
-                <span>Account</span>
-            </a>
-        {% endif %}
-    </div>
+    {% endif %}
+</div>
 
     <footer style="text-align:center; padding:16px; color:var(--text-secondary); font-size:0.7rem; border-top:1px solid var(--border); margin-top:20px;">
         &copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬
