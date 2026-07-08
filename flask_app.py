@@ -5312,21 +5312,24 @@ def admin_restore():
 def admin_subscriptions():
     if not session.get('admin'):
         return redirect('/admin/login')
+    
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id, name, duration_days, price, points_required, is_active FROM subscription_packages ORDER BY price")
     packages = c.fetchall()
     conn.close()
+    
     rows = ""
     for p in packages:
         active_status = "✅ Active" if p[5] else "❌ Inactive"
         price_display = "FREE" if p[3] == 0 else f"UGX {p[3]:,}"
+        points_display = f"{p[4]} pts" if p[4] > 0 else "—"
         rows += f"""
         <tr>
             <td>{p[1]}</td>
             <td>{p[2]} days</td>
             <td>{price_display}</td>
-            <td>{p[4]} pts</td>
+            <td>{points_display}</td>
             <td>{active_status}</td>
             <td>
                 <a href="/admin/edit-package/{p[0]}" class="btn btn-small">Edit</a>
@@ -5334,14 +5337,18 @@ def admin_subscriptions():
                 <a href="/admin/delete-package/{p[0]}" class="btn btn-small btn-danger" onclick="return confirm('Delete this package?')">Delete</a>
             </td>
         </tr>"""
+    
     if not rows:
-        rows = "<tr><td colspan='5'>No packages yet.</td></tr>"
+        rows = "<tr><td colspan='6'>No packages yet.</td></tr>"
+    
     content = f"""
     <div class="card">
         <div class="card-header">📦 Subscription Packages</div>
         <a href="/admin/add-package" class="btn" style="margin-bottom:15px;">+ Add Package</a>
         <table>
-            <thead><tr><th>Name</th><th>Duration</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead>
+                <tr><th>Name</th><th>Duration</th><th>Price</th><th>Points Required</th><th>Status</th><th>Actions</th></tr>
+            </thead>
             <tbody>{rows}</tbody>
         </table>
         <div style="margin-top:20px;">
@@ -5349,18 +5356,20 @@ def admin_subscriptions():
         </div>
     </div>
     """
-    return render_template_string(admin_base_template.replace("{title}", "Subscriptions").replace("{active_page}", "subscriptions").replace("{content}", content))
+    return render_template_string(admin_base_template.replace("{title}", "Subscriptions").replace("{active_page}", "packages").replace("{content}", content))
 
 @app.route('/admin/add-package', methods=['GET', 'POST'])
 def admin_add_package():
     if not session.get('admin'):
         return redirect('/admin/login')
+    
     if request.method == 'POST':
         name = request.form['name'].strip()
         duration = int(request.form['duration'])
         price = int(request.form['price'])
         points_required = int(request.form.get('points_required', 0))
         is_active = 1 if request.form.get('is_active') else 0
+        
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("""
@@ -5377,15 +5386,20 @@ def admin_add_package():
         <form method="POST">
             <label>Package Name</label>
             <input type="text" name="name" required>
+            
             <label>Duration (days)</label>
             <input type="number" name="duration" required min="1">
+            
             <label>Price (UGX) — Use 0 for free</label>
             <input type="number" name="price" required min="0">
-            <label>Points Required (0 for free/paid packages)</label>
+            
+            <label>Points Required — 0 means not redeemable with points</label>
             <input type="number" name="points_required" value="0" min="0">
+            
             <label style="margin-top:10px;">
                 <input type="checkbox" name="is_active" checked> Active
             </label>
+            
             <button type="submit" class="btn" style="margin-top:20px;">Create Package</button>
         </form>
         <a href="/admin/subscriptions" class="btn btn-outline" style="margin-top:10px;">Back</a>
@@ -5399,35 +5413,57 @@ def admin_edit_package(package_id):
         return redirect('/admin/login')
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    
     if request.method == 'POST':
         name = request.form['name'].strip()
         duration = int(request.form['duration'])
         price = int(request.form['price'])
-        c.execute("UPDATE subscription_packages SET name=?, duration_days=?, price=? WHERE id=?", (name, duration, price, package_id))
+        points_required = int(request.form.get('points_required', 0))
+        is_active = 1 if request.form.get('is_active') else 0
+        
+        c.execute("""
+            UPDATE subscription_packages 
+            SET name=?, duration_days=?, price=?, points_required=?, is_active=? 
+            WHERE id=?
+        """, (name, duration, price, points_required, is_active, package_id))
         conn.commit()
         conn.close()
         return redirect('/admin/subscriptions')
-    c.execute("SELECT id, name, duration_days, price FROM subscription_packages WHERE id=?", (package_id,))
+    
+    c.execute("SELECT id, name, duration_days, price, points_required, is_active FROM subscription_packages WHERE id=?", (package_id,))
     p = c.fetchone()
     conn.close()
+    
     if not p:
         return "Package not found", 404
+    
+    checked = 'checked' if p[5] else ''
     content = f"""
     <div class="card">
         <div class="card-header">✏️ Edit Package</div>
         <form method="POST">
             <label>Package Name</label>
             <input type="text" name="name" value="{p[1]}" required>
+            
             <label>Duration (days)</label>
             <input type="number" name="duration" value="{p[2]}" required min="1">
-            <label>Price (UGX)</label>
+            
+            <label>Price (UGX) — Use 0 for free</label>
             <input type="number" name="price" value="{p[3]}" required min="0">
+            
+            <label>Points Required — 0 means not redeemable with points</label>
+            <input type="number" name="points_required" value="{p[4]}" min="0">
+            
+            <label style="margin-top:10px;">
+                <input type="checkbox" name="is_active" {checked}> Active
+            </label>
+            
             <button type="submit" class="btn" style="margin-top:20px;">Update Package</button>
         </form>
         <a href="/admin/subscriptions" class="btn btn-outline" style="margin-top:10px;">Back</a>
     </div>
     """
-    return render_template_string(admin_base_template.replace("{title}", "Edit Package").replace("{active_page}", "subscriptions").replace("{content}", content))
+    return render_template_string(admin_base_template.replace("{title}", "Edit Package").replace("{active_page}", "packages").replace("{content}", content))
 
 @app.route('/admin/toggle-package/<int:package_id>')
 def admin_toggle_package(package_id):
