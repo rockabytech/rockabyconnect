@@ -4437,46 +4437,6 @@ def boost_job_submit(job_id):
     return render_user_template(base_template, title="Boost Submitted", active_page="dashboard", content=content)
 
 # ---------- Job posting, editing ----------
-@app.route('/post-job', methods=['GET', 'POST'])
-@login_required
-def post_job():
-    if request.method == 'POST':
-        title = request.form['title']
-        company = request.form.get('company', '')
-        description = request.form['description']
-        location = request.form['location']
-        village = request.form.get('village', '')
-        contact = request.form.get('contact', '')
-        urgent = 1 if request.form.get('urgent') else 0  # ⭐ NEW
-        file = request.files.get('job_image')
-        video_file = request.files.get('video')
-
-        filename = None
-        video_filename = None
-        if file and allowed_file(file.filename):
-            filename = save_resized_image(file, max_width=800, max_height=600)
-        if video_file and allowed_video(video_file.filename):
-            video_filename = secure_filename(video_file.filename)
-            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
-            video_file.save(video_path)
-
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image, video, urgent)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
-        """, (session['user_id'], title, company, description, location, village, contact, 'Open', filename, video_filename, urgent))
-        conn.commit()
-        conn.close()
-        return redirect('/dashboard')
-
-    # GET form (unchanged except adding {urgent_checked})
-    form = job_form_template.replace("{job_form_title}", "Post a Job").replace("{form_header}", "Post a New Job")
-    form = form.replace("{title_val}", "").replace("{company_val}", "").replace("{description_val}", "")
-    form = form.replace("{location_val}", "").replace("{village_val}", "").replace("{contact_val}", "")
-    form = form.replace("{submit_button}", "Post Job")
-    form = form.replace("{urgent_checked}", "")  # ⭐ NEW
-    return render_user_template(form, title="Post a Job", active_page="jobs")
 
 @app.route('/post-job', methods=['GET', 'POST'])
 @login_required
@@ -4511,6 +4471,7 @@ def post_job():
         conn.close()
         return redirect('/dashboard')
 
+    # GET form
     form = job_form_template.replace("{job_form_title}", "Post a Job").replace("{form_header}", "Post a New Job")
     form = form.replace("{title_val}", "").replace("{company_val}", "").replace("{description_val}", "")
     form = form.replace("{location_val}", "").replace("{village_val}", "").replace("{contact_val}", "")
