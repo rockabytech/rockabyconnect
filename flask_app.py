@@ -946,14 +946,15 @@ def render_user_template(template, title="", active_page="", **kwargs):
     template = template.replace('{{ VAPID_PUBLIC_KEY }}', vapid_public_key)
     # --------------------------------------------
     
+    # Replace kwargs placeholders
     for key, value in kwargs.items():
         template = template.replace(f'{{{key}}}', str(value))
     
-    # ⭐ CRITICAL FIX: Pass session and request to the template ⭐
+    # ⭐⭐⭐ CRITICAL FIX: Pass session and request to the template ⭐⭐⭐
     return render_template_string(
         template,
-        session=session,  # ⭐ THIS IS THE KEY FIX
-        request=request,   # ⭐ Also pass request for form data access
+        session=session,  # This makes session available in templates
+        request=request,   # This makes request available in templates
         **kwargs
     )
 
