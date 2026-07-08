@@ -3633,6 +3633,7 @@ def dashboard():
     
     # ---- GET USER POINTS ----
     points = get_user_points(user_id)
+    print(f"[DEBUG] User {user_id} has {points} points")
     # -------------------------
     
     conn = sqlite3.connect(DB_PATH)
