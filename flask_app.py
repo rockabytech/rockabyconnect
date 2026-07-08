@@ -3881,7 +3881,7 @@ admin_base_template = """
 def home():
     # Debug log
     user_id = session.get('user_id')
-    print(f"[DEBUG] Home route - User ID: {user_id}")
+    print(f"[DEBUG] Home route - User ID in session: {user_id}")
     
     # ---- REFERRAL CODE DETECTION ----
     ref_code = request.args.get('ref', '')
@@ -4010,7 +4010,12 @@ def home():
         hero_end = content.find('</div>', content.find('class="hero"')) + 6
         content = content[:hero_end] + carousel_html + content[hero_end:]
 
-    return render_user_template(content, title="Home", active_page="home")
+    # ⭐ Return with cache-busting headers ⭐
+    response = make_response(render_user_template(content, title="Home", active_page="home"))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/points-history')
 @login_required
