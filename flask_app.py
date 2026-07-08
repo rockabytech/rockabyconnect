@@ -22,9 +22,22 @@ from PIL import Image
 # ============================================================
 # BACKUP CONFIGURATION
 # ============================================================
+import zipfile
+import io
+import os
+import shutil
+from github import Github
+from datetime import datetime
+
 BACKUP_REPO = 'rockabytech/rockabyconnect-backup'  # ✅ Your repo
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 BACKUP_FILE = 'providers_backup.db'
+UPLOADS_BACKUP_FILE = 'uploads_backup.zip'
+UPLOADS_PATH = os.path.join(BASE_DIR, 'static', 'uploads')
+
+# ============================================================
+# DATABASE BACKUP
+# ============================================================
 
 def backup_to_github():
     """Upload SQLite database to GitHub using VACUUM INTO for a fast, consistent backup."""
@@ -73,7 +86,7 @@ def backup_to_github():
                 db_content
             )
         
-        print(f"[BACKUP] ✅ Backup completed successfully at {datetime.now().isoformat()}")
+        print(f"[BACKUP] ✅ Database backup completed successfully at {datetime.now().isoformat()}")
         
     except sqlite3.OperationalError as e:
         print(f"[BACKUP] ⚠️ Database busy, will retry later: {e}")
@@ -83,7 +96,7 @@ def backup_to_github():
             except:
                 pass
     except Exception as e:
-        print(f"[BACKUP] ❌ Backup failed: {e}")
+        print(f"[BACKUP] ❌ Database backup failed: {e}")
         if conn:
             try:
                 conn.rollback()
@@ -125,17 +138,128 @@ def restore_from_github():
             print(f"[BACKUP] ✅ Database restored from GitHub backup")
             return True
         except:
-            print("[BACKUP] No existing backup found, starting fresh")
+            print("[BACKUP] No existing database backup found, starting fresh")
             return False
     except Exception as e:
-        print(f"[BACKUP] ❌ Restore failed: {e}")
+        print(f"[BACKUP] ❌ Database restore failed: {e}")
         return False
 
+# ============================================================
+# UPLOADS FOLDER BACKUP (Images, Videos, etc.)
+# ============================================================
+
+def backup_uploads_to_github():
+    """Zip and upload the uploads folder to GitHub."""
+    if not GITHUB_TOKEN:
+        print("[BACKUP] No GitHub token, skipping uploads backup")
+        return
+    
+    if not os.path.exists(UPLOADS_PATH):
+        print("[BACKUP] Uploads folder not found, skipping backup")
+        return
+    
+    try:
+        # Create ZIP in memory
+        zip_buffer = io.BytesIO()
+        file_count = 0
+        total_size = 0
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for root, dirs, files in os.walk(UPLOADS_PATH):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, UPLOADS_PATH)
+                    zip_file.write(file_path, arcname)
+                    file_count += 1
+                    total_size += os.path.getsize(file_path)
+        
+        zip_buffer.seek(0)
+        zip_data = zip_buffer.read()
+        
+        # Upload to GitHub
+        g = Github(GITHUB_TOKEN)
+        repo = g.get_repo(BACKUP_REPO)
+        
+        try:
+            contents = repo.get_contents(UPLOADS_BACKUP_FILE)
+            repo.update_file(
+                contents.path,
+                f"Uploads backup from {datetime.now().isoformat()} ({file_count} files, {total_size//1024} KB)",
+                zip_data,
+                contents.sha
+            )
+        except:
+            repo.create_file(
+                UPLOADS_BACKUP_FILE,
+                f"Initial uploads backup from {datetime.now().isoformat()} ({file_count} files, {total_size//1024} KB)",
+                zip_data
+            )
+        
+        print(f"[BACKUP] ✅ Uploads backed up: {file_count} files, {total_size//1024} KB")
+        
+    except Exception as e:
+        print(f"[BACKUP] ❌ Uploads backup failed: {e}")
+
+def restore_uploads_from_github():
+    """Download and extract uploads from GitHub."""
+    if not GITHUB_TOKEN:
+        print("[BACKUP] No GitHub token, skipping uploads restore")
+        return False
+    
+    try:
+        # Connect to GitHub
+        g = Github(GITHUB_TOKEN)
+        repo = g.get_repo(BACKUP_REPO)
+        
+        # Get the uploads backup file
+        try:
+            contents = repo.get_contents(UPLOADS_BACKUP_FILE)
+            zip_data = contents.decoded_content
+            
+            # Ensure uploads directory exists
+            os.makedirs(UPLOADS_PATH, exist_ok=True)
+            
+            # Extract ZIP
+            with zipfile.ZipFile(io.BytesIO(zip_data), 'r') as zip_file:
+                zip_file.extractall(UPLOADS_PATH)
+            
+            file_count = len(zip_file.namelist())
+            print(f"[BACKUP] ✅ Uploads restored: {file_count} files")
+            return True
+            
+        except:
+            print("[BACKUP] No existing uploads backup found, starting fresh")
+            return False
+            
+    except Exception as e:
+        print(f"[BACKUP] ❌ Uploads restore failed: {e}")
+        return False
+
+# ============================================================
+# SCHEDULER & STARTUP
+# ============================================================
+
 def schedule_github_backup():
-    """Run GitHub backup every 30 minutes."""
+    """Run GitHub backup every 30 minutes (database + uploads)."""
+    print("[BACKUP] 🕐 Running scheduled backup...")
     backup_to_github()
+    backup_uploads_to_github()
     # Schedule next run
     threading.Timer(1800, schedule_github_backup).start()  # 1800 seconds = 30 minutes
+
+# ============================================================
+# ADD THIS TO YOUR APP STARTUP (replace existing restore calls)
+# ============================================================
+# 
+# # ---- RESTORE BACKUP ON STARTUP ----
+# print("[STARTUP] Attempting to restore from backup...")
+# restore_from_github()
+# restore_uploads_from_github()
+# 
+# # ---- START BACKUP SCHEDULER ----
+# print("[STARTUP] Starting backup scheduler (every 30 minutes)...")
+# schedule_github_backup()
+# 
 
 # ============================================================
 # APP CONFIGURATION (DYNAMIC FOR RENDER)
@@ -262,23 +386,30 @@ def init_db():
     )''')
 
     # ---- JOBS TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS jobs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        employer_id INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        company TEXT,
-        description TEXT,
-        location TEXT,
-        village TEXT,
-        contact TEXT,
-        status TEXT DEFAULT 'Open',
-        posted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        job_image TEXT,
-        video TEXT,
-        featured INTEGER DEFAULT 0,
-        featured_expiry DATE,
-        FOREIGN KEY(employer_id) REFERENCES users(id)
-    )''')
+c.execute('''CREATE TABLE IF NOT EXISTS jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employer_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    company TEXT,
+    description TEXT,
+    location TEXT,
+    village TEXT,
+    contact TEXT,
+    status TEXT DEFAULT 'Open',
+    posted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    job_image TEXT,
+    video TEXT,
+    featured INTEGER DEFAULT 0,
+    featured_expiry DATE,
+    FOREIGN KEY(employer_id) REFERENCES users(id)
+)''')
+
+# ---- Add 'urgent' column if missing ----
+c.execute("PRAGMA table_info(jobs)")
+columns = [col[1] for col in c.fetchall()]
+if 'urgent' not in columns:
+    c.execute("ALTER TABLE jobs ADD COLUMN urgent INTEGER DEFAULT 0")
+    print("[DB] Added 'urgent' column to jobs table")
 
     # ---- BOOST REQUESTS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS boost_requests (
@@ -6992,8 +7123,9 @@ def search_users():
 # ============================================================
 
 # ---- RESTORE BACKUP ON STARTUP ----
-print("[STARTUP] Attempting to restore database from backup...")
+print("[STARTUP] Attempting to restore from backup...")
 restore_from_github()
+restore_uploads_from_github()
 
 # ---- INIT DB (only if restore fails or no tables exist) ----
 def ensure_db():
