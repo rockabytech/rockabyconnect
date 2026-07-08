@@ -2615,18 +2615,27 @@ base_template = """
             </div>
         </a>
         <div class="navbar-right">
-            <!-- Search bar -->
-            <form action="/search" method="GET" class="search-form">
-                <input type="text" name="q" placeholder="Search users..." 
-                       value="{{ request.args.get('q', '') }}" 
-                       aria-label="Search users by name">
-                <button type="submit" aria-label="Submit search">
-                    <i class="fas fa-search"></i>
-                </button>
-            </form>
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
-            <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
-        </div>
+    <!-- Search bar -->
+    <form action="/search" method="GET" class="search-form">
+        <input type="text" name="q" placeholder="Search users..." value="{{ request.args.get('q', '') }}">
+        <button type="submit"><i class="fas fa-search"></i></button>
+    </form>
+    
+    <!-- Messages Badge -->
+    <a href="/messages" style="position:relative; color:var(--text-secondary);">
+        <i class="fas fa-envelope" style="font-size:1.2rem;"></i>
+        <span id="messagesBadge" class="badge" style="background:#dc3545; color:white; font-size:0.6rem; padding:2px 6px; border-radius:10px; position:absolute; top:-8px; right:-10px; display:none;">0</span>
+    </a>
+    
+    <!-- Notifications Badge -->
+    <a href="/notifications" style="position:relative; color:var(--text-secondary);">
+        <i class="fas fa-bell" style="font-size:1.2rem;"></i>
+        <span id="notifBadge" class="badge" style="background:#dc3545; color:white; font-size:0.6rem; padding:2px 6px; border-radius:10px; position:absolute; top:-8px; right:-10px; display:none;">0</span>
+    </a>
+    
+    <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+    <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
+</div>
     </nav>
 
     <div class="container">
@@ -2652,16 +2661,16 @@ base_template = """
             <span>Vendors</span>
         </a>
         {% if session.user_id %}
-            <a href="/messages" id="bottomMsgLink">
-                <i class="fas fa-envelope"></i>
-                <span>Messages</span>
-                <span id="bottomMsgBadge" class="badge" style="display:none;"></span>
-            </a>
-            <a href="/notifications" id="bottomNotifLink">
-                <i class="fas fa-bell"></i>
-                <span>Alerts</span>
-                <span id="bottomNotifBadge" class="badge" style="display:none;"></span>
-            </a>
+        <a href="/messages" id="bottomMsgLink">
+            <i class="fas fa-envelope"></i>
+            <span>Messages</span>
+            <span id="bottomMsgBadge" class="badge" style="display:none;"></span>
+        </a>
+        <a href="/notifications" id="bottomNotifLink">
+            <i class="fas fa-bell"></i>
+            <span>Alerts</span>
+            <span id="bottomNotifBadge" class="badge" style="display:none;"></span>
+        </a>
         {% else %}
             <a href="/login">
                 <i class="fas fa-user"></i>
@@ -2727,34 +2736,68 @@ base_template = """
         }
 
         // ============================================================
-        // UNREAD BADGES
-        // ============================================================
-        function updateUnreadBadge() {
-            fetch('/api/unread-count')
-                .then(r => r.json())
-                .then(data => {
-                    const count = data.count || 0;
-                    // Desktop navbar (if present)
-                    const badge = document.getElementById('messagesBadge');
-                    if (badge) {
-                        badge.textContent = count;
-                        badge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                    // Mobile menu
-                    const mobileBadge = document.getElementById('mobileMsgBadge');
-                    if (mobileBadge) {
-                        mobileBadge.textContent = count;
-                        mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                    // Bottom nav
-                    const bottomBadge = document.getElementById('bottomMsgBadge');
-                    if (bottomBadge) {
-                        bottomBadge.textContent = count;
-                        bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                })
-                .catch(err => console.log('Error fetching unread count:', err));
-        }
+// UNREAD BADGES
+// ============================================================
+
+function updateUnreadBadge() {
+    fetch('/api/unread-count')
+        .then(r => r.json())
+        .then(data => {
+            const count = data.count || 0;
+            
+            // Desktop navbar
+            const badge = document.getElementById('messagesBadge');
+            if (badge) {
+                badge.textContent = count;
+                badge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+            
+            // Mobile menu
+            const mobileBadge = document.getElementById('mobileMsgBadge');
+            if (mobileBadge) {
+                mobileBadge.textContent = count;
+                mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+            
+            // Bottom nav
+            const bottomBadge = document.getElementById('bottomMsgBadge');
+            if (bottomBadge) {
+                bottomBadge.textContent = count;
+                bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+        })
+        .catch(err => console.log('Error fetching unread count:', err));
+}
+
+function updateNotifBadge() {
+    fetch('/api/unread-notifications')
+        .then(r => r.json())
+        .then(data => {
+            const count = data.count || 0;
+            
+            // Desktop navbar
+            const badge = document.getElementById('notifBadge');
+            if (badge) {
+                badge.textContent = count;
+                badge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+            
+            // Mobile menu
+            const mobileBadge = document.getElementById('mobileNotifBadge');
+            if (mobileBadge) {
+                mobileBadge.textContent = count;
+                mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+            
+            // Bottom nav
+            const bottomBadge = document.getElementById('bottomNotifBadge');
+            if (bottomBadge) {
+                bottomBadge.textContent = count;
+                bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+        })
+        .catch(err => console.log('Error fetching unread notifications:', err));
+}
 
         function updateNotifBadge() {
             fetch('/api/unread-notifications')
@@ -3896,12 +3939,6 @@ def points_history():
 # ============================================================
 # NOTIFICATION API & PAGE
 # ============================================================
-
-@app.route('/api/unread-notifications')
-@login_required
-def api_unread_notifications():
-    count = get_unread_notifications(session['user_id'])
-    return {'count': count}
 
 @app.route('/notifications')
 @login_required
@@ -6961,6 +6998,17 @@ def api_unread_count():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM messages WHERE receiver_id=? AND is_read=0", (user_id,))
+    count = c.fetchone()[0]
+    conn.close()
+    return {'count': count}
+
+@app.route('/api/unread-notifications')
+@login_required
+def api_unread_notifications():
+    user_id = session['user_id']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0", (user_id,))
     count = c.fetchone()[0]
     conn.close()
     return {'count': count}
