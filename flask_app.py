@@ -2252,6 +2252,160 @@ base_template = """
         body.theme-neon .pill-title i { color: #00d4ff; }
         body.theme-neon .pill-title:hover { background: rgba(0, 212, 255, 0.2); }
 
+        /* ================================================
+           URGENT JOB STYLES - Glowing & Blinking
+           ================================================ */
+
+        /* Urgent job card - glowing animation */
+        .job-urgent {
+            animation: urgentGlow 1.5s ease-in-out infinite alternate;
+            border: 2px solid #ff4444 !important;
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.6);
+            position: relative;
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 16px;
+            transition: all 0.3s ease;
+        }
+
+        /* Glow animation */
+        @keyframes urgentGlow {
+            0% {
+                box-shadow: 0 0 5px rgba(255, 68, 68, 0.3);
+                border-color: #ff4444;
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(255, 68, 68, 0.6);
+                border-color: #ff2222;
+                transform: scale(1.01);
+            }
+            100% {
+                box-shadow: 0 0 30px rgba(255, 68, 68, 0.9);
+                border-color: #ff0000;
+                transform: scale(1);
+            }
+        }
+
+        /* Urgent badge - pulsing */
+        .urgent-badge {
+            display: inline-block;
+            background: #ff4444;
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 12px;
+            margin-left: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            animation: pulseBadge 1s ease-in-out infinite alternate;
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.4);
+            vertical-align: middle;
+        }
+
+        /* Badge pulse animation */
+        @keyframes pulseBadge {
+            0% {
+                opacity: 0.7;
+                transform: scale(0.95);
+                box-shadow: 0 0 5px rgba(255, 68, 68, 0.3);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1.05);
+                box-shadow: 0 0 15px rgba(255, 68, 68, 0.6);
+            }
+        }
+
+        /* Urgent icon overlay (optional) */
+        .job-urgent::before {
+            content: "⚡";
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 1.8rem;
+            animation: pulseIcon 1.5s ease-in-out infinite alternate;
+            filter: drop-shadow(0 0 10px rgba(255, 68, 68, 0.8));
+            z-index: 1;
+        }
+
+        @keyframes pulseIcon {
+            0% {
+                transform: scale(0.9) rotate(-10deg);
+                filter: drop-shadow(0 0 5px rgba(255, 68, 68, 0.5));
+            }
+            100% {
+                transform: scale(1.1) rotate(10deg);
+                filter: drop-shadow(0 0 20px rgba(255, 68, 68, 0.9));
+            }
+        }
+
+        /* Dark mode support */
+        body.dark-mode .job-urgent {
+            border-color: #ff6666 !important;
+            box-shadow: 0 0 30px rgba(255, 68, 68, 0.3);
+        }
+
+        body.dark-mode .job-urgent::before {
+            filter: drop-shadow(0 0 15px rgba(255, 68, 68, 0.6));
+        }
+
+        body.dark-mode .urgent-badge {
+            background: #ff3333;
+            box-shadow: 0 0 15px rgba(255, 68, 68, 0.3);
+        }
+
+        /* Neon theme support */
+        body.theme-neon .job-urgent {
+            border-color: #ff00a0 !important;
+            box-shadow: 0 0 30px rgba(255, 0, 160, 0.6);
+            animation: neonUrgentGlow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes neonUrgentGlow {
+            0% {
+                box-shadow: 0 0 10px rgba(255, 0, 160, 0.3);
+                border-color: #ff00a0;
+            }
+            100% {
+                box-shadow: 0 0 40px rgba(255, 0, 160, 0.8);
+                border-color: #ff00ff;
+            }
+        }
+
+        body.theme-neon .urgent-badge {
+            background: #ff00a0;
+            box-shadow: 0 0 15px rgba(255, 0, 160, 0.5);
+        }
+
+        /* Responsive adjustments for urgent styles */
+        @media (max-width: 768px) {
+            .job-urgent::before {
+                font-size: 1.2rem;
+                top: -6px;
+                right: -6px;
+            }
+            
+            .urgent-badge {
+                font-size: 0.5rem;
+                padding: 2px 6px;
+                margin-left: 4px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .job-urgent {
+                padding: 12px;
+            }
+            
+            .job-urgent::before {
+                font-size: 1rem;
+                top: -4px;
+                right: -4px;
+            }
+        }
+
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(30px); }
             to { opacity: 1; transform: translateY(0); }
@@ -2931,8 +3085,10 @@ job_form_template = base_template.replace("{title}", "{job_form_title}").replace
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Job Title *</label>
             <input type="text" name="title" value="{title_val}" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
             
-            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Company / Your Name</label>
-            <input type="text" name="company" value="{company_val}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">
+            <input type="checkbox" name="urgent" value="1" {urgent_checked}> ⚡ Mark as Urgent
+            </label>
+            <p style="font-size:0.75rem; color:var(--text-secondary);">Urgent jobs will glow on the listings page to attract more attention.</p>
             
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Description *</label>
             <textarea name="description" rows="4" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem; min-height:100px;">{description_val}</textarea>
@@ -4291,6 +4447,7 @@ def post_job():
         location = request.form['location']
         village = request.form.get('village', '')
         contact = request.form.get('contact', '')
+        urgent = 1 if request.form.get('urgent') else 0  # ⭐ NEW
         file = request.files.get('job_image')
         video_file = request.files.get('video')
 
@@ -4306,9 +4463,50 @@ def post_job():
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("""
-            INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image, video)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
-        """, (session['user_id'], title, company, description, location, village, contact, 'Open', filename, video_filename))
+            INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image, video, urgent)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """, (session['user_id'], title, company, description, location, village, contact, 'Open', filename, video_filename, urgent))
+        conn.commit()
+        conn.close()
+        return redirect('/dashboard')
+
+    # GET form (unchanged except adding {urgent_checked})
+    form = job_form_template.replace("{job_form_title}", "Post a Job").replace("{form_header}", "Post a New Job")
+    form = form.replace("{title_val}", "").replace("{company_val}", "").replace("{description_val}", "")
+    form = form.replace("{location_val}", "").replace("{village_val}", "").replace("{contact_val}", "")
+    form = form.replace("{submit_button}", "Post Job")
+    form = form.replace("{urgent_checked}", "")  # ⭐ NEW
+    return render_user_template(form, title="Post a Job", active_page="jobs")
+
+@app.route('/post-job', methods=['GET', 'POST'])
+@login_required
+def post_job():
+    if request.method == 'POST':
+        title = request.form['title']
+        company = request.form.get('company', '')
+        description = request.form['description']
+        location = request.form['location']
+        village = request.form.get('village', '')
+        contact = request.form.get('contact', '')
+        urgent = 1 if request.form.get('urgent') else 0  # ⭐ NEW
+        file = request.files.get('job_image')
+        video_file = request.files.get('video')
+
+        filename = None
+        video_filename = None
+        if file and allowed_file(file.filename):
+            filename = save_resized_image(file, max_width=800, max_height=600)
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
+
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image, video, urgent)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """, (session['user_id'], title, company, description, location, village, contact, 'Open', filename, video_filename, urgent))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
@@ -4317,62 +4515,8 @@ def post_job():
     form = form.replace("{title_val}", "").replace("{company_val}", "").replace("{description_val}", "")
     form = form.replace("{location_val}", "").replace("{village_val}", "").replace("{contact_val}", "")
     form = form.replace("{submit_button}", "Post Job")
+    form = form.replace("{urgent_checked}", "")  # ⭐ NEW
     return render_user_template(form, title="Post a Job", active_page="jobs")
-
-@app.route('/edit-job/<int:job_id>', methods=['GET', 'POST'])
-@login_required
-def edit_job(job_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT title, company, description, location, village, contact, status, employer_id, job_image, video FROM jobs WHERE id=?", (job_id,))
-    job = c.fetchone()
-    if not job or job[7] != session['user_id']:
-        conn.close()
-        return "Job not found or unauthorized.", 404
-
-    if request.method == 'POST':
-        title = request.form['title']
-        company = request.form.get('company', '')
-        description = request.form['description']
-        location = request.form['location']
-        village = request.form.get('village', '')
-        contact = request.form.get('contact', '')
-        status = request.form.get('status', 'Open')
-        file = request.files.get('job_image')
-        video_file = request.files.get('video')
-
-        filename = job[8]
-        video_filename = job[9]
-        if file and allowed_file(file.filename):
-            filename = save_resized_image(file, max_width=800, max_height=600)
-        if video_file and allowed_video(video_file.filename):
-            video_filename = secure_filename(video_file.filename)
-            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
-            video_file.save(video_path)
-
-        c.execute("""
-            UPDATE jobs SET title=?, company=?, description=?, location=?, village=?, contact=?, status=?, job_image=?, video=?
-            WHERE id=?
-        """, (title, company, description, location, village, contact, status, filename, video_filename, job_id))
-        conn.commit()
-        conn.close()
-        return redirect('/dashboard')
-
-    form = job_form_template.replace("{job_form_title}", "Edit Job").replace("{form_header}", "Edit Job Posting")
-    form = form.replace("{title_val}", job[0]).replace("{company_val}", job[1] or '').replace("{description_val}", job[2] or '')
-    form = form.replace("{location_val}", job[3] or '').replace("{village_val}", job[4] or '').replace("{contact_val}", job[5] or '')
-    form = form.replace("{submit_button}", "Update Job")
-    status_dropdown = f"""
-        <label>Status</label>
-        <select name="status">
-            <option value="Open" {"selected" if job[6]=='Open' else ''}>Open</option>
-            <option value="Taken" {"selected" if job[6]=='Taken' else ''}>Taken</option>
-            <option value="Closed" {"selected" if job[6]=='Closed' else ''}>Closed</option>
-        </select>
-    """
-    form = form.replace('</form>', f'{status_dropdown}\n</form>')
-    conn.close()
-    return render_user_template(form, title="Edit Job", active_page="jobs")
 
 # ---------- Public Listing ----------
 @app.route('/list')
@@ -4450,18 +4594,28 @@ def list_jobs():
     today = date.today().isoformat()
     c.execute("UPDATE jobs SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
     conn.commit()
+    
+    # ⭐ UPDATED: Include urgent column and sort by urgent first
     c.execute("""
-        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.featured, j.featured_expiry, j.employer_id
+        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.featured, j.featured_expiry, j.employer_id, j.urgent
         FROM jobs j
-        ORDER BY CASE WHEN j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= date('now')) THEN 0 ELSE 1 END, j.id DESC
+        ORDER BY j.urgent DESC, 
+                 CASE WHEN j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= date('now')) THEN 0 ELSE 1 END, 
+                 j.id DESC
     """)
     jobs = c.fetchall()
     conn.close()
 
     jobs_html = ""
     for j in jobs:
-        job_id, title, company, desc, loc, village, contact, status, posted_date, image, featured, expiry, employer_id = j
+        # ⭐ UPDATED: Unpack urgent (14 items now)
+        job_id, title, company, desc, loc, village, contact, status, posted_date, image, featured, expiry, employer_id, urgent = j
         badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
+        
+        # ⭐ NEW: Urgent classes and badge
+        urgent_class = "job-urgent" if urgent else ""
+        urgent_badge = '<span class="urgent-badge">⚡ URGENT</span>' if urgent else ''
+        
         if logged_in:
             contact_display = f'<p>Contact: {contact}'
             if is_phone_number(contact):
@@ -4495,11 +4649,12 @@ def list_jobs():
                 else:
                     message_button = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Message</a>'
 
+        # ⭐ UPDATED: Added urgent_class and urgent_badge
         jobs_html += f"""
-        <div class="job-card">
+        <div class="job-card {urgent_class}">
             {img_tag}
             <div class="job-info">
-                <h3>{title_display} <span class="badge badge-{badge_class}">{status}</span> {feat_badge}</h3>
+                <h3>{title_display} {urgent_badge} <span class="badge badge-{badge_class}">{status}</span> {feat_badge}</h3>
                 <p class="meta">{company or 'N/A'} · {location_display} · {posted_date[:10] if posted_date else ''}</p>
                 <p>{desc}</p>
                 {contact_display}
