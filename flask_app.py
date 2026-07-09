@@ -2726,12 +2726,12 @@ base_template = """
     <!-- ===== TOP NAVBAR (Compact) ===== -->
     <nav class="navbar">
         <a href="/" class="logo">
-            <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
-            <div>
-            <div class="logo-text">ROCKABY<span>CONNECT</span></div>
-            <div class="logo-sub">Connecting Skills, Building Uganda</div>
-        </div>
-    </a>
+    <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
+    <div>
+        <div class="logo-text">ROCKABY<span style="color:#FF0000;">CONNECT</span></div>
+        <div class="logo-sub">Connecting Skills, Building Uganda</div>
+    </div>
+</a>
     <div class="navbar-right">
         <!-- Search bar -->
         <form action="/search" method="GET" class="search-form">
