@@ -7219,7 +7219,8 @@ def api_unread_notifications():
     user_id = session['user_id']
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0", (user_id,))
+    # ⭐ Exclude 'message' type from notification count
+    c.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0 AND type != 'message'", (user_id,))
     count = c.fetchone()[0]
     conn.close()
     return {'count': count}
