@@ -884,6 +884,21 @@ def get_subscription_packages():
     conn.close()
     return packages
 
+def broadcast_to_all_users(title, message, link='/'):
+    """Send a notification to every user in the system."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id FROM users")
+    users = c.fetchall()
+    conn.close()
+    
+    count = 0
+    for (user_id,) in users:
+        add_notification(user_id, 'broadcast', f'{title}: {message}', link=link)
+        count += 1
+    
+    return count
+
 # ============================================================
 # THEME HELPERS
 # ============================================================
@@ -1079,6 +1094,7 @@ def add_notification(user_id, type, message, link=None):
             'subscription_request': '📩 Subscription Request',
             'subscription_approved': '✅ Subscription Approved',
             'redemption_approved': '✅ Redemption Approved'
+            'broadcast': '📢 Announcement',
         }
         title = title_map.get(type, '🔔 Notification')
         
@@ -1369,6 +1385,68 @@ def admin_reject_redemption(req_id):
     conn.commit()
     conn.close()
     return redirect('/admin/redemption-requests')
+
+@app.route('/admin/broadcast', methods=['GET', 'POST'])
+def admin_broadcast():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        message = request.form.get('message', '').strip()
+        link = request.form.get('link', '/')
+        
+        if not title or not message:
+            content = """
+            <div class="card">
+                <div class="card-header">❌ Error</div>
+                <p>Title and message are required.</p>
+                <a href="/admin/broadcast" class="btn btn-outline">Back</a>
+            </div>
+            """
+            return render_template_string(admin_base_template.replace("{title}", "Broadcast Error").replace("{active_page}", "broadcast").replace("{content}", content))
+        
+        # Send to all users
+        count = broadcast_to_all_users(title, message, link)
+        
+        content = f"""
+        <div class="card">
+            <div class="card-header">✅ Broadcast Sent</div>
+            <p>Your announcement was sent to <strong>{count}</strong> users.</p>
+            <p><strong>Title:</strong> {title}</p>
+            <p><strong>Message:</strong> {message}</p>
+            <p><strong>Link:</strong> {link}</p>
+            <div style="margin-top:20px;">
+                <a href="/admin/broadcast" class="btn">Send Another</a>
+                <a href="/admin/dashboard" class="btn btn-outline">Back to Dashboard</a>
+            </div>
+        </div>
+        """
+        return render_template_string(admin_base_template.replace("{title}", "Broadcast Sent").replace("{active_page}", "broadcast").replace("{content}", content))
+    
+    # GET – show form
+    content = """
+    <div class="card">
+        <div class="card-header">📢 Send Announcement to All Users</div>
+        <p>This will send a notification to <strong>every user</strong> in the system.</p>
+        <hr>
+        <form method="POST">
+            <label>Title *</label>
+            <input type="text" name="title" placeholder="e.g., New Feature Released" required>
+            
+            <label>Message *</label>
+            <textarea name="message" rows="4" placeholder="Your announcement message..." required></textarea>
+            
+            <label>Link (optional)</label>
+            <input type="text" name="link" placeholder="/ or /jobs or /list" value="/">
+            <p style="font-size:0.75rem; color:var(--text-secondary);">Users will be taken to this page when they click the notification.</p>
+            
+            <button type="submit" class="btn" style="margin-top:20px;">📢 Send to All Users</button>
+        </form>
+        <a href="/admin/dashboard" class="btn btn-outline" style="margin-top:10px;">Back to Dashboard</a>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Broadcast Announcement").replace("{active_page}", "broadcast").replace("{content}", content))
 
 # ============================================================
 # BASE TEMPLATE (UNCHANGED)
@@ -5612,16 +5690,16 @@ def admin_dashboard():
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header">⚙️ Admin Tools</div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <a href="/admin/points-settings" class="btn" style="background:#fd7e14; color:white;">⭐ Points Settings</a>
-            <a href="/admin/subscription-requests" class="btn" style="background:#17a2b8; color:white;">📦 Subscription Requests</a>
-            <a href="/admin/subscriptions" class="btn" style="background:#28a745; color:white;">📦 Manage Packages</a>
-            <a href="/admin/backups" class="btn" style="background:#6c757d; color:white;">💾 Backups</a>
-            <a href="/admin/stats" class="btn" style="background:#6f42c1; color:white;">📊 Detailed Stats</a>
-        </div>
+   <div class="card">
+    <div class="card-header">⚙️ Admin Tools</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a href="/admin/points-settings" class="btn" style="background:#fd7e14; color:white;">⭐ Points Settings</a>
+        <a href="/admin/subscription-requests" class="btn" style="background:#17a2b8; color:white;">📦 Subscription Requests</a>
+        <a href="/admin/subscriptions" class="btn" style="background:#28a745; color:white;">📦 Manage Packages</a>
+        <a href="/admin/backups" class="btn" style="background:#6c757d; color:white;">💾 Backups</a>
+        <a href="/admin/broadcast" class="btn" style="background:#dc3545; color:white;">📢 Broadcast</a>  <!-- ⭐ ADD THIS -->
     </div>
+</div>
 
     <div class="card">
         <div class="card-header">⏳ Pending Boost Requests</div>
