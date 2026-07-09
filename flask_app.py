@@ -1093,7 +1093,7 @@ def add_notification(user_id, type, message, link=None):
             'job_alert': '🚨 New Job Matching Your Skills',  # <-- ADD THIS
             'subscription_request': '📩 Subscription Request',
             'subscription_approved': '✅ Subscription Approved',
-            'redemption_approved': '✅ Redemption Approved'
+            'redemption_approved': '✅ Redemption Approved',
             'broadcast': '📢 Announcement',
         }
         title = title_map.get(type, '🔔 Notification')
