@@ -2701,23 +2701,26 @@ base_template = """
         {% endif %}
     </div>
     
-    {% if session.user_id %}
-        <a href="/dashboard" onclick="closeMobileMenu()">📊 Dashboard</a>
-        <a href="/refer" onclick="closeMobileMenu()">🎁 Refer a Friend</a>
-        <a href="/settings" onclick="closeMobileMenu()">⚙️ Settings</a>
-        <a href="/points-history" onclick="closeMobileMenu()">⭐ My Points</a>
-        <a href="/redeem" onclick="closeMobileMenu()">🔄 Redeem Points</a>
-        <button id="installBtnMobile" class="install-app-btn" onclick="installApp()">
-            <i class="fas fa-download"></i> Install App
-        </button>
-        <a href="/logout" onclick="closeMobileMenu()" class="logout-link">🚪 Logout</a>
-    {% else %}
-        <a href="/login" onclick="closeMobileMenu()">🔐 Login</a>
-        <a href="/signup" onclick="closeMobileMenu()">📝 Sign Up</a>
-        <button id="installBtnMobileGuest" class="install-app-btn" onclick="installApp()">
-            <i class="fas fa-download"></i> Install App
-        </button>
-    {% endif %}
+    <!-- Mobile Menu (logged-in) -->
+{% if session.user_id %}
+    <a href="/dashboard" onclick="closeMobileMenu()">📊 Dashboard</a>
+    <a href="/refer" onclick="closeMobileMenu()">🎁 Refer a Friend</a>
+    <a href="/settings" onclick="closeMobileMenu()">⚙️ Settings</a>
+    <a href="/points-history" onclick="closeMobileMenu()">⭐ My Points</a>
+    <a href="/redeem" onclick="closeMobileMenu()">🔄 Redeem Points</a>
+    <button id="installBtnMobile" class="install-app-btn" onclick="installApp()">
+        <i class="fas fa-download"></i> Install App
+    </button>
+    <a href="/logout" onclick="closeMobileMenu()" class="logout-link">🚪 Logout</a>
+{% else %}
+    <!-- Guest menu -->
+    <a href="/" onclick="closeMobileMenu()">🏠 Home</a>
+    <a href="/login" onclick="closeMobileMenu()">🔐 Login</a>
+    <a href="/signup" onclick="closeMobileMenu()">📝 Sign Up</a>
+    <button id="installBtnMobileGuest" class="install-app-btn" onclick="installApp()">
+        <i class="fas fa-download"></i> Install App
+    </button>
+{% endif %}
 </div>
 
     <!-- ===== TOP NAVBAR (Compact) ===== -->
@@ -2762,12 +2765,16 @@ base_template = """
         {content}
     </div>
 
-    <!-- ===== BOTTOM NAVIGATION ===== -->
+<!-- ===== BOTTOM NAVIGATION ===== -->
 <div class="bottom-nav">
-    <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">
-        <i class="fas fa-home"></i>
-        <span>Home</span>
-    </a>
+    {% if not session.user_id %}
+        <!-- Show Home only for guests -->
+        <a href="/" class="{{ 'active' if active_page == 'home' else '' }}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+    {% endif %}
+    
     <a href="/list" class="{{ 'active' if active_page == 'list' else '' }}">
         <i class="fas fa-search"></i>
         <span>Find</span>
@@ -2780,12 +2787,15 @@ base_template = """
         <i class="fas fa-store"></i>
         <span>Vendors</span>
     </a>
+    
     {% if session.user_id %}
+        <!-- Logged-in user: My Apps -->
         <a href="/my-applications" class="{{ 'active' if active_page == 'my-applications' else '' }}">
             <i class="fas fa-file-alt"></i>
-            <span>My Apps</span>
+            <span>My Applications</span>
         </a>
     {% else %}
+        <!-- Guest: Account -->
         <a href="/login">
             <i class="fas fa-user"></i>
             <span>Account</span>
