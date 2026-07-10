@@ -7869,6 +7869,24 @@ def change_password():
     """
     return render_user_template(base_template, title="Change Password", content=content)
 
+@app.route('/admin/create-password-resets-table')
+def admin_create_password_resets_table():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS password_resets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            expiry TIMESTAMP NOT NULL,
+            used INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
+        conn.commit()
+    return "✅ Table 'password_resets' created successfully. <a href='/admin/dashboard'>Back</a>"
+
 # ============================================================
 # RUN APP
 # ============================================================
