@@ -951,20 +951,22 @@ def render_user_template(template, title="", active_page="", **kwargs):
         template = template.replace('<body class="theme-neon">', '<body>')
         template = template.replace('<body class="{theme_class}">', '<body>')
     
-    # ⭐ CRITICAL: Replace placeholders BEFORE rendering
-    template = template.replace('{title}', title)
-    template = template.replace('{active_page}', active_page)
+    # ⭐ CRITICAL: Replace {title} and {active_page} FIRST
+    if '{title}' in template:
+        template = template.replace('{title}', title)
+    if '{active_page}' in template:
+        template = template.replace('{active_page}', active_page)
     
     # ---- Replace VAPID public key placeholder ----
     vapid_public_key = os.environ.get('VAPID_PUBLIC_KEY', '')
     template = template.replace('{{ VAPID_PUBLIC_KEY }}', vapid_public_key)
     
-    # ---- Replace all kwargs placeholders ----
+    # ---- Replace all kwargs placeholders (including {content}) ----
     for key, value in kwargs.items():
         template = template.replace(f'{{{key}}}', str(value))
     
-    # ---- Debug: Print first 200 chars of template ----
-    print(f"[DEBUG] Template content preview: {template[:200]}...")
+    # ---- Debug: Print to verify content replacement ----
+    print(f"[DEBUG] Content in kwargs: {kwargs.get('content', 'NOT FOUND')[:100]}...")
     
     # ⭐ Return rendered template with session and request
     return render_template_string(
@@ -3973,7 +3975,7 @@ def home():
     if ref_code:
         session['referral_code'] = ref_code
     
-    # ---- SIMPLE CONTENT THAT WILL DEFINITELY SHOW ----
+    # ---- CONTENT ----
     content = """
     <div style="background: #f5af19; padding: 60px 20px; text-align: center; border-radius: 20px; margin-bottom: 30px;">
         <h1 style="font-size: 3rem; color: white; font-weight: 900;">Get Work Done – <span style="background: rgba(255,255,255,0.2); padding: 0 16px; border-radius: 12px;">or Get Paid</span></h1>
@@ -4038,10 +4040,9 @@ def home():
     </div>
     """
     
-    # Debug: Print content length
     print(f"[DEBUG] Content length: {len(content)} chars")
     
-    # ---- RENDER ----
+    # ⭐ DIRECT RENDER - BYPASS render_user_template ⭐
     return render_template_string(
         base_template,
         session=session,
@@ -4050,6 +4051,7 @@ def home():
         active_page="home",
         content=content
     )
+
 @app.route('/points-history')
 @login_required
 def points_history():
