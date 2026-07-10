@@ -330,17 +330,6 @@ def init_db():
     if 'theme' not in columns:
         c.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'default'")
 
-    # ---- PASSWORD RESETS TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS password_resets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        token TEXT NOT NULL UNIQUE,
-        expiry TIMESTAMP NOT NULL,
-        used INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )''')
-
     # ---- PROVIDERS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS providers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -457,7 +446,6 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
-
     # ---- REFERRAL TABLES ----
     c.execute('''CREATE TABLE IF NOT EXISTS referral_codes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
