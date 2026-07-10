@@ -3983,7 +3983,7 @@ def home():
     total_vendors = c.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
     open_jobs = c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'").fetchone()[0]
 
-    # ---- FEATURED ITEMS for carousel & sponsored grid ----
+    # ---- FEATURED ITEMS ----
     featured_providers = c.execute("""
         SELECT p.id, u.name, p.profile_pic, p.skills, 'provider' as type
         FROM providers p
@@ -4009,10 +4009,8 @@ def home():
         LIMIT 6
     """, (today,)).fetchall()
 
-    # Combine all featured items for carousel (mix)
+    # Combine
     all_featured = []
-    # We'll interleave: provider, vendor, job, provider, vendor, job...
-    # Simply combine and shuffle? Let's just combine and take first 10.
     for p in featured_providers:
         all_featured.append((p[0], p[1], p[2], p[3], 'provider'))
     for v in featured_vendors:
@@ -4020,9 +4018,8 @@ def home():
     for j in featured_jobs:
         all_featured.append((j[0], j[1], j[2], '', 'job'))
 
-    # If not enough featured, we can add some non-featured popular items (e.g., latest)
+    # Fallback to latest if not enough
     if len(all_featured) < 3:
-        # Get latest providers, vendors, jobs as fallback
         latest_providers = c.execute("""
             SELECT p.id, u.name, p.profile_pic, p.skills, 'provider'
             FROM providers p JOIN users u ON p.user_id = u.id
@@ -4040,14 +4037,15 @@ def home():
         all_featured.extend(latest_vendors)
         all_featured.extend(latest_jobs)
 
-    # Sponsored grid: take up to 9 items (mix)
     sponsored_items = all_featured[:9]
 
     # Build carousel slides
+    fallback_img = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23ddd'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' font-size='20' fill='%23666'%3ENo Image%3C/text%3E%3C/svg%3E"
+
     carousel_slides = ""
-    for item in all_featured[:10]:  # max 10 slides
+    for item in all_featured[:10]:
         item_id, name, img, detail, item_type = item
-        img_url = f"/static/uploads/{img}" if img else "/static/placeholder.png"
+        img_url = f"/static/uploads/{img}" if img else fallback_img
         label = item_type.capitalize()
         if item_type == 'provider':
             link = f"/provider/{item_id}"
@@ -4060,25 +4058,24 @@ def home():
             label = f"💼 {name}"
         carousel_slides += f"""
             <div class="carousel-slide">
-                <img src="{img_url}" alt="{name}" onerror="this.src='/static/placeholder.png'">
+                <img src="{img_url}" alt="{name}" onerror="this.src='{fallback_img}'">
                 <div class="carousel-label">{label}</div>
             </div>
         """
 
-    # If no slides, show a placeholder
     if not carousel_slides:
         carousel_slides = """
             <div class="carousel-slide">
-                <img src="/static/placeholder.png" alt="No featured items">
+                <img src="{fallback_img}" alt="No featured items">
                 <div class="carousel-label">Coming Soon</div>
             </div>
         """
 
-    # Build sponsored grid
+    # Sponsored grid
     sponsored_html = ""
     for item in sponsored_items:
         item_id, name, img, detail, item_type = item
-        img_url = f"/static/uploads/{img}" if img else "/static/placeholder.png"
+        img_url = f"/static/uploads/{img}" if img else fallback_img
         if item_type == 'provider':
             link = f"/provider/{item_id}"
             badge = "Freelancer"
@@ -4090,7 +4087,7 @@ def home():
             badge = "Job"
         sponsored_html += f"""
             <a href="{link}" class="sponsored-card">
-                <img src="{img_url}" alt="{name}" onerror="this.src='/static/placeholder.png'">
+                <img src="{img_url}" alt="{name}" onerror="this.src='{fallback_img}'">
                 <div class="sponsored-info">
                     <h3>{name}</h3>
                     <p>{detail if detail else badge}</p>
@@ -4101,7 +4098,7 @@ def home():
     if not sponsored_html:
         sponsored_html = "<p>No sponsored items yet.</p>"
 
-    # ---- TESTIMONIALS ----
+    # Testimonials
     reviews = c.execute("""
         SELECT r.rating, r.comment, u.name, r.created_at
         FROM reviews r
@@ -4125,7 +4122,6 @@ def home():
 
     conn.close()
 
-    # ---- BANNER ADS (static promotional) ----
     banners = """
         <a href="/boost" class="banner-ad banner-ad-1">
             <div>
@@ -4150,7 +4146,6 @@ def home():
         </a>
     """
 
-    # ---- COMPLETE CONTENT ----
     content = f"""
     <!-- HERO -->
     <div class="hero-full">
@@ -4250,14 +4245,8 @@ def home():
     </div>
     """
 
-    return render_template_string(
-        base_template,
-        session=session,
-        request=request,
-        title="Home",
-        active_page="home",
-        content=content
-    )
+    # ⭐ CORRECTED RENDER ⭐
+    return render_user_template(base_template, title="Home", active_page="home", content=content)
 
 @app.route('/points-history')
 @login_required
