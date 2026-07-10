@@ -1512,6 +1512,438 @@ base_template = """
         }
 
         /* ================================================
+   FULL LANDING PAGE STYLES
+   ================================================ */
+
+/* Hero */
+.hero-full {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    padding: 60px 20px;
+    text-align: center;
+    color: white;
+    border-radius: var(--radius);
+    margin-bottom: 30px;
+}
+.hero-full h1 {
+    font-size: 2.8rem;
+    font-weight: 800;
+    margin-bottom: 16px;
+}
+.hero-full h1 span {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    padding: 0 12px;
+    border-radius: 8px;
+}
+.hero-full p {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    max-width: 700px;
+    margin: 0 auto 24px;
+}
+.hero-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.btn-primary {
+    background: white;
+    color: var(--primary);
+}
+.btn-primary:hover {
+    background: #f0f0f0;
+    transform: translateY(-2px);
+}
+.btn-secondary {
+    background: transparent;
+    color: white;
+    border: 2px solid white;
+}
+.btn-secondary:hover {
+    background: rgba(255,255,255,0.1);
+    transform: translateY(-2px);
+}
+
+/* Stats Bar */
+.stats-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    margin-bottom: 40px;
+}
+.stat-item {
+    background: var(--card-bg);
+    backdrop-filter: blur(10px);
+    padding: 20px;
+    border-radius: var(--radius);
+    text-align: center;
+    border: 1px solid var(--glass-border);
+}
+.stat-item i {
+    font-size: 2rem;
+    color: var(--primary);
+    display: block;
+    margin-bottom: 6px;
+}
+.stat-number {
+    font-size: 2rem;
+    font-weight: 800;
+    display: block;
+}
+.stat-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* How It Works */
+.how-it-works {
+    margin-bottom: 40px;
+}
+.how-it-works h2 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 24px;
+}
+.steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 24px;
+}
+.step {
+    text-align: center;
+    padding: 20px;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--glass-border);
+}
+.step-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+.step h3 {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+.step p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Carousel (full-width) */
+.ad-carousel {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius);
+    margin-bottom: 40px;
+    background: #000;
+    min-height: 300px;
+}
+.carousel-track {
+    display: flex;
+    transition: transform 0.5s ease;
+}
+.carousel-slide {
+    min-width: 100%;
+    position: relative;
+}
+.carousel-label {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 4px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+}
+.carousel-prev,
+.carousel-next {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    font-size: 1.8rem;
+    cursor: pointer;
+    z-index: 2;
+    transition: background 0.3s;
+}
+.carousel-prev:hover,
+.carousel-next:hover {
+    background: rgba(0,0,0,0.8);
+}
+.carousel-prev { left: 10px; }
+.carousel-next { right: 10px; }
+.carousel-dots {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 2;
+}
+.carousel-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.4);
+    cursor: pointer;
+}
+.carousel-dots span.active {
+    background: white;
+}
+
+/* Sponsored Section */
+.sponsored-section {
+    margin-bottom: 40px;
+}
+.sponsored-section h2 {
+    text-align: center;
+    font-size: 1.8rem;
+    margin-bottom: 20px;
+}
+.sponsored-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+}
+.sponsored-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--glass-border);
+    text-decoration: none;
+    color: var(--text);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+.sponsored-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-hover);
+}
+.sponsored-card img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+}
+.sponsored-info {
+    padding: 12px 16px;
+}
+.sponsored-info h3 {
+    font-size: 1rem;
+    margin-bottom: 4px;
+}
+.sponsored-info p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.sponsored-badge {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 12px;
+    margin-top: 6px;
+}
+
+/* Banner Ads */
+.banner-ads {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 40px;
+}
+.banner-ad {
+    padding: 30px 20px;
+    border-radius: var(--radius);
+    text-align: center;
+    color: white;
+    text-decoration: none;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+.banner-ad:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-hover);
+}
+.banner-ad-1 {
+    background: linear-gradient(135deg, #1a73e8, #0d47a1);
+}
+.banner-ad-2 {
+    background: linear-gradient(135deg, #e8710a, #bf360c);
+}
+.banner-ad-3 {
+    background: linear-gradient(135deg, #0d904f, #1b5e20);
+}
+.banner-ad h3 {
+    font-size: 1.4rem;
+    margin-bottom: 6px;
+}
+.banner-ad p {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+/* Testimonials */
+.testimonials {
+    margin-bottom: 40px;
+}
+.testimonials h2 {
+    text-align: center;
+    font-size: 1.8rem;
+    margin-bottom: 20px;
+}
+.testimonial-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+}
+.testimonial-card {
+    background: var(--card-bg);
+    padding: 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--glass-border);
+}
+.testimonial-card .stars {
+    color: var(--primary);
+    font-size: 1rem;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+}
+.testimonial-card p {
+    font-size: 0.95rem;
+    font-style: italic;
+    margin-bottom: 8px;
+}
+.testimonial-author {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* CTA Section */
+.cta-section {
+    text-align: center;
+    padding: 40px 20px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+}
+.cta-section h2 {
+    font-size: 2rem;
+    margin-bottom: 12px;
+}
+.cta-section p {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    margin-bottom: 20px;
+}
+.cta-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.cta-buttons .btn-primary {
+    background: white;
+    color: var(--primary);
+}
+.cta-buttons .btn-secondary {
+    background: transparent;
+    color: white;
+    border: 2px solid white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .hero-full h1 {
+        font-size: 2rem;
+    }
+    .hero-full p {
+        font-size: 1rem;
+    }
+    .stats-bar {
+        grid-template-columns: 1fr 1fr;
+    }
+    .sponsored-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+    .banner-ads {
+        grid-template-columns: 1fr;
+    }
+    .testimonial-grid {
+        grid-template-columns: 1fr;
+    }
+    .steps {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero-full h1 {
+        font-size: 1.6rem;
+    }
+    .stat-number {
+        font-size: 1.4rem;
+    }
+    .sponsored-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+        // ============================================================
+// CAROUSEL (Homepage)
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    const carousel = document.querySelector('.ad-carousel');
+    if (!carousel) return;
+    
+    const track = carousel.querySelector('.carousel-track');
+    const slides = track.querySelectorAll('.carousel-slide');
+    const prevBtn = carousel.querySelector('.carousel-prev');
+    const nextBtn = carousel.querySelector('.carousel-next');
+    const dotsContainer = carousel.querySelector('.carousel-dots');
+    let current = 0;
+    const total = slides.length;
+    let interval;
+
+    // Create dots
+    for (let i = 0; i < total; i++) {
+        const dot = document.createElement('span');
+        dot.classList.add(i === 0 ? 'active' : '');
+        dot.addEventListener('click', () => goTo(i));
+        dotsContainer.appendChild(dot);
+    }
+    const dots = dotsContainer.querySelectorAll('span');
+
+    function goTo(index) {
+        current = (index + total) % total;
+        track.style.transform = `translateX(-${current * 100}%)`;
+        dots.forEach((d, i) => d.classList.toggle('active', i === current));
+    }
+
+    function nextSlide() { goTo(current + 1); }
+    function prevSlide() { goTo(current - 1); }
+
+    nextBtn.addEventListener('click', () => { clearInterval(interval); nextSlide(); startAutoPlay(); });
+    prevBtn.addEventListener('click', () => { clearInterval(interval); prevSlide(); startAutoPlay(); });
+
+    function startAutoPlay() {
+        interval = setInterval(nextSlide, 5000);
+    }
+    startAutoPlay();
+
+    carousel.addEventListener('mouseenter', () => clearInterval(interval));
+    carousel.addEventListener('mouseleave', startAutoPlay);
+});
+
+        /* ================================================
    TOP NAVBAR (Mobile Responsive)
    ================================================ */
 .navbar {
@@ -3978,12 +4410,18 @@ def home():
     
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    
+    # ---- STATS ----
+    c.execute("SELECT COUNT(*) FROM users")
+    total_users = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM providers")
-    provider_count = c.fetchone()[0]
+    total_providers = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM vendors")
+    total_vendors = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'")
     open_jobs = c.fetchone()[0]
     
-    # ---- FETCH BOOSTED ITEMS (Ad carousel) ----
+    # ---- FETCH BOOSTED ITEMS (Carousel) ----
     today = date.today().isoformat()
     ads = []
     # Providers
@@ -4010,24 +4448,129 @@ def home():
     """, (today,))
     for row in c.fetchall():
         ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
+    
+    # ---- FETCH SPONSORED LISTINGS (Featured items with more detail) ----
+    sponsored = []
+    # Featured providers (limit 6)
+    c.execute("""
+        SELECT p.id, u.name, p.skills, p.district, p.profile_pic, 'provider' as type
+        FROM providers p JOIN users u ON p.user_id = u.id
+        WHERE p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= ?)
+        LIMIT 6
+    """, (today,))
+    for row in c.fetchall():
+        sponsored.append({'id': row[0], 'name': row[1], 'details': row[2], 'location': row[3], 'image': row[4], 'type': row[5]})
+    # Featured vendors (limit 6)
+    c.execute("""
+        SELECT v.id, v.business_name, v.district, v.vendor_image, 'vendor' as type
+        FROM vendors v
+        WHERE v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= ?)
+        LIMIT 6
+    """, (today,))
+    for row in c.fetchall():
+        sponsored.append({'id': row[0], 'name': row[1], 'details': 'Shop', 'location': row[2], 'image': row[3], 'type': row[4]})
+    # Featured jobs (limit 6)
+    c.execute("""
+        SELECT j.id, j.title, j.company, j.location, j.job_image, 'job' as type
+        FROM jobs j
+        WHERE j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?)
+        LIMIT 6
+    """, (today,))
+    for row in c.fetchall():
+        sponsored.append({'id': row[0], 'name': row[1], 'details': row[2] or 'Company', 'location': row[3], 'image': row[4], 'type': row[5]})
+    
+    # ---- FETCH TESTIMONIALS (Latest 6 reviews) ----
+    c.execute("""
+        SELECT u.name, r.rating, r.comment, r.created_at
+        FROM reviews r
+        JOIN users u ON r.reviewer_id = u.id
+        ORDER BY r.created_at DESC
+        LIMIT 6
+    """)
+    testimonials = c.fetchall()
+    
     conn.close()
-
-    # ---- Build carousel HTML ----
+    
+    # ---- BUILD HERO ----
+    hero_html = """
+    <div class="hero-full">
+        <div class="hero-content">
+            <h1>Get Work Done – <span>or Get Paid</span></h1>
+            <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
+            <div class="hero-buttons">
+                <a href="/offer-skill" class="btn btn-primary">Offer Your Skill</a>
+                <a href="/post-job" class="btn btn-secondary">Post a Job</a>
+            </div>
+        </div>
+    </div>
+    """
+    
+    # ---- BUILD STATS ----
+    stats_html = f"""
+    <div class="stats-bar">
+        <div class="stat-item">
+            <i class="fas fa-users"></i>
+            <span class="stat-number">{total_users:,}</span>
+            <span class="stat-label">Total Users</span>
+        </div>
+        <div class="stat-item">
+            <i class="fas fa-user-tie"></i>
+            <span class="stat-number">{total_providers:,}</span>
+            <span class="stat-label">Skilled Workers</span>
+        </div>
+        <div class="stat-item">
+            <i class="fas fa-store"></i>
+            <span class="stat-number">{total_vendors:,}</span>
+            <span class="stat-label">Vendors</span>
+        </div>
+        <div class="stat-item">
+            <i class="fas fa-briefcase"></i>
+            <span class="stat-number">{open_jobs:,}</span>
+            <span class="stat-label">Open Jobs</span>
+        </div>
+    </div>
+    """
+    
+    # ---- BUILD HOW IT WORKS ----
+    how_it_works_html = """
+    <div class="how-it-works">
+        <h2>How It Works</h2>
+        <div class="steps">
+            <div class="step">
+                <div class="step-icon">🔍</div>
+                <h3>1. Find Skills</h3>
+                <p>Browse verified workers or search by skill, location, or rating.</p>
+            </div>
+            <div class="step">
+                <div class="step-icon">📝</div>
+                <h3>2. Connect</h3>
+                <p>Post a job, send a message, or apply for opportunities.</p>
+            </div>
+            <div class="step">
+                <div class="step-icon">💬</div>
+                <h3>3. Work & Grow</h3>
+                <p>Get paid for your skills or find the right talent for your business.</p>
+            </div>
+        </div>
+    </div>
+    """
+    
+    # ---- BUILD CAROUSEL ----
     carousel_html = ""
     if ads:
         carousel_html = """
-        <div class="ad-carousel" style="position:relative; overflow:hidden; border-radius:var(--radius); margin-bottom:30px; background:#000; min-height:200px;">
-            <div class="carousel-track" style="display:flex; transition: transform 0.5s ease;">
+        <div class="ad-carousel">
+            <div class="carousel-track">
         """
         for ad in ads:
             media = ""
             if ad['video']:
-                media = f'<video src="/static/uploads/{ad["video"]}" autoplay muted loop playsinline style="width:100%; max-height:400px; object-fit:cover;"></video>'
+                media = f'<video src="/static/uploads/{ad["video"]}" autoplay muted loop playsinline style="width:100%; max-height:500px; object-fit:cover;"></video>'
             elif ad['image']:
-                media = f'<img src="/static/uploads/{ad["image"]}" alt="{ad["name"]}" style="width:100%; max-height:400px; object-fit:cover;">'
+                media = f'<img src="/static/uploads/{ad["image"]}" alt="{ad["name"]}" style="width:100%; max-height:500px; object-fit:cover;">'
             else:
-                media = f'<div style="width:100%; max-height:400px; background:var(--primary); display:flex; align-items:center; justify-content:center; color:white; font-size:1.5rem;">{ad["name"]}</div>'
-            label = f'<div style="position:absolute; bottom:10px; left:10px; background:rgba(0,0,0,0.6); color:white; padding:4px 12px; border-radius:20px; font-size:0.8rem;">{ad["type"].title()}</div>'
+                media = f'<div style="width:100%; max-height:500px; background:var(--primary); display:flex; align-items:center; justify-content:center; color:white; font-size:2rem;">{ad["name"]}</div>'
+            label = f'<div class="carousel-label">{ad["type"].title()}</div>'
             carousel_html += f"""
                 <div class="carousel-slide" style="min-width:100%; position:relative;">
                     {media}
@@ -4036,74 +4579,90 @@ def home():
             """
         carousel_html += """
             </div>
-            <button class="carousel-prev" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer; z-index:2; font-size:1.5rem;">‹</button>
-            <button class="carousel-next" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer; z-index:2; font-size:1.5rem;">›</button>
-            <div class="carousel-dots" style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%); display:flex; gap:8px; z-index:2;"></div>
+            <button class="carousel-prev">‹</button>
+            <button class="carousel-next">›</button>
+            <div class="carousel-dots"></div>
         </div>
         <script>
-            (function() {
-                const track = document.querySelector('.carousel-track');
-                const slides = track.querySelectorAll('.carousel-slide');
-                const prev = document.querySelector('.carousel-prev');
-                const next = document.querySelector('.carousel-next');
-                const dotsContainer = document.querySelector('.carousel-dots');
-                let current = 0;
-                const total = slides.length;
-                let interval;
-
-                for (let i = 0; i < total; i++) {
-                    const dot = document.createElement('span');
-                    dot.style.width = '10px';
-                    dot.style.height = '10px';
-                    dot.style.borderRadius = '50%';
-                    dot.style.background = i === 0 ? 'white' : 'rgba(255,255,255,0.4)';
-                    dot.style.cursor = 'pointer';
-                    dot.dataset.index = i;
-                    dot.addEventListener('click', () => goTo(i));
-                    dotsContainer.appendChild(dot);
-                }
-                const dots = dotsContainer.querySelectorAll('span');
-
-                function goTo(index) {
-                    current = (index + total) % total;
-                    track.style.transform = `translateX(-${current * 100}%)`;
-                    dots.forEach((d, i) => d.style.background = i === current ? 'white' : 'rgba(255,255,255,0.4)');
-                }
-
-                function nextSlide() { goTo(current + 1); }
-                function prevSlide() { goTo(current - 1); }
-
-                next.addEventListener('click', () => { clearInterval(interval); nextSlide(); startAutoPlay(); });
-                prev.addEventListener('click', () => { clearInterval(interval); prevSlide(); startAutoPlay(); });
-
-                function startAutoPlay() {
-                    interval = setInterval(nextSlide, 5000);
-                }
-                startAutoPlay();
-
-                const carousel = document.querySelector('.ad-carousel');
-                carousel.addEventListener('mouseenter', () => clearInterval(interval));
-                carousel.addEventListener('mouseleave', startAutoPlay);
-            })();
+            // ... carousel JS (keep from earlier) ...
         </script>
         """
     
-    # ---- Prepare page content ----
-    content = home_page.replace("{provider_count}", str(provider_count)).replace("{open_jobs}", str(open_jobs))
-    # Insert carousel after hero
-    if '{carousel}' in content:
-        content = content.replace("{carousel}", carousel_html)
-    else:
-        # If no placeholder, insert after hero
-        hero_end = content.find('</div>', content.find('class="hero"')) + 6
-        content = content[:hero_end] + carousel_html + content[hero_end:]
-
-    # ⭐ Return with cache-busting headers ⭐
-    response = make_response(render_user_template(content, title="Home", active_page="home"))
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
+    # ---- BUILD SPONSORED LISTINGS ----
+    sponsored_html = ""
+    if sponsored:
+        sponsored_html = '<div class="sponsored-section"><h2>🌟 Sponsored Listings</h2><div class="sponsored-grid">'
+        for item in sponsored:
+            img = f'/static/uploads/{item["image"]}' if item['image'] else '/static/placeholder.png'
+            link = f'/{item["type"]}/{item["id"]}'
+            sponsored_html += f"""
+            <a href="{link}" class="sponsored-card">
+                <img src="{img}" alt="{item['name']}">
+                <div class="sponsored-info">
+                    <h3>{item['name']}</h3>
+                    <p>{item['details']}</p>
+                    <span class="sponsored-badge">Sponsored</span>
+                </div>
+            </a>
+            """
+        sponsored_html += '</div></div>'
+    
+    # ---- BUILD BANNER ADS ----
+    banner_html = """
+    <div class="banner-ads">
+        <a href="/list" class="banner-ad banner-ad-1">
+            <div>
+                <h3>Find Skilled Workers</h3>
+                <p>Browse our directory of trusted freelancers</p>
+            </div>
+        </a>
+        <a href="/jobs" class="banner-ad banner-ad-2">
+            <div>
+                <h3>Post a Job</h3>
+                <p>Find the right talent for your business</p>
+            </div>
+        </a>
+        <a href="/vendors" class="banner-ad banner-ad-3">
+            <div>
+                <h3>Discover Vendors</h3>
+                <p>Support local businesses and shops</p>
+            </div>
+        </a>
+    </div>
+    """
+    
+    # ---- BUILD TESTIMONIALS ----
+    testimonial_html = ""
+    if testimonials:
+        testimonial_html = '<div class="testimonials"><h2>⭐ What Our Users Say</h2><div class="testimonial-grid">'
+        for t in testimonials:
+            name, rating, comment, created = t
+            stars = ''.join(['★' for _ in range(rating)] + ['☆' for _ in range(5 - rating)])
+            testimonial_html += f"""
+            <div class="testimonial-card">
+                <div class="stars">{stars}</div>
+                <p>"{comment}"</p>
+                <span class="testimonial-author">— {name}</span>
+            </div>
+            """
+        testimonial_html += '</div></div>'
+    
+    # ---- BUILD CTA ----
+    cta_html = """
+    <div class="cta-section">
+        <h2>Ready to Get Started?</h2>
+        <p>Join thousands of users in Uganda's growing freelance community.</p>
+        <div class="cta-buttons">
+            <a href="/signup" class="btn btn-primary">Sign Up Free</a>
+            <a href="/list" class="btn btn-secondary">Browse Skills</a>
+        </div>
+    </div>
+    """
+    
+    # ---- ASSEMBLE FINAL PAGE ----
+    content = hero_html + stats_html + how_it_works_html + carousel_html + sponsored_html + banner_html + testimonial_html + cta_html
+    
+    return render_user_template(content, title="Home", active_page="home")
 
 @app.route('/points-history')
 @login_required
