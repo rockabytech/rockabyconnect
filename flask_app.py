@@ -3965,275 +3965,71 @@ admin_base_template = """
 
 @app.route('/')
 def home():
-    # Debug log
-    user_id = session.get('user_id')
-    print(f"[DEBUG] Home route - User ID in session: {user_id}")
+    # ---- SIMPLE TEST HOMEPAGE ----
+    content = """
+    <div style="background: #f5af19; padding: 60px 20px; text-align: center; border-radius: 20px; margin-bottom: 30px;">
+        <h1 style="font-size: 3rem; color: white; font-weight: 900;">Get Work Done – <span style="background: rgba(255,255,255,0.2); padding: 0 16px; border-radius: 12px;">or Get Paid</span></h1>
+        <p style="font-size: 1.3rem; color: white; max-width: 700px; margin: 20px auto;">Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
+        <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+            <a href="/offer-skill" style="background: white; color: #f5af19; padding: 16px 40px; border-radius: 50px; font-weight: 700; text-decoration: none;">Offer Your Skill</a>
+            <a href="/post-job" style="background: transparent; color: white; padding: 16px 40px; border-radius: 50px; font-weight: 700; text-decoration: none; border: 2px solid white;">Post a Job</a>
+        </div>
+    </div>
     
-    # ---- REFERRAL CODE DETECTION ----
-    ref_code = request.args.get('ref', '')
-    if ref_code:
-        session['referral_code'] = ref_code
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 40px;">
+        <div style="background: white; padding: 20px; border-radius: 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <div style="font-size: 2.5rem; color: #f5af19;">👥</div>
+            <div style="font-size: 2rem; font-weight: 900;">124</div>
+            <div style="color: #666;">Total Users</div>
+        </div>
+        <div style="background: white; padding: 20px; border-radius: 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <div style="font-size: 2.5rem; color: #f5af19;">👤</div>
+            <div style="font-size: 2rem; font-weight: 900;">56</div>
+            <div style="color: #666;">Skilled Workers</div>
+        </div>
+        <div style="background: white; padding: 20px; border-radius: 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <div style="font-size: 2.5rem; color: #f5af19;">🏪</div>
+            <div style="font-size: 2rem; font-weight: 900;">8</div>
+            <div style="color: #666;">Vendors</div>
+        </div>
+        <div style="background: white; padding: 20px; border-radius: 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <div style="font-size: 2.5rem; color: #f5af19;">💼</div>
+            <div style="font-size: 2rem; font-weight: 900;">12</div>
+            <div style="color: #666;">Open Jobs</div>
+        </div>
+    </div>
     
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    # ---- STATS (with fallback to 0 if no data) ----
-    try:
-        c.execute("SELECT COUNT(*) FROM users")
-        total_users = c.fetchone()[0] or 0
-    except:
-        total_users = 0
-    
-    try:
-        c.execute("SELECT COUNT(*) FROM providers")
-        total_providers = c.fetchone()[0] or 0
-    except:
-        total_providers = 0
-    
-    try:
-        c.execute("SELECT COUNT(*) FROM vendors")
-        total_vendors = c.fetchone()[0] or 0
-    except:
-        total_vendors = 0
-    
-    try:
-        c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'")
-        open_jobs = c.fetchone()[0] or 0
-    except:
-        open_jobs = 0
-    
-    # ---- FETCH BOOSTED ITEMS (Carousel) ----
-    today = date.today().isoformat()
-    ads = []
-    try:
-        # Providers
-        c.execute("""
-            SELECT p.id, u.name, p.profile_pic, p.video, p.featured_expiry, 'provider' as type
-            FROM providers p JOIN users u ON p.user_id = u.id
-            WHERE p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= ?)
-        """, (today,))
-        for row in c.fetchall():
-            ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
-        # Vendors
-        c.execute("""
-            SELECT v.id, v.business_name, v.vendor_image, v.video, v.featured_expiry, 'vendor' as type
-            FROM vendors v
-            WHERE v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= ?)
-        """, (today,))
-        for row in c.fetchall():
-            ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
-        # Jobs
-        c.execute("""
-            SELECT j.id, j.title, j.job_image, j.video, j.featured_expiry, 'job' as type
-            FROM jobs j
-            WHERE j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?)
-        """, (today,))
-        for row in c.fetchall():
-            ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
-    except:
-        pass
-    
-    # ---- FETCH SPONSORED LISTINGS ----
-    sponsored = []
-    try:
-        # Featured providers (limit 6)
-        c.execute("""
-            SELECT p.id, u.name, p.skills, p.district, p.profile_pic, 'provider' as type
-            FROM providers p JOIN users u ON p.user_id = u.id
-            WHERE p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= ?)
-            LIMIT 6
-        """, (today,))
-        for row in c.fetchall():
-            sponsored.append({'id': row[0], 'name': row[1], 'details': row[2] or 'Skilled Worker', 'location': row[3], 'image': row[4], 'type': row[5]})
-        # Featured vendors (limit 6)
-        c.execute("""
-            SELECT v.id, v.business_name, v.district, v.vendor_image, 'vendor' as type
-            FROM vendors v
-            WHERE v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= ?)
-            LIMIT 6
-        """, (today,))
-        for row in c.fetchall():
-            sponsored.append({'id': row[0], 'name': row[1], 'details': 'Shop', 'location': row[2], 'image': row[3], 'type': row[4]})
-        # Featured jobs (limit 6)
-        c.execute("""
-            SELECT j.id, j.title, j.company, j.location, j.job_image, 'job' as type
-            FROM jobs j
-            WHERE j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?)
-            LIMIT 6
-        """, (today,))
-        for row in c.fetchall():
-            sponsored.append({'id': row[0], 'name': row[1], 'details': row[2] or 'Company', 'location': row[3], 'image': row[4], 'type': row[5]})
-    except:
-        pass
-    
-    # ---- FETCH TESTIMONIALS ----
-    testimonials = []
-    try:
-        c.execute("""
-            SELECT u.name, r.rating, r.comment
-            FROM reviews r
-            JOIN users u ON r.reviewer_id = u.id
-            ORDER BY r.created_at DESC
-            LIMIT 6
-        """)
-        testimonials = c.fetchall()
-    except:
-        pass
-    
-    conn.close()
-    
-    # ============================================================
-    # BUILD THE FULL PAGE CONTENT WITH DEBUG BORDERS
-    # ============================================================
-    
-    # ---- HERO ----
-    content = """<div style="border:3px solid red; padding:10px; margin:10px 0;">
-        <div class="hero-full">
-            <div class="hero-content">
-                <h1>Get Work Done – <span>or Get Paid</span></h1>
-                <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
-                <div class="hero-buttons">
-                    <a href="/offer-skill" class="btn-hero-primary">Offer Your Skill</a>
-                    <a href="/post-job" class="btn-hero-secondary">Post a Job</a>
-                </div>
+    <div style="margin-bottom: 40px;">
+        <h2 style="text-align: center; font-size: 2.2rem; font-weight: 800; margin-bottom: 30px; color: #f5af19;">How It Works</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px;">
+            <div style="text-align: center; padding: 30px 20px; background: white; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+                <div style="font-size: 3.5rem; margin-bottom: 16px;">🔍</div>
+                <h3 style="font-size: 1.2rem; font-weight: 700;">1. Find Skills</h3>
+                <p style="color: #666;">Browse verified workers or search by skill, location, or rating.</p>
+            </div>
+            <div style="text-align: center; padding: 30px 20px; background: white; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+                <div style="font-size: 3.5rem; margin-bottom: 16px;">📝</div>
+                <h3 style="font-size: 1.2rem; font-weight: 700;">2. Connect</h3>
+                <p style="color: #666;">Post a job, send a message, or apply for opportunities.</p>
+            </div>
+            <div style="text-align: center; padding: 30px 20px; background: white; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+                <div style="font-size: 3.5rem; margin-bottom: 16px;">💬</div>
+                <h3 style="font-size: 1.2rem; font-weight: 700;">3. Work & Grow</h3>
+                <p style="color: #666;">Get paid for your skills or find the right talent for your business.</p>
             </div>
         </div>
-        <div style="text-align:center; background:red; color:white; padding:4px;">🔴 HERO SECTION</div>
-    </div>"""
+    </div>
     
-    # ---- STATS BAR ----
-    content += f"""<div style="border:3px solid blue; padding:10px; margin:10px 0;">
-        <div class="stats-bar">
-            <div class="stat-item">
-                <i class="fas fa-users"></i>
-                <span class="stat-number">{total_users}</span>
-                <span class="stat-label">Total Users</span>
-            </div>
-            <div class="stat-item">
-                <i class="fas fa-user-tie"></i>
-                <span class="stat-number">{total_providers}</span>
-                <span class="stat-label">Skilled Workers</span>
-            </div>
-            <div class="stat-item">
-                <i class="fas fa-store"></i>
-                <span class="stat-number">{total_vendors}</span>
-                <span class="stat-label">Vendors</span>
-            </div>
-            <div class="stat-item">
-                <i class="fas fa-briefcase"></i>
-                <span class="stat-number">{open_jobs}</span>
-                <span class="stat-label">Open Jobs</span>
-            </div>
+    <div style="text-align: center; padding: 50px 20px; background: linear-gradient(135deg, #f5af19, #e09e15); color: white; border-radius: 20px; margin-bottom: 20px;">
+        <h2 style="font-size: 2.4rem; font-weight: 900; margin-bottom: 12px;">Ready to Get Started?</h2>
+        <p style="font-size: 1.15rem; opacity: 0.95; margin-bottom: 24px;">Join thousands of users in Uganda's growing freelance community.</p>
+        <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+            <a href="/signup" style="background: white; color: #f5af19; padding: 14px 36px; border-radius: 50px; font-weight: 700; text-decoration: none;">Sign Up Free</a>
+            <a href="/list" style="background: transparent; color: white; padding: 14px 36px; border-radius: 50px; font-weight: 700; text-decoration: none; border: 2px solid white;">Browse Skills</a>
         </div>
-        <div style="text-align:center; background:blue; color:white; padding:4px;">🔵 STATS BAR (Counts: {total_users} users, {total_providers} providers, {total_vendors} vendors, {open_jobs} jobs)</div>
-    </div>"""
+    </div>
+    """
     
-    # ---- HOW IT WORKS ----
-    content += """<div style="border:3px solid green; padding:10px; margin:10px 0;">
-        <div class="how-it-works">
-            <h2>How It Works</h2>
-            <div class="steps">
-                <div class="step">
-                    <span class="step-icon">🔍</span>
-                    <h3>1. Find Skills</h3>
-                    <p>Browse verified workers or search by skill, location, or rating.</p>
-                </div>
-                <div class="step">
-                    <span class="step-icon">📝</span>
-                    <h3>2. Connect</h3>
-                    <p>Post a job, send a message, or apply for opportunities.</p>
-                </div>
-                <div class="step">
-                    <span class="step-icon">💬</span>
-                    <h3>3. Work & Grow</h3>
-                    <p>Get paid for your skills or find the right talent for your business.</p>
-                </div>
-            </div>
-        </div>
-        <div style="text-align:center; background:green; color:white; padding:4px;">🟢 HOW IT WORKS</div>
-    </div>"""
-    
-    # ---- CAROUSEL ----
-    if ads:
-        content += """<div style="border:3px solid orange; padding:10px; margin:10px 0;">
-            <div class="ad-carousel"><div class="carousel-track">"""
-        for ad in ads:
-            media = ""
-            if ad.get('video'):
-                media = f'<video src="/static/uploads/{ad["video"]}" autoplay muted loop playsinline></video>'
-            elif ad.get('image'):
-                media = f'<img src="/static/uploads/{ad["image"]}" alt="{ad["name"]}">'
-            else:
-                media = f'<div style="width:100%; height:350px; background:linear-gradient(135deg, var(--primary), var(--primary-dark)); display:flex; align-items:center; justify-content:center; color:white; font-size:2rem; font-weight:700;">{ad["name"]}</div>'
-            label = f'<span class="carousel-label">{ad["type"].title()}</span>'
-            content += f'<div class="carousel-slide">{media}{label}</div>'
-        content += """</div><button class="carousel-prev">‹</button><button class="carousel-next">›</button><div class="carousel-dots"></div></div>
-            <div style="text-align:center; background:orange; color:white; padding:4px;">🟠 CAROUSEL ("""+str(len(ads))+""" items)</div>
-        </div>"""
-    else:
-        content += """<div style="border:3px solid orange; padding:10px; margin:10px 0;">
-            <p style="text-align:center; padding:40px; background:#f0f0f0;">⚠️ No boosted items found. Create a boost to see the carousel.</p>
-            <div style="text-align:center; background:orange; color:white; padding:4px;">🟠 CAROUSEL (No items)</div>
-        </div>"""
-    
-    # ---- SPONSORED LISTINGS ----
-    if sponsored:
-        content += """<div style="border:3px solid purple; padding:10px; margin:10px 0;">
-            <div class="sponsored-section"><h2>🌟 Sponsored Listings</h2><div class="sponsored-grid">"""
-        for item in sponsored:
-            img = f'/static/uploads/{item["image"]}' if item.get('image') else '/static/placeholder.png'
-            link = f'/{item["type"]}/{item["id"]}'
-            content += f'<a href="{link}" class="sponsored-card"><img src="{img}" alt="{item["name"]}"><div class="sponsored-info"><h3>{item["name"]}</h3><p>{item.get("details", "")}</p><span class="sponsored-badge">Sponsored</span></div></a>'
-        content += """</div></div>
-            <div style="text-align:center; background:purple; color:white; padding:4px;">🟣 SPONSORED ("""+str(len(sponsored))+""" items)</div>
-        </div>"""
-    else:
-        content += """<div style="border:3px solid purple; padding:10px; margin:10px 0;">
-            <p style="text-align:center; padding:40px; background:#f0f0f0;">⚠️ No sponsored listings found.</p>
-            <div style="text-align:center; background:purple; color:white; padding:4px;">🟣 SPONSORED (No items)</div>
-        </div>"""
-    
-    # ---- BANNER ADS ----
-    content += """<div style="border:3px solid teal; padding:10px; margin:10px 0;">
-        <div class="banner-ads">
-            <a href="/list" class="banner-ad banner-ad-1"><div><span class="banner-icon">🔍</span><h3>Find Skilled Workers</h3><p>Browse our directory of trusted freelancers</p></div></a>
-            <a href="/jobs" class="banner-ad banner-ad-2"><div><span class="banner-icon">💼</span><h3>Post a Job</h3><p>Find the right talent for your business</p></div></a>
-            <a href="/vendors" class="banner-ad banner-ad-3"><div><span class="banner-icon">🏪</span><h3>Discover Vendors</h3><p>Support local businesses and shops</p></div></a>
-        </div>
-        <div style="text-align:center; background:teal; color:white; padding:4px;">🩵 BANNER ADS</div>
-    </div>"""
-    
-    # ---- TESTIMONIALS ----
-    if testimonials:
-        content += """<div style="border:3px solid pink; padding:10px; margin:10px 0;">
-            <div class="testimonials"><h2>⭐ What Our Users Say</h2><div class="testimonial-grid">"""
-        for t in testimonials:
-            name, rating, comment = t
-            stars = ''.join(['★' for _ in range(rating)] + ['☆' for _ in range(5 - rating)])
-            content += f'<div class="testimonial-card"><div class="stars">{stars}</div><p>"{comment or "Great platform!"}"</p><span class="testimonial-author">— {name}</span></div>'
-        content += """</div></div>
-            <div style="text-align:center; background:pink; color:white; padding:4px;">🩷 TESTIMONIALS ("""+str(len(testimonials))+""" reviews)</div>
-        </div>"""
-    else:
-        content += """<div style="border:3px solid pink; padding:10px; margin:10px 0;">
-            <p style="text-align:center; padding:40px; background:#f0f0f0;">⚠️ No reviews yet.</p>
-            <div style="text-align:center; background:pink; color:white; padding:4px;">🩷 TESTIMONIALS (No reviews)</div>
-        </div>"""
-    
-    # ---- CTA ----
-    content += """<div style="border:3px solid gold; padding:10px; margin:10px 0;">
-        <div class="cta-section">
-            <h2>Ready to Get Started?</h2>
-            <p>Join thousands of users in Uganda's growing freelance community.</p>
-            <div class="cta-buttons">
-                <a href="/signup" class="btn-cta-primary">Sign Up Free</a>
-                <a href="/list" class="btn-cta-secondary">Browse Skills</a>
-            </div>
-        </div>
-        <div style="text-align:center; background:gold; color:black; padding:4px;">🟡 CTA SECTION</div>
-    </div>"""
-    
-    # ---- RENDER ----
     return render_template_string(
         base_template,
         session=session,
