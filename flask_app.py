@@ -951,28 +951,28 @@ def render_user_template(template, title="", active_page="", **kwargs):
         template = template.replace('<body class="theme-neon">', '<body>')
         template = template.replace('<body class="{theme_class}">', '<body>')
     
-    if '{title}' in template:
-        template = template.replace('{title}', title)
-    if '{active_page}' in template:
-        template = template.replace('{active_page}', active_page)
+    # ⭐ CRITICAL: Replace placeholders BEFORE rendering
+    template = template.replace('{title}', title)
+    template = template.replace('{active_page}', active_page)
     
     # ---- Replace VAPID public key placeholder ----
     vapid_public_key = os.environ.get('VAPID_PUBLIC_KEY', '')
     template = template.replace('{{ VAPID_PUBLIC_KEY }}', vapid_public_key)
-    # --------------------------------------------
     
-    # Replace kwargs placeholders
+    # ---- Replace all kwargs placeholders ----
     for key, value in kwargs.items():
         template = template.replace(f'{{{key}}}', str(value))
     
-    # ⭐⭐⭐ CRITICAL FIX: Pass session and request to the template ⭐⭐⭐
+    # ---- Debug: Print first 200 chars of template ----
+    print(f"[DEBUG] Template content preview: {template[:200]}...")
+    
+    # ⭐ Return rendered template with session and request
     return render_template_string(
         template,
-        session=session,  # This makes session available in templates
-        request=request,   # This makes request available in templates
+        session=session,
+        request=request,
         **kwargs
     )
-
 # ============================================================
 # REFERRAL HELPERS
 # ============================================================
@@ -3965,14 +3965,22 @@ admin_base_template = """
 
 @app.route('/')
 def home():
-    # ---- SIMPLE TEST HOMEPAGE ----
+    user_id = session.get('user_id')
+    print(f"[DEBUG] Home route - User ID in session: {user_id}")
+    
+    # ---- REFERRAL CODE DETECTION ----
+    ref_code = request.args.get('ref', '')
+    if ref_code:
+        session['referral_code'] = ref_code
+    
+    # ---- SIMPLE CONTENT THAT WILL DEFINITELY SHOW ----
     content = """
     <div style="background: #f5af19; padding: 60px 20px; text-align: center; border-radius: 20px; margin-bottom: 30px;">
         <h1 style="font-size: 3rem; color: white; font-weight: 900;">Get Work Done – <span style="background: rgba(255,255,255,0.2); padding: 0 16px; border-radius: 12px;">or Get Paid</span></h1>
         <p style="font-size: 1.3rem; color: white; max-width: 700px; margin: 20px auto;">Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
         <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-            <a href="/offer-skill" style="background: white; color: #f5af19; padding: 16px 40px; border-radius: 50px; font-weight: 700; text-decoration: none;">Offer Your Skill</a>
-            <a href="/post-job" style="background: transparent; color: white; padding: 16px 40px; border-radius: 50px; font-weight: 700; text-decoration: none; border: 2px solid white;">Post a Job</a>
+            <a href="/offer-skill" style="background: white; color: #f5af19; padding: 16px 40px; border-radius: 50px; font-weight: 700; text-decoration: none; display: inline-block;">Offer Your Skill</a>
+            <a href="/post-job" style="background: transparent; color: white; padding: 16px 40px; border-radius: 50px; font-weight: 700; text-decoration: none; border: 2px solid white; display: inline-block;">Post a Job</a>
         </div>
     </div>
     
@@ -4024,12 +4032,16 @@ def home():
         <h2 style="font-size: 2.4rem; font-weight: 900; margin-bottom: 12px;">Ready to Get Started?</h2>
         <p style="font-size: 1.15rem; opacity: 0.95; margin-bottom: 24px;">Join thousands of users in Uganda's growing freelance community.</p>
         <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-            <a href="/signup" style="background: white; color: #f5af19; padding: 14px 36px; border-radius: 50px; font-weight: 700; text-decoration: none;">Sign Up Free</a>
-            <a href="/list" style="background: transparent; color: white; padding: 14px 36px; border-radius: 50px; font-weight: 700; text-decoration: none; border: 2px solid white;">Browse Skills</a>
+            <a href="/signup" style="background: white; color: #f5af19; padding: 14px 36px; border-radius: 50px; font-weight: 700; text-decoration: none; display: inline-block;">Sign Up Free</a>
+            <a href="/list" style="background: transparent; color: white; padding: 14px 36px; border-radius: 50px; font-weight: 700; text-decoration: none; border: 2px solid white; display: inline-block;">Browse Skills</a>
         </div>
     </div>
     """
     
+    # Debug: Print content length
+    print(f"[DEBUG] Content length: {len(content)} chars")
+    
+    # ---- RENDER ----
     return render_template_string(
         base_template,
         session=session,
@@ -4038,7 +4050,6 @@ def home():
         active_page="home",
         content=content
     )
-
 @app.route('/points-history')
 @login_required
 def points_history():
