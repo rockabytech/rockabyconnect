@@ -4056,7 +4056,7 @@ def home():
     for row in c.fetchall():
         ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
     
-    # ---- FETCH SPONSORED LISTINGS (Featured items with more detail) ----
+    # ---- FETCH SPONSORED LISTINGS ----
     sponsored = []
     # Featured providers (limit 6)
     c.execute("""
@@ -4066,7 +4066,7 @@ def home():
         LIMIT 6
     """, (today,))
     for row in c.fetchall():
-        sponsored.append({'id': row[0], 'name': row[1], 'details': row[2], 'location': row[3], 'image': row[4], 'type': row[5]})
+        sponsored.append({'id': row[0], 'name': row[1], 'details': row[2] or 'Skilled Worker', 'location': row[3], 'image': row[4], 'type': row[5]})
     # Featured vendors (limit 6)
     c.execute("""
         SELECT v.id, v.business_name, v.district, v.vendor_image, 'vendor' as type
@@ -4086,9 +4086,9 @@ def home():
     for row in c.fetchall():
         sponsored.append({'id': row[0], 'name': row[1], 'details': row[2] or 'Company', 'location': row[3], 'image': row[4], 'type': row[5]})
     
-    # ---- FETCH TESTIMONIALS (Latest 6 reviews) ----
+    # ---- FETCH TESTIMONIALS ----
     c.execute("""
-        SELECT u.name, r.rating, r.comment, r.created_at
+        SELECT u.name, r.rating, r.comment
         FROM reviews r
         JOIN users u ON r.reviewer_id = u.id
         ORDER BY r.created_at DESC
@@ -4105,8 +4105,8 @@ def home():
             <h1>Get Work Done – <span>or Get Paid</span></h1>
             <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
             <div class="hero-buttons">
-                <a href="/offer-skill" class="btn btn-primary">Offer Your Skill</a>
-                <a href="/post-job" class="btn btn-secondary">Post a Job</a>
+                <a href="/offer-skill" class="btn-hero-primary">Offer Your Skill</a>
+                <a href="/post-job" class="btn-hero-secondary">Post a Job</a>
             </div>
         </div>
     </div>
@@ -4144,17 +4144,17 @@ def home():
         <h2>How It Works</h2>
         <div class="steps">
             <div class="step">
-                <div class="step-icon">🔍</div>
+                <span class="step-icon">🔍</span>
                 <h3>1. Find Skills</h3>
                 <p>Browse verified workers or search by skill, location, or rating.</p>
             </div>
             <div class="step">
-                <div class="step-icon">📝</div>
+                <span class="step-icon">📝</span>
                 <h3>2. Connect</h3>
                 <p>Post a job, send a message, or apply for opportunities.</p>
             </div>
             <div class="step">
-                <div class="step-icon">💬</div>
+                <span class="step-icon">💬</span>
                 <h3>3. Work & Grow</h3>
                 <p>Get paid for your skills or find the right talent for your business.</p>
             </div>
@@ -4171,15 +4171,15 @@ def home():
         """
         for ad in ads:
             media = ""
-            if ad['video']:
-                media = f'<video src="/static/uploads/{ad["video"]}" autoplay muted loop playsinline style="width:100%; max-height:500px; object-fit:cover;"></video>'
-            elif ad['image']:
-                media = f'<img src="/static/uploads/{ad["image"]}" alt="{ad["name"]}" style="width:100%; max-height:500px; object-fit:cover;">'
+            if ad.get('video'):
+                media = f'<video src="/static/uploads/{ad["video"]}" autoplay muted loop playsinline></video>'
+            elif ad.get('image'):
+                media = f'<img src="/static/uploads/{ad["image"]}" alt="{ad["name"]}">'
             else:
-                media = f'<div style="width:100%; max-height:500px; background:var(--primary); display:flex; align-items:center; justify-content:center; color:white; font-size:2rem;">{ad["name"]}</div>'
-            label = f'<div class="carousel-label">{ad["type"].title()}</div>'
+                media = f'<div style="width:100%; height:350px; background:linear-gradient(135deg, var(--primary), var(--primary-dark)); display:flex; align-items:center; justify-content:center; color:white; font-size:2rem; font-weight:700;">{ad["name"]}</div>'
+            label = f'<span class="carousel-label">{ad["type"].title()}</span>'
             carousel_html += f"""
-                <div class="carousel-slide" style="min-width:100%; position:relative;">
+                <div class="carousel-slide">
                     {media}
                     {label}
                 </div>
@@ -4190,9 +4190,6 @@ def home():
             <button class="carousel-next">›</button>
             <div class="carousel-dots"></div>
         </div>
-        <script>
-            // ... carousel JS (keep from earlier) ...
-        </script>
         """
     
     # ---- BUILD SPONSORED LISTINGS ----
@@ -4200,14 +4197,14 @@ def home():
     if sponsored:
         sponsored_html = '<div class="sponsored-section"><h2>🌟 Sponsored Listings</h2><div class="sponsored-grid">'
         for item in sponsored:
-            img = f'/static/uploads/{item["image"]}' if item['image'] else '/static/placeholder.png'
+            img = f'/static/uploads/{item["image"]}' if item.get('image') else '/static/placeholder.png'
             link = f'/{item["type"]}/{item["id"]}'
             sponsored_html += f"""
             <a href="{link}" class="sponsored-card">
                 <img src="{img}" alt="{item['name']}">
                 <div class="sponsored-info">
                     <h3>{item['name']}</h3>
-                    <p>{item['details']}</p>
+                    <p>{item.get('details', '')}</p>
                     <span class="sponsored-badge">Sponsored</span>
                 </div>
             </a>
@@ -4219,18 +4216,21 @@ def home():
     <div class="banner-ads">
         <a href="/list" class="banner-ad banner-ad-1">
             <div>
+                <span class="banner-icon">🔍</span>
                 <h3>Find Skilled Workers</h3>
                 <p>Browse our directory of trusted freelancers</p>
             </div>
         </a>
         <a href="/jobs" class="banner-ad banner-ad-2">
             <div>
+                <span class="banner-icon">💼</span>
                 <h3>Post a Job</h3>
                 <p>Find the right talent for your business</p>
             </div>
         </a>
         <a href="/vendors" class="banner-ad banner-ad-3">
             <div>
+                <span class="banner-icon">🏪</span>
                 <h3>Discover Vendors</h3>
                 <p>Support local businesses and shops</p>
             </div>
@@ -4243,12 +4243,12 @@ def home():
     if testimonials:
         testimonial_html = '<div class="testimonials"><h2>⭐ What Our Users Say</h2><div class="testimonial-grid">'
         for t in testimonials:
-            name, rating, comment, created = t
+            name, rating, comment = t
             stars = ''.join(['★' for _ in range(rating)] + ['☆' for _ in range(5 - rating)])
             testimonial_html += f"""
             <div class="testimonial-card">
                 <div class="stars">{stars}</div>
-                <p>"{comment}"</p>
+                <p>"{comment or 'Great platform!'}"</p>
                 <span class="testimonial-author">— {name}</span>
             </div>
             """
@@ -4260,8 +4260,8 @@ def home():
         <h2>Ready to Get Started?</h2>
         <p>Join thousands of users in Uganda's growing freelance community.</p>
         <div class="cta-buttons">
-            <a href="/signup" class="btn btn-primary">Sign Up Free</a>
-            <a href="/list" class="btn btn-secondary">Browse Skills</a>
+            <a href="/signup" class="btn-cta-primary">Sign Up Free</a>
+            <a href="/list" class="btn-cta-secondary">Browse Skills</a>
         </div>
     </div>
     """
