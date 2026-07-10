@@ -3267,45 +3267,10 @@ base_template = """
 """
 
 # ============================================================
-# PAGE FRAGMENTS (Unchanged from your PythonAnywhere code)
+# PAGE FRAGMENTS - Homepage content is now built in the route
 # ============================================================
-home_page = base_template.replace("{title}", "Home").replace("{active_page}", "home").replace("{content}", """
-    <div class="hero">
-        <div style="display:flex; align-items:center; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:10px;">
-            <img src="/static/ug-06.png" alt="RockabyConnect Logo" style="height:60px; width:60px; border-radius:12px; object-fit:cover; box-shadow:0 4px 15px rgba(0,0,0,0.2);">
-            <h1 style="margin:0; font-size:1.8rem;">Get Work Done – or Get Paid</h1>
-        </div>
-        <p style="font-size:0.95rem;">Uganda's premier freelance marketplace. Connect with trusted skilled workers near you.</p>
-        <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-            <a href="/offer-skill" class="btn" style="font-size:0.85rem;">Offer Your Skill</a>
-            <a href="/post-job" class="btn btn-outline" style="font-size:0.85rem;">Post a Job</a>
-        </div>
-        <div class="category-chips" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:20px; padding:10px 0;">
-            <span style="color: var(--text-secondary); font-size:0.85rem; font-weight:600; margin-right:4px;">Popular:</span>
-            <a href="/list?search=Boda+Rider" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🏍️ Boda Rider</a>
-            <a href="/list?search=Maid" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🧹 Maid</a>
-            <a href="/list?search=Plumbing" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🔧 Plumbing</a>
-            <a href="/list?search=Electrical" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">⚡ Electrical</a>
-            <a href="/list?search=Carpentry" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🪚 Carpentry</a>
-            <a href="/list?search=Cooking" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🍳 Cooking</a>
-            <a href="/list?search=Driver" class="chip" style="display:inline-block; padding:8px 20px; border-radius:30px; background:rgba(245,175,25,0.15); color:var(--text); text-decoration:none; font-size:0.8rem; font-weight:500; border:1px solid rgba(245,175,25,0.2); transition:all 0.2s;">🚗 Driver</a>
-        </div>
-    </div>
-    <div class="stat-grid">
-        <div class="stat-card"><h3>{provider_count}</h3><small>Skilled Workers</small></div>
-        <div class="stat-card"><h3>{open_jobs}</h3><small>Open Jobs</small></div>
-        <div class="stat-card"><h3>10K+</h3><small>Monthly Visitors</small></div>
-    </div>
-    <div class="card">
-        <div class="card-header">📖 How It Works</div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; text-align: center;">
-            <div><div style="font-size: 2rem;">🔍</div><h3 style="font-size:1rem; margin:8px 0;">1. Find Skills</h3><p style="font-size:0.8rem;">Browse verified workers</p></div>
-            <div><div style="font-size: 2rem;">📝</div><h3 style="font-size:1rem; margin:8px 0;">2. Post a Job</h3><p style="font-size:0.8rem;">Describe what you need</p></div>
-            <div><div style="font-size: 2rem;">💬</div><h3 style="font-size:1rem; margin:8px 0;">3. Connect</h3><p style="font-size:0.8rem;">Chat on WhatsApp</p></div>
-        </div>
-    </div>
-    {carousel}
-""")
+# No static home_page variable needed — content is generated dynamically
+home_page = ""  # Kept for compatibility, but not used
 
 # ============================================================
 # PAGE TEMPLATES (define these AFTER base_template)
