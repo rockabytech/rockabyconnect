@@ -7725,14 +7725,12 @@ def forgot_password():
         if not phone:
             return "Phone number required.", 400
 
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT id FROM users WHERE phone=?", (phone,))
-        user = c.fetchone()
-        conn.close()
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT id FROM users WHERE phone=?", (phone,))
+            user = c.fetchone()
 
         if not user:
-            # Generic message for security
             content = """
             <div class="card">
                 <div class="card-header">📨 Check Your Phone</div>
@@ -7847,18 +7845,16 @@ def change_password():
         if len(new_pass) < 6:
             return "New password must be at least 6 characters.", 400
 
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT password_hash FROM users WHERE id=?", (user_id,))
-        row = c.fetchone()
-        if not row or not check_password_hash(row[0], current):
-            conn.close()
-            return "Current password is incorrect.", 403
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT password_hash FROM users WHERE id=?", (user_id,))
+            row = c.fetchone()
+            if not row or not check_password_hash(row[0], current):
+                return "Current password is incorrect.", 403
 
-        hashed = generate_password_hash(new_pass)
-        c.execute("UPDATE users SET password_hash=? WHERE id=?", (hashed, user_id))
-        conn.commit()
-        conn.close()
+            hashed = generate_password_hash(new_pass)
+            c.execute("UPDATE users SET password_hash=? WHERE id=?", (hashed, user_id))
+            conn.commit()
 
         content = """
         <div class="card">
