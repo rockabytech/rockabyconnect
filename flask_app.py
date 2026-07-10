@@ -4168,6 +4168,7 @@ def home():
         </div>
     </div>"""
     
+    # ⭐ Use render_template_string directly with base_template ⭐
     return render_template_string(
         base_template,
         session=session,
