@@ -4098,10 +4098,12 @@ def home():
     
     conn.close()
     
-    # ---- BUILD FULL PAGE HTML ----
+    # ============================================================
+    # BUILD THE FULL PAGE CONTENT DIRECTLY (NO home_page VARIABLE)
+    # ============================================================
     
-    # HERO
-    content = '''
+    content = """
+    <!-- HERO SECTION -->
     <div class="hero-full">
         <div class="hero-content">
             <h1>Get Work Done – <span>or Get Paid</span></h1>
@@ -4112,10 +4114,10 @@ def home():
             </div>
         </div>
     </div>
-    '''
+    """
     
-    # STATS
-    content += f'''
+    # ---- STATS ----
+    content += f"""
     <div class="stats-bar">
         <div class="stat-item">
             <i class="fas fa-users"></i>
@@ -4138,10 +4140,10 @@ def home():
             <span class="stat-label">Open Jobs</span>
         </div>
     </div>
-    '''
+    """
     
-    # HOW IT WORKS
-    content += '''
+    # ---- HOW IT WORKS ----
+    content += """
     <div class="how-it-works">
         <h2>How It Works</h2>
         <div class="steps">
@@ -4162,14 +4164,14 @@ def home():
             </div>
         </div>
     </div>
-    '''
+    """
     
-    # CAROUSEL
+    # ---- CAROUSEL ----
     if ads:
-        content += '''
+        content += """
         <div class="ad-carousel">
             <div class="carousel-track">
-        '''
+        """
         for ad in ads:
             media = ""
             if ad.get('video'):
@@ -4179,27 +4181,27 @@ def home():
             else:
                 media = f'<div style="width:100%; height:350px; background:linear-gradient(135deg, var(--primary), var(--primary-dark)); display:flex; align-items:center; justify-content:center; color:white; font-size:2rem; font-weight:700;">{ad["name"]}</div>'
             label = f'<span class="carousel-label">{ad["type"].title()}</span>'
-            content += f'''
+            content += f"""
                 <div class="carousel-slide">
                     {media}
                     {label}
                 </div>
-            '''
-        content += '''
+            """
+        content += """
             </div>
             <button class="carousel-prev">‹</button>
             <button class="carousel-next">›</button>
             <div class="carousel-dots"></div>
         </div>
-        '''
+        """
     
-    # SPONSORED LISTINGS
+    # ---- SPONSORED LISTINGS ----
     if sponsored:
         content += '<div class="sponsored-section"><h2>🌟 Sponsored Listings</h2><div class="sponsored-grid">'
         for item in sponsored:
             img = f'/static/uploads/{item["image"]}' if item.get('image') else '/static/placeholder.png'
             link = f'/{item["type"]}/{item["id"]}'
-            content += f'''
+            content += f"""
             <a href="{link}" class="sponsored-card">
                 <img src="{img}" alt="{item['name']}">
                 <div class="sponsored-info">
@@ -4208,11 +4210,11 @@ def home():
                     <span class="sponsored-badge">Sponsored</span>
                 </div>
             </a>
-            '''
+            """
         content += '</div></div>'
     
-    # BANNER ADS
-    content += '''
+    # ---- BANNER ADS ----
+    content += """
     <div class="banner-ads">
         <a href="/list" class="banner-ad banner-ad-1">
             <div>
@@ -4236,25 +4238,25 @@ def home():
             </div>
         </a>
     </div>
-    '''
+    """
     
-    # TESTIMONIALS
+    # ---- TESTIMONIALS ----
     if testimonials:
         content += '<div class="testimonials"><h2>⭐ What Our Users Say</h2><div class="testimonial-grid">'
         for t in testimonials:
             name, rating, comment = t
             stars = ''.join(['★' for _ in range(rating)] + ['☆' for _ in range(5 - rating)])
-            content += f'''
+            content += f"""
             <div class="testimonial-card">
                 <div class="stars">{stars}</div>
                 <p>"{comment or 'Great platform!'}"</p>
                 <span class="testimonial-author">— {name}</span>
             </div>
-            '''
+            """
         content += '</div></div>'
     
-    # CTA
-    content += '''
+    # ---- CTA ----
+    content += """
     <div class="cta-section">
         <h2>Ready to Get Started?</h2>
         <p>Join thousands of users in Uganda's growing freelance community.</p>
@@ -4263,7 +4265,7 @@ def home():
             <a href="/list" class="btn-cta-secondary">Browse Skills</a>
         </div>
     </div>
-    '''
+    """
     
     return render_user_template(content, title="Home", active_page="home")
 
