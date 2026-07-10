@@ -4064,12 +4064,10 @@ def home():
     conn.close()
     
     # ============================================================
-    # BUILD THE FULL PAGE CONTENT DIRECTLY (NO home_page VARIABLE)
+    # BUILD THE FULL PAGE CONTENT
     # ============================================================
     
-    content = """
-    <!-- HERO SECTION -->
-    <div class="hero-full">
+    content = """<div class="hero-full">
         <div class="hero-content">
             <h1>Get Work Done – <span>or Get Paid</span></h1>
             <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
@@ -4078,12 +4076,10 @@ def home():
                 <a href="/post-job" class="btn-hero-secondary">Post a Job</a>
             </div>
         </div>
-    </div>
-    """
+    </div>"""
     
     # ---- STATS ----
-    content += f"""
-    <div class="stats-bar">
+    content += f"""<div class="stats-bar">
         <div class="stat-item">
             <i class="fas fa-users"></i>
             <span class="stat-number">{total_users:,}</span>
@@ -4104,12 +4100,10 @@ def home():
             <span class="stat-number">{open_jobs:,}</span>
             <span class="stat-label">Open Jobs</span>
         </div>
-    </div>
-    """
+    </div>"""
     
     # ---- HOW IT WORKS ----
-    content += """
-    <div class="how-it-works">
+    content += """<div class="how-it-works">
         <h2>How It Works</h2>
         <div class="steps">
             <div class="step">
@@ -4128,15 +4122,11 @@ def home():
                 <p>Get paid for your skills or find the right talent for your business.</p>
             </div>
         </div>
-    </div>
-    """
+    </div>"""
     
     # ---- CAROUSEL ----
     if ads:
-        content += """
-        <div class="ad-carousel">
-            <div class="carousel-track">
-        """
+        content += '<div class="ad-carousel"><div class="carousel-track">'
         for ad in ads:
             media = ""
             if ad.get('video'):
@@ -4146,19 +4136,8 @@ def home():
             else:
                 media = f'<div style="width:100%; height:350px; background:linear-gradient(135deg, var(--primary), var(--primary-dark)); display:flex; align-items:center; justify-content:center; color:white; font-size:2rem; font-weight:700;">{ad["name"]}</div>'
             label = f'<span class="carousel-label">{ad["type"].title()}</span>'
-            content += f"""
-                <div class="carousel-slide">
-                    {media}
-                    {label}
-                </div>
-            """
-        content += """
-            </div>
-            <button class="carousel-prev">‹</button>
-            <button class="carousel-next">›</button>
-            <div class="carousel-dots"></div>
-        </div>
-        """
+            content += f'<div class="carousel-slide">{media}{label}</div>'
+        content += '</div><button class="carousel-prev">‹</button><button class="carousel-next">›</button><div class="carousel-dots"></div></div>'
     
     # ---- SPONSORED LISTINGS ----
     if sponsored:
@@ -4166,44 +4145,15 @@ def home():
         for item in sponsored:
             img = f'/static/uploads/{item["image"]}' if item.get('image') else '/static/placeholder.png'
             link = f'/{item["type"]}/{item["id"]}'
-            content += f"""
-            <a href="{link}" class="sponsored-card">
-                <img src="{img}" alt="{item['name']}">
-                <div class="sponsored-info">
-                    <h3>{item['name']}</h3>
-                    <p>{item.get('details', '')}</p>
-                    <span class="sponsored-badge">Sponsored</span>
-                </div>
-            </a>
-            """
+            content += f'<a href="{link}" class="sponsored-card"><img src="{img}" alt="{item["name"]}"><div class="sponsored-info"><h3>{item["name"]}</h3><p>{item.get("details", "")}</p><span class="sponsored-badge">Sponsored</span></div></a>'
         content += '</div></div>'
     
     # ---- BANNER ADS ----
-    content += """
-    <div class="banner-ads">
-        <a href="/list" class="banner-ad banner-ad-1">
-            <div>
-                <span class="banner-icon">🔍</span>
-                <h3>Find Skilled Workers</h3>
-                <p>Browse our directory of trusted freelancers</p>
-            </div>
-        </a>
-        <a href="/jobs" class="banner-ad banner-ad-2">
-            <div>
-                <span class="banner-icon">💼</span>
-                <h3>Post a Job</h3>
-                <p>Find the right talent for your business</p>
-            </div>
-        </a>
-        <a href="/vendors" class="banner-ad banner-ad-3">
-            <div>
-                <span class="banner-icon">🏪</span>
-                <h3>Discover Vendors</h3>
-                <p>Support local businesses and shops</p>
-            </div>
-        </a>
-    </div>
-    """
+    content += """<div class="banner-ads">
+        <a href="/list" class="banner-ad banner-ad-1"><div><span class="banner-icon">🔍</span><h3>Find Skilled Workers</h3><p>Browse our directory of trusted freelancers</p></div></a>
+        <a href="/jobs" class="banner-ad banner-ad-2"><div><span class="banner-icon">💼</span><h3>Post a Job</h3><p>Find the right talent for your business</p></div></a>
+        <a href="/vendors" class="banner-ad banner-ad-3"><div><span class="banner-icon">🏪</span><h3>Discover Vendors</h3><p>Support local businesses and shops</p></div></a>
+    </div>"""
     
     # ---- TESTIMONIALS ----
     if testimonials:
@@ -4211,26 +4161,18 @@ def home():
         for t in testimonials:
             name, rating, comment = t
             stars = ''.join(['★' for _ in range(rating)] + ['☆' for _ in range(5 - rating)])
-            content += f"""
-            <div class="testimonial-card">
-                <div class="stars">{stars}</div>
-                <p>"{comment or 'Great platform!'}"</p>
-                <span class="testimonial-author">— {name}</span>
-            </div>
-            """
+            content += f'<div class="testimonial-card"><div class="stars">{stars}</div><p>"{comment or "Great platform!"}"</p><span class="testimonial-author">— {name}</span></div>'
         content += '</div></div>'
     
     # ---- CTA ----
-    content += """
-    <div class="cta-section">
+    content += """<div class="cta-section">
         <h2>Ready to Get Started?</h2>
         <p>Join thousands of users in Uganda's growing freelance community.</p>
         <div class="cta-buttons">
             <a href="/signup" class="btn-cta-primary">Sign Up Free</a>
             <a href="/list" class="btn-cta-secondary">Browse Skills</a>
         </div>
-    </div>
-    """
+    </div>"""
     
     return render_user_template(content, title="Home", active_page="home")
 
