@@ -3977,83 +3977,108 @@ def home():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # ---- STATS ----
-    c.execute("SELECT COUNT(*) FROM users")
-    total_users = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM providers")
-    total_providers = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM vendors")
-    total_vendors = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'")
-    open_jobs = c.fetchone()[0]
+    # ---- STATS (with fallback to 0 if no data) ----
+    try:
+        c.execute("SELECT COUNT(*) FROM users")
+        total_users = c.fetchone()[0] or 0
+    except:
+        total_users = 0
+    
+    try:
+        c.execute("SELECT COUNT(*) FROM providers")
+        total_providers = c.fetchone()[0] or 0
+    except:
+        total_providers = 0
+    
+    try:
+        c.execute("SELECT COUNT(*) FROM vendors")
+        total_vendors = c.fetchone()[0] or 0
+    except:
+        total_vendors = 0
+    
+    try:
+        c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'")
+        open_jobs = c.fetchone()[0] or 0
+    except:
+        open_jobs = 0
     
     # ---- FETCH BOOSTED ITEMS (Carousel) ----
     today = date.today().isoformat()
     ads = []
-    # Providers
-    c.execute("""
-        SELECT p.id, u.name, p.profile_pic, p.video, p.featured_expiry, 'provider' as type
-        FROM providers p JOIN users u ON p.user_id = u.id
-        WHERE p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= ?)
-    """, (today,))
-    for row in c.fetchall():
-        ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
-    # Vendors
-    c.execute("""
-        SELECT v.id, v.business_name, v.vendor_image, v.video, v.featured_expiry, 'vendor' as type
-        FROM vendors v
-        WHERE v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= ?)
-    """, (today,))
-    for row in c.fetchall():
-        ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
-    # Jobs
-    c.execute("""
-        SELECT j.id, j.title, j.job_image, j.video, j.featured_expiry, 'job' as type
-        FROM jobs j
-        WHERE j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?)
-    """, (today,))
-    for row in c.fetchall():
-        ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
+    try:
+        # Providers
+        c.execute("""
+            SELECT p.id, u.name, p.profile_pic, p.video, p.featured_expiry, 'provider' as type
+            FROM providers p JOIN users u ON p.user_id = u.id
+            WHERE p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= ?)
+        """, (today,))
+        for row in c.fetchall():
+            ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
+        # Vendors
+        c.execute("""
+            SELECT v.id, v.business_name, v.vendor_image, v.video, v.featured_expiry, 'vendor' as type
+            FROM vendors v
+            WHERE v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= ?)
+        """, (today,))
+        for row in c.fetchall():
+            ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
+        # Jobs
+        c.execute("""
+            SELECT j.id, j.title, j.job_image, j.video, j.featured_expiry, 'job' as type
+            FROM jobs j
+            WHERE j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?)
+        """, (today,))
+        for row in c.fetchall():
+            ads.append({'id': row[0], 'name': row[1], 'image': row[2], 'video': row[3], 'type': row[5]})
+    except:
+        pass
     
     # ---- FETCH SPONSORED LISTINGS ----
     sponsored = []
-    # Featured providers (limit 6)
-    c.execute("""
-        SELECT p.id, u.name, p.skills, p.district, p.profile_pic, 'provider' as type
-        FROM providers p JOIN users u ON p.user_id = u.id
-        WHERE p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= ?)
-        LIMIT 6
-    """, (today,))
-    for row in c.fetchall():
-        sponsored.append({'id': row[0], 'name': row[1], 'details': row[2] or 'Skilled Worker', 'location': row[3], 'image': row[4], 'type': row[5]})
-    # Featured vendors (limit 6)
-    c.execute("""
-        SELECT v.id, v.business_name, v.district, v.vendor_image, 'vendor' as type
-        FROM vendors v
-        WHERE v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= ?)
-        LIMIT 6
-    """, (today,))
-    for row in c.fetchall():
-        sponsored.append({'id': row[0], 'name': row[1], 'details': 'Shop', 'location': row[2], 'image': row[3], 'type': row[4]})
-    # Featured jobs (limit 6)
-    c.execute("""
-        SELECT j.id, j.title, j.company, j.location, j.job_image, 'job' as type
-        FROM jobs j
-        WHERE j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?)
-        LIMIT 6
-    """, (today,))
-    for row in c.fetchall():
-        sponsored.append({'id': row[0], 'name': row[1], 'details': row[2] or 'Company', 'location': row[3], 'image': row[4], 'type': row[5]})
+    try:
+        # Featured providers (limit 6)
+        c.execute("""
+            SELECT p.id, u.name, p.skills, p.district, p.profile_pic, 'provider' as type
+            FROM providers p JOIN users u ON p.user_id = u.id
+            WHERE p.featured = 1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= ?)
+            LIMIT 6
+        """, (today,))
+        for row in c.fetchall():
+            sponsored.append({'id': row[0], 'name': row[1], 'details': row[2] or 'Skilled Worker', 'location': row[3], 'image': row[4], 'type': row[5]})
+        # Featured vendors (limit 6)
+        c.execute("""
+            SELECT v.id, v.business_name, v.district, v.vendor_image, 'vendor' as type
+            FROM vendors v
+            WHERE v.featured = 1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= ?)
+            LIMIT 6
+        """, (today,))
+        for row in c.fetchall():
+            sponsored.append({'id': row[0], 'name': row[1], 'details': 'Shop', 'location': row[2], 'image': row[3], 'type': row[4]})
+        # Featured jobs (limit 6)
+        c.execute("""
+            SELECT j.id, j.title, j.company, j.location, j.job_image, 'job' as type
+            FROM jobs j
+            WHERE j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?)
+            LIMIT 6
+        """, (today,))
+        for row in c.fetchall():
+            sponsored.append({'id': row[0], 'name': row[1], 'details': row[2] or 'Company', 'location': row[3], 'image': row[4], 'type': row[5]})
+    except:
+        pass
     
     # ---- FETCH TESTIMONIALS ----
-    c.execute("""
-        SELECT u.name, r.rating, r.comment
-        FROM reviews r
-        JOIN users u ON r.reviewer_id = u.id
-        ORDER BY r.created_at DESC
-        LIMIT 6
-    """)
-    testimonials = c.fetchall()
+    testimonials = []
+    try:
+        c.execute("""
+            SELECT u.name, r.rating, r.comment
+            FROM reviews r
+            JOIN users u ON r.reviewer_id = u.id
+            ORDER BY r.created_at DESC
+            LIMIT 6
+        """)
+        testimonials = c.fetchall()
+    except:
+        pass
     
     conn.close()
     
@@ -4061,6 +4086,7 @@ def home():
     # BUILD THE FULL PAGE CONTENT
     # ============================================================
     
+    # ---- HERO ----
     content = """<div class="hero-full">
         <div class="hero-content">
             <h1>Get Work Done – <span>or Get Paid</span></h1>
@@ -4072,26 +4098,26 @@ def home():
         </div>
     </div>"""
     
-    # ---- STATS ----
+    # ---- STATS BAR ----
     content += f"""<div class="stats-bar">
         <div class="stat-item">
             <i class="fas fa-users"></i>
-            <span class="stat-number">{total_users:,}</span>
+            <span class="stat-number">{total_users}</span>
             <span class="stat-label">Total Users</span>
         </div>
         <div class="stat-item">
             <i class="fas fa-user-tie"></i>
-            <span class="stat-number">{total_providers:,}</span>
+            <span class="stat-number">{total_providers}</span>
             <span class="stat-label">Skilled Workers</span>
         </div>
         <div class="stat-item">
             <i class="fas fa-store"></i>
-            <span class="stat-number">{total_vendors:,}</span>
+            <span class="stat-number">{total_vendors}</span>
             <span class="stat-label">Vendors</span>
         </div>
         <div class="stat-item">
             <i class="fas fa-briefcase"></i>
-            <span class="stat-number">{open_jobs:,}</span>
+            <span class="stat-number">{open_jobs}</span>
             <span class="stat-label">Open Jobs</span>
         </div>
     </div>"""
@@ -4168,7 +4194,7 @@ def home():
         </div>
     </div>"""
     
-    # ⭐ Use render_template_string directly with base_template ⭐
+    # ---- RENDER ----
     return render_template_string(
         base_template,
         session=session,
