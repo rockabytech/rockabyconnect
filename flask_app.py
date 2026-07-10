@@ -3267,12 +3267,6 @@ base_template = """
 """
 
 # ============================================================
-# PAGE FRAGMENTS - Homepage content is now built in the route
-# ============================================================
-# No static home_page variable needed — content is generated dynamically
-home_page = ""  # Kept for compatibility, but not used
-
-# ============================================================
 # PAGE TEMPLATES (define these AFTER base_template)
 # ============================================================
 
@@ -4174,7 +4168,14 @@ def home():
         </div>
     </div>"""
     
-    return render_user_template(content, title="Home", active_page="home")
+    return render_template_string(
+        base_template,
+        session=session,
+        request=request,
+        title="Home",
+        active_page="home",
+        content=content
+    )
 
 @app.route('/points-history')
 @login_required
