@@ -3967,82 +3967,289 @@ admin_base_template = """
 
 @app.route('/')
 def home():
-    user_id = session.get('user_id')
-    print(f"[DEBUG] Home route - User ID in session: {user_id}")
-    
-    # ---- REFERRAL CODE DETECTION ----
+    # Get referral code from URL
     ref_code = request.args.get('ref', '')
     if ref_code:
         session['referral_code'] = ref_code
-    
-    # ---- CONTENT ----
-    content = """
-    <div style="background: #f5af19; padding: 60px 20px; text-align: center; border-radius: 20px; margin-bottom: 30px;">
-        <h1 style="font-size: 3rem; color: white; font-weight: 900;">Get Work Done – <span style="background: rgba(255,255,255,0.2); padding: 0 16px; border-radius: 12px;">or Get Paid</span></h1>
-        <p style="font-size: 1.3rem; color: white; max-width: 700px; margin: 20px auto;">Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
-        <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-            <a href="/offer-skill" style="background: white; color: #f5af19; padding: 16px 40px; border-radius: 50px; font-weight: 700; text-decoration: none; display: inline-block;">Offer Your Skill</a>
-            <a href="/post-job" style="background: transparent; color: white; padding: 16px 40px; border-radius: 50px; font-weight: 700; text-decoration: none; border: 2px solid white; display: inline-block;">Post a Job</a>
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    c = conn.cursor()
+    today = date.today().isoformat()
+
+    # ---- STATS ----
+    total_users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    total_providers = c.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
+    total_vendors = c.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
+    open_jobs = c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'").fetchone()[0]
+
+    # ---- FEATURED ITEMS for carousel & sponsored grid ----
+    featured_providers = c.execute("""
+        SELECT p.id, u.name, p.profile_pic, p.skills, 'provider' as type
+        FROM providers p
+        JOIN users u ON p.user_id = u.id
+        WHERE p.featured=1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= ?)
+        ORDER BY p.id DESC
+        LIMIT 6
+    """, (today,)).fetchall()
+
+    featured_vendors = c.execute("""
+        SELECT v.id, v.business_name as name, v.vendor_image as profile_pic, 'vendor' as type
+        FROM vendors v
+        WHERE v.featured=1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= ?)
+        ORDER BY v.id DESC
+        LIMIT 6
+    """, (today,)).fetchall()
+
+    featured_jobs = c.execute("""
+        SELECT j.id, j.title as name, j.job_image as profile_pic, 'job' as type
+        FROM jobs j
+        WHERE j.featured=1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?) AND j.status='Open'
+        ORDER BY j.id DESC
+        LIMIT 6
+    """, (today,)).fetchall()
+
+    # Combine all featured items for carousel (mix)
+    all_featured = []
+    # We'll interleave: provider, vendor, job, provider, vendor, job...
+    # Simply combine and shuffle? Let's just combine and take first 10.
+    for p in featured_providers:
+        all_featured.append((p[0], p[1], p[2], p[3], 'provider'))
+    for v in featured_vendors:
+        all_featured.append((v[0], v[1], v[2], '', 'vendor'))
+    for j in featured_jobs:
+        all_featured.append((j[0], j[1], j[2], '', 'job'))
+
+    # If not enough featured, we can add some non-featured popular items (e.g., latest)
+    if len(all_featured) < 3:
+        # Get latest providers, vendors, jobs as fallback
+        latest_providers = c.execute("""
+            SELECT p.id, u.name, p.profile_pic, p.skills, 'provider'
+            FROM providers p JOIN users u ON p.user_id = u.id
+            ORDER BY p.id DESC LIMIT 3
+        """).fetchall()
+        latest_vendors = c.execute("""
+            SELECT v.id, v.business_name, v.vendor_image, '', 'vendor'
+            FROM vendors v ORDER BY v.id DESC LIMIT 3
+        """).fetchall()
+        latest_jobs = c.execute("""
+            SELECT j.id, j.title, j.job_image, '', 'job'
+            FROM jobs j WHERE j.status='Open' ORDER BY j.id DESC LIMIT 3
+        """).fetchall()
+        all_featured.extend(latest_providers)
+        all_featured.extend(latest_vendors)
+        all_featured.extend(latest_jobs)
+
+    # Sponsored grid: take up to 9 items (mix)
+    sponsored_items = all_featured[:9]
+
+    # Build carousel slides
+    carousel_slides = ""
+    for item in all_featured[:10]:  # max 10 slides
+        item_id, name, img, detail, item_type = item
+        img_url = f"/static/uploads/{img}" if img else "/static/placeholder.png"
+        label = item_type.capitalize()
+        if item_type == 'provider':
+            link = f"/provider/{item_id}"
+            label = f"👤 {name}"
+        elif item_type == 'vendor':
+            link = f"/vendor/{item_id}"
+            label = f"🏪 {name}"
+        else:  # job
+            link = f"/job/{item_id}"
+            label = f"💼 {name}"
+        carousel_slides += f"""
+            <div class="carousel-slide">
+                <img src="{img_url}" alt="{name}" onerror="this.src='/static/placeholder.png'">
+                <div class="carousel-label">{label}</div>
+            </div>
+        """
+
+    # If no slides, show a placeholder
+    if not carousel_slides:
+        carousel_slides = """
+            <div class="carousel-slide">
+                <img src="/static/placeholder.png" alt="No featured items">
+                <div class="carousel-label">Coming Soon</div>
+            </div>
+        """
+
+    # Build sponsored grid
+    sponsored_html = ""
+    for item in sponsored_items:
+        item_id, name, img, detail, item_type = item
+        img_url = f"/static/uploads/{img}" if img else "/static/placeholder.png"
+        if item_type == 'provider':
+            link = f"/provider/{item_id}"
+            badge = "Freelancer"
+        elif item_type == 'vendor':
+            link = f"/vendor/{item_id}"
+            badge = "Vendor"
+        else:
+            link = f"/job/{item_id}"
+            badge = "Job"
+        sponsored_html += f"""
+            <a href="{link}" class="sponsored-card">
+                <img src="{img_url}" alt="{name}" onerror="this.src='/static/placeholder.png'">
+                <div class="sponsored-info">
+                    <h3>{name}</h3>
+                    <p>{detail if detail else badge}</p>
+                    <span class="sponsored-badge">⭐ Featured</span>
+                </div>
+            </a>
+        """
+    if not sponsored_html:
+        sponsored_html = "<p>No sponsored items yet.</p>"
+
+    # ---- TESTIMONIALS ----
+    reviews = c.execute("""
+        SELECT r.rating, r.comment, u.name, r.created_at
+        FROM reviews r
+        JOIN users u ON r.reviewer_id = u.id
+        ORDER BY r.created_at DESC
+        LIMIT 4
+    """).fetchall()
+    testimonials_html = ""
+    if reviews:
+        for rating, comment, name, created in reviews:
+            stars = ''.join(['★' if i < rating else '☆' for i in range(5)])
+            testimonials_html += f"""
+                <div class="testimonial-card">
+                    <div class="stars">{stars}</div>
+                    <p>"{comment}"</p>
+                    <div class="testimonial-author">— {name}</div>
+                </div>
+            """
+    else:
+        testimonials_html = "<p>No reviews yet. Be the first!</p>"
+
+    conn.close()
+
+    # ---- BANNER ADS (static promotional) ----
+    banners = """
+        <a href="/boost" class="banner-ad banner-ad-1">
+            <div>
+                <span class="banner-icon">🚀</span>
+                <h3>Boost Your Profile</h3>
+                <p>Get seen by more clients</p>
+            </div>
+        </a>
+        <a href="/post-job" class="banner-ad banner-ad-2">
+            <div>
+                <span class="banner-icon">💼</span>
+                <h3>Post a Job</h3>
+                <p>Find the right talent</p>
+            </div>
+        </a>
+        <a href="/refer" class="banner-ad banner-ad-3">
+            <div>
+                <span class="banner-icon">🎁</span>
+                <h3>Refer a Friend</h3>
+                <p>Earn rewards</p>
+            </div>
+        </a>
+    """
+
+    # ---- COMPLETE CONTENT ----
+    content = f"""
+    <!-- HERO -->
+    <div class="hero-full">
+        <h1>Get Work Done – <span>or Get Paid</span></h1>
+        <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
+        <div class="hero-buttons">
+            <a href="/offer-skill" class="btn-hero-primary">Offer Your Skill</a>
+            <a href="/post-job" class="btn-hero-secondary">Post a Job</a>
         </div>
     </div>
-    
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 40px;">
-        <div style="background: white; padding: 20px; border-radius: 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
-            <div style="font-size: 2.5rem; color: #f5af19;">👥</div>
-            <div style="font-size: 2rem; font-weight: 900;">124</div>
-            <div style="color: #666;">Total Users</div>
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+        <div class="stat-item">
+            <i class="fas fa-users"></i>
+            <span class="stat-number">{total_users}</span>
+            <span class="stat-label">Total Users</span>
         </div>
-        <div style="background: white; padding: 20px; border-radius: 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
-            <div style="font-size: 2.5rem; color: #f5af19;">👤</div>
-            <div style="font-size: 2rem; font-weight: 900;">56</div>
-            <div style="color: #666;">Skilled Workers</div>
+        <div class="stat-item">
+            <i class="fas fa-user-tie"></i>
+            <span class="stat-number">{total_providers}</span>
+            <span class="stat-label">Skilled Workers</span>
         </div>
-        <div style="background: white; padding: 20px; border-radius: 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
-            <div style="font-size: 2.5rem; color: #f5af19;">🏪</div>
-            <div style="font-size: 2rem; font-weight: 900;">8</div>
-            <div style="color: #666;">Vendors</div>
+        <div class="stat-item">
+            <i class="fas fa-store"></i>
+            <span class="stat-number">{total_vendors}</span>
+            <span class="stat-label">Vendors</span>
         </div>
-        <div style="background: white; padding: 20px; border-radius: 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
-            <div style="font-size: 2.5rem; color: #f5af19;">💼</div>
-            <div style="font-size: 2rem; font-weight: 900;">12</div>
-            <div style="color: #666;">Open Jobs</div>
-        </div>
-    </div>
-    
-    <div style="margin-bottom: 40px;">
-        <h2 style="text-align: center; font-size: 2.2rem; font-weight: 800; margin-bottom: 30px; color: #f5af19;">How It Works</h2>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px;">
-            <div style="text-align: center; padding: 30px 20px; background: white; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
-                <div style="font-size: 3.5rem; margin-bottom: 16px;">🔍</div>
-                <h3 style="font-size: 1.2rem; font-weight: 700;">1. Find Skills</h3>
-                <p style="color: #666;">Browse verified workers or search by skill, location, or rating.</p>
-            </div>
-            <div style="text-align: center; padding: 30px 20px; background: white; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
-                <div style="font-size: 3.5rem; margin-bottom: 16px;">📝</div>
-                <h3 style="font-size: 1.2rem; font-weight: 700;">2. Connect</h3>
-                <p style="color: #666;">Post a job, send a message, or apply for opportunities.</p>
-            </div>
-            <div style="text-align: center; padding: 30px 20px; background: white; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
-                <div style="font-size: 3.5rem; margin-bottom: 16px;">💬</div>
-                <h3 style="font-size: 1.2rem; font-weight: 700;">3. Work & Grow</h3>
-                <p style="color: #666;">Get paid for your skills or find the right talent for your business.</p>
-            </div>
+        <div class="stat-item">
+            <i class="fas fa-briefcase"></i>
+            <span class="stat-number">{open_jobs}</span>
+            <span class="stat-label">Open Jobs</span>
         </div>
     </div>
-    
-    <div style="text-align: center; padding: 50px 20px; background: linear-gradient(135deg, #f5af19, #e09e15); color: white; border-radius: 20px; margin-bottom: 20px;">
-        <h2 style="font-size: 2.4rem; font-weight: 900; margin-bottom: 12px;">Ready to Get Started?</h2>
-        <p style="font-size: 1.15rem; opacity: 0.95; margin-bottom: 24px;">Join thousands of users in Uganda's growing freelance community.</p>
-        <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-            <a href="/signup" style="background: white; color: #f5af19; padding: 14px 36px; border-radius: 50px; font-weight: 700; text-decoration: none; display: inline-block;">Sign Up Free</a>
-            <a href="/list" style="background: transparent; color: white; padding: 14px 36px; border-radius: 50px; font-weight: 700; text-decoration: none; border: 2px solid white; display: inline-block;">Browse Skills</a>
+
+    <!-- HOW IT WORKS -->
+    <div class="how-it-works">
+        <h2>How It Works</h2>
+        <div class="steps">
+            <div class="step">
+                <span class="step-icon">🔍</span>
+                <h3>1. Find Skills</h3>
+                <p>Browse verified workers or search by skill, location, or rating.</p>
+            </div>
+            <div class="step">
+                <span class="step-icon">📝</span>
+                <h3>2. Connect</h3>
+                <p>Post a job, send a message, or apply for opportunities.</p>
+            </div>
+            <div class="step">
+                <span class="step-icon">💬</span>
+                <h3>3. Work & Grow</h3>
+                <p>Get paid for your skills or find the right talent for your business.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- FEATURED CAROUSEL -->
+    <div class="ad-carousel">
+        <div class="carousel-track">
+            {carousel_slides}
+        </div>
+        <button class="carousel-prev">‹</button>
+        <button class="carousel-next">›</button>
+        <div class="carousel-dots"></div>
+    </div>
+
+    <!-- SPONSORED LISTINGS -->
+    <div class="sponsored-section">
+        <h2>⭐ Sponsored Listings</h2>
+        <div class="sponsored-grid">
+            {sponsored_html}
+        </div>
+    </div>
+
+    <!-- BANNER ADS -->
+    <div class="banner-ads">
+        {banners}
+    </div>
+
+    <!-- TESTIMONIALS -->
+    <div class="testimonials">
+        <h2>What Our Users Say</h2>
+        <div class="testimonial-grid">
+            {testimonials_html}
+        </div>
+    </div>
+
+    <!-- CTA SECTION -->
+    <div class="cta-section">
+        <h2>Ready to Get Started?</h2>
+        <p>Join thousands of users in Uganda's growing freelance community.</p>
+        <div class="cta-buttons">
+            <a href="/signup" class="btn-cta-primary">Sign Up Free</a>
+            <a href="/list" class="btn-cta-secondary">Browse Skills</a>
         </div>
     </div>
     """
-    
-    print(f"[DEBUG] Content length: {len(content)} chars")
-    
-    # ⭐ DIRECT RENDER - BYPASS render_user_template ⭐
+
     return render_template_string(
         base_template,
         session=session,
