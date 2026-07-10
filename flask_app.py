@@ -7783,12 +7783,11 @@ def reset_password(token):
             return "Passwords do not match.", 400
 
         hashed = generate_password_hash(password)
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("UPDATE users SET password_hash=? WHERE id=?", (hashed, user_id))
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE users SET password_hash=? WHERE id=?", (hashed, user_id))
+            conn.commit()
         mark_token_used(token)
-        conn.commit()
-        conn.close()
 
         content = """
         <div class="card">
