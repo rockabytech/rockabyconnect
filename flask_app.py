@@ -683,16 +683,13 @@ import secrets
 from datetime import datetime, timedelta
 
 def generate_reset_token():
-    """Generate a secure random token."""
     return secrets.token_urlsafe(32)
 
 def create_password_reset(user_id):
-    """Create a reset token for a user, delete old ones."""
     token = generate_reset_token()
-    expiry = datetime.now() + timedelta(hours=2)  # valid for 2 hours
+    expiry = datetime.now() + timedelta(hours=2)
     conn = get_db_connection()
     c = conn.cursor()
-    # Delete any existing valid tokens for this user
     c.execute("DELETE FROM password_resets WHERE user_id=? AND used=0", (user_id,))
     c.execute(
         "INSERT INTO password_resets (user_id, token, expiry) VALUES (?, ?, ?)",
@@ -703,21 +700,17 @@ def create_password_reset(user_id):
     return token
 
 def validate_reset_token(token):
-    """Check if token is valid (exists, not used, not expired). Returns user_id or None."""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute(
-        "SELECT user_id, expiry FROM password_resets WHERE token=? AND used=0 AND expiry > datetime('now')",
+        "SELECT user_id FROM password_resets WHERE token=? AND used=0 AND expiry > datetime('now')",
         (token,)
     )
     row = c.fetchone()
     conn.close()
-    if row:
-        return row[0]
-    return None
+    return row[0] if row else None
 
 def mark_token_used(token):
-    """Mark the token as used."""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("UPDATE password_resets SET used=1 WHERE token=?", (token,))
@@ -5717,177 +5710,6 @@ def refer():
     '''
     return render_user_template(base_template, title="Refer a Friend", active_page="refer", content=content)
 
-@app.route('/forgot-password', methods=['GET', 'POST'])
-def forgot_password():
-    if request.method == 'POST':
-        phone = request.form.get('phone', '').strip()
-        if not phone:
-            return "Phone number required.", 400
-
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT id FROM users WHERE phone=?", (phone,))
-        user = c.fetchone()
-        conn.close()
-
-        if not user:
-            # For security, don't reveal if user exists; show generic message.
-            return render_user_template(
-                base_template,
-                title="Reset Link Sent",
-                content="""
-                <div class="card">
-                    <div class="card-header">📨 Check Your Phone</div>
-                    <p>If an account with that number exists, we've sent a reset link.</p>
-                    <a href="/login" class="btn">Back to Login</a>
-                </div>
-                """
-            )
-
-        token = create_password_reset(user[0])
-        reset_link = request.url_root + f"reset-password/{token}"
-        # Compose WhatsApp message with the link
-        wa_msg = f"Hello, use this link to reset your RockabyConnect password: {reset_link}"
-        wa_url = whatsapp_link(phone) + f"?text={wa_msg.replace(' ', '%20')}"
-
-        content = f"""
-        <div class="card">
-            <div class="card-header">✅ Reset Link Generated</div>
-            <p>We've created a reset link for you.</p>
-            <p><strong>Your reset link (copy this):</strong><br>
-            <a href="{reset_link}" target="_blank">{reset_link}</a></p>
-            <p>Or send it via WhatsApp to your own number:</p>
-            <a href="{wa_url}" target="_blank" class="btn btn-whatsapp">📱 Send via WhatsApp</a>
-            <br><br>
-            <a href="/login" class="btn btn-outline">Back to Login</a>
-        </div>
-        """
-        return render_user_template(base_template, title="Reset Link Sent", content=content)
-
-    # GET – show form
-    content = """
-    <div class="card" style="max-width:500px; margin:0 auto;">
-        <div class="card-header">🔑 Forgot Password</div>
-        <p>Enter your registered phone number. We'll send you a reset link.</p>
-        <form method="POST">
-            <label>Phone Number</label>
-            <input type="tel" name="phone" placeholder="e.g., 0751318876" required>
-            <button type="submit" class="btn" style="margin-top:20px; width:100%;">Send Reset Link</button>
-        </form>
-        <p style="margin-top:15px; text-align:center;"><a href="/login">Back to Login</a></p>
-    </div>
-    """
-    return render_user_template(base_template, title="Forgot Password", content=content)
-
-@app.route('/reset-password/<token>', methods=['GET', 'POST'])
-def reset_password(token):
-    user_id = validate_reset_token(token)
-    if not user_id:
-        content = """
-        <div class="card">
-            <div class="card-header">❌ Invalid or Expired Link</div>
-            <p>The reset link is invalid or has expired. Please request a new one.</p>
-            <a href="/forgot-password" class="btn">Request New Link</a>
-        </div>
-        """
-        return render_user_template(base_template, title="Reset Failed", content=content)
-
-    if request.method == 'POST':
-        password = request.form.get('password', '').strip()
-        confirm = request.form.get('confirm', '').strip()
-        if not password or len(password) < 6:
-            return "Password must be at least 6 characters.", 400
-        if password != confirm:
-            return "Passwords do not match.", 400
-
-        hashed = generate_password_hash(password)
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("UPDATE users SET password_hash=? WHERE id=?", (hashed, user_id))
-        mark_token_used(token)
-        conn.commit()
-        conn.close()
-
-        content = """
-        <div class="card">
-            <div class="card-header">✅ Password Reset Successful</div>
-            <p>Your password has been updated. You can now log in with your new password.</p>
-            <a href="/login" class="btn">Go to Login</a>
-        </div>
-        """
-        return render_user_template(base_template, title="Password Reset", content=content)
-
-    # GET – show form to enter new password
-    content = """
-    <div class="card" style="max-width:500px; margin:0 auto;">
-        <div class="card-header">🔑 Set New Password</div>
-        <form method="POST">
-            <label>New Password (minimum 6 characters)</label>
-            <input type="password" name="password" required>
-            <label>Confirm Password</label>
-            <input type="password" name="confirm" required>
-            <button type="submit" class="btn" style="margin-top:20px; width:100%;">Reset Password</button>
-        </form>
-    </div>
-    """
-    return render_user_template(base_template, title="Reset Password", content=content)
-
-@app.route('/change-password', methods=['GET', 'POST'])
-@login_required
-def change_password():
-    user_id = session['user_id']
-    if request.method == 'POST':
-        current = request.form.get('current', '').strip()
-        new_pass = request.form.get('new_password', '').strip()
-        confirm = request.form.get('confirm', '').strip()
-
-        if not current or not new_pass or not confirm:
-            return "All fields required.", 400
-        if new_pass != confirm:
-            return "New passwords do not match.", 400
-        if len(new_pass) < 6:
-            return "New password must be at least 6 characters.", 400
-
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT password_hash FROM users WHERE id=?", (user_id,))
-        row = c.fetchone()
-        if not row or not check_password_hash(row[0], current):
-            conn.close()
-            return "Current password is incorrect.", 403
-
-        hashed = generate_password_hash(new_pass)
-        c.execute("UPDATE users SET password_hash=? WHERE id=?", (hashed, user_id))
-        conn.commit()
-        conn.close()
-
-        content = """
-        <div class="card">
-            <div class="card-header">✅ Password Updated</div>
-            <p>Your password has been changed successfully.</p>
-            <a href="/dashboard" class="btn">Back to Dashboard</a>
-        </div>
-        """
-        return render_user_template(base_template, title="Password Changed", content=content)
-
-    # GET – show form
-    content = """
-    <div class="card" style="max-width:500px; margin:0 auto;">
-        <div class="card-header">🔐 Change Password</div>
-        <form method="POST">
-            <label>Current Password</label>
-            <input type="password" name="current" required>
-            <label>New Password (min 6 characters)</label>
-            <input type="password" name="new_password" required>
-            <label>Confirm New Password</label>
-            <input type="password" name="confirm" required>
-            <button type="submit" class="btn" style="margin-top:20px; width:100%;">Update Password</button>
-        </form>
-        <p style="margin-top:15px; text-align:center;"><a href="/dashboard">Cancel</a></p>
-    </div>
-    """
-    return render_user_template(base_template, title="Change Password", content=content)
-
 # ---------- Settings ----------
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
@@ -7892,6 +7714,178 @@ ensure_db()
 print("[STARTUP] Starting backup scheduler (every 30 minutes)...")
 schedule_github_backup()
 
+# ============================================================
+# PASSWORD RESET ROUTES
+# ============================================================
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        phone = request.form.get('phone', '').strip()
+        if not phone:
+            return "Phone number required.", 400
+
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT id FROM users WHERE phone=?", (phone,))
+        user = c.fetchone()
+        conn.close()
+
+        if not user:
+            # Generic message for security
+            content = """
+            <div class="card">
+                <div class="card-header">📨 Check Your Phone</div>
+                <p>If an account with that number exists, we've sent a reset link.</p>
+                <a href="/login" class="btn">Back to Login</a>
+            </div>
+            """
+            return render_user_template(base_template, title="Reset Link Sent", content=content)
+
+        token = create_password_reset(user[0])
+        reset_link = request.url_root + f"reset-password/{token}"
+        wa_msg = f"Hello, use this link to reset your RockabyConnect password: {reset_link}"
+        wa_url = whatsapp_link(phone) + f"?text={wa_msg.replace(' ', '%20')}"
+
+        content = f"""
+        <div class="card">
+            <div class="card-header">✅ Reset Link Generated</div>
+            <p>We've created a reset link for you.</p>
+            <p><strong>Your reset link (copy this):</strong><br>
+            <a href="{reset_link}" target="_blank">{reset_link}</a></p>
+            <p>Or send it via WhatsApp to your own number:</p>
+            <a href="{wa_url}" target="_blank" class="btn btn-whatsapp">📱 Send via WhatsApp</a>
+            <br><br>
+            <a href="/login" class="btn btn-outline">Back to Login</a>
+        </div>
+        """
+        return render_user_template(base_template, title="Reset Link Sent", content=content)
+
+    # GET – show form
+    content = """
+    <div class="card" style="max-width:500px; margin:0 auto;">
+        <div class="card-header">🔑 Forgot Password</div>
+        <p>Enter your registered phone number. We'll send you a reset link.</p>
+        <form method="POST">
+            <label>Phone Number</label>
+            <input type="tel" name="phone" placeholder="e.g., 0751318876" required>
+            <button type="submit" class="btn" style="margin-top:20px; width:100%;">Send Reset Link</button>
+        </form>
+        <p style="margin-top:15px; text-align:center;"><a href="/login">Back to Login</a></p>
+    </div>
+    """
+    return render_user_template(base_template, title="Forgot Password", content=content)
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    user_id = validate_reset_token(token)
+    if not user_id:
+        content = """
+        <div class="card">
+            <div class="card-header">❌ Invalid or Expired Link</div>
+            <p>The reset link is invalid or has expired. Please request a new one.</p>
+            <a href="/forgot-password" class="btn">Request New Link</a>
+        </div>
+        """
+        return render_user_template(base_template, title="Reset Failed", content=content)
+
+    if request.method == 'POST':
+        password = request.form.get('password', '').strip()
+        confirm = request.form.get('confirm', '').strip()
+        if not password or len(password) < 6:
+            return "Password must be at least 6 characters.", 400
+        if password != confirm:
+            return "Passwords do not match.", 400
+
+        hashed = generate_password_hash(password)
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("UPDATE users SET password_hash=? WHERE id=?", (hashed, user_id))
+        mark_token_used(token)
+        conn.commit()
+        conn.close()
+
+        content = """
+        <div class="card">
+            <div class="card-header">✅ Password Reset Successful</div>
+            <p>Your password has been updated. You can now log in with your new password.</p>
+            <a href="/login" class="btn">Go to Login</a>
+        </div>
+        """
+        return render_user_template(base_template, title="Password Reset", content=content)
+
+    # GET – show form to enter new password
+    content = """
+    <div class="card" style="max-width:500px; margin:0 auto;">
+        <div class="card-header">🔑 Set New Password</div>
+        <form method="POST">
+            <label>New Password (minimum 6 characters)</label>
+            <input type="password" name="password" required>
+            <label>Confirm Password</label>
+            <input type="password" name="confirm" required>
+            <button type="submit" class="btn" style="margin-top:20px; width:100%;">Reset Password</button>
+        </form>
+    </div>
+    """
+    return render_user_template(base_template, title="Reset Password", content=content)
+
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    user_id = session['user_id']
+    if request.method == 'POST':
+        current = request.form.get('current', '').strip()
+        new_pass = request.form.get('new_password', '').strip()
+        confirm = request.form.get('confirm', '').strip()
+
+        if not current or not new_pass or not confirm:
+            return "All fields required.", 400
+        if new_pass != confirm:
+            return "New passwords do not match.", 400
+        if len(new_pass) < 6:
+            return "New password must be at least 6 characters.", 400
+
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT password_hash FROM users WHERE id=?", (user_id,))
+        row = c.fetchone()
+        if not row or not check_password_hash(row[0], current):
+            conn.close()
+            return "Current password is incorrect.", 403
+
+        hashed = generate_password_hash(new_pass)
+        c.execute("UPDATE users SET password_hash=? WHERE id=?", (hashed, user_id))
+        conn.commit()
+        conn.close()
+
+        content = """
+        <div class="card">
+            <div class="card-header">✅ Password Updated</div>
+            <p>Your password has been changed successfully.</p>
+            <a href="/dashboard" class="btn">Back to Dashboard</a>
+        </div>
+        """
+        return render_user_template(base_template, title="Password Changed", content=content)
+
+    # GET – show form
+    content = """
+    <div class="card" style="max-width:500px; margin:0 auto;">
+        <div class="card-header">🔐 Change Password</div>
+        <form method="POST">
+            <label>Current Password</label>
+            <input type="password" name="current" required>
+            <label>New Password (min 6 characters)</label>
+            <input type="password" name="new_password" required>
+            <label>Confirm New Password</label>
+            <input type="password" name="confirm" required>
+            <button type="submit" class="btn" style="margin-top:20px; width:100%;">Update Password</button>
+        </form>
+        <p style="margin-top:15px; text-align:center;"><a href="/dashboard">Cancel</a></p>
+    </div>
+    """
+    return render_user_template(base_template, title="Change Password", content=content)
 
 # ============================================================
 # RUN APP
