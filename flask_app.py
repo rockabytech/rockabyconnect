@@ -688,34 +688,32 @@ def generate_reset_token():
 def create_password_reset(user_id):
     token = generate_reset_token()
     expiry = datetime.now() + timedelta(hours=2)
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("DELETE FROM password_resets WHERE user_id=? AND used=0", (user_id,))
-    c.execute(
-        "INSERT INTO password_resets (user_id, token, expiry) VALUES (?, ?, ?)",
-        (user_id, token, expiry)
-    )
-    conn.commit()
-    conn.close()
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        # Delete any existing valid tokens for this user
+        c.execute("DELETE FROM password_resets WHERE user_id=? AND used=0", (user_id,))
+        c.execute(
+            "INSERT INTO password_resets (user_id, token, expiry) VALUES (?, ?, ?)",
+            (user_id, token, expiry)
+        )
+        conn.commit()
     return token
 
 def validate_reset_token(token):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute(
-        "SELECT user_id FROM password_resets WHERE token=? AND used=0 AND expiry > datetime('now')",
-        (token,)
-    )
-    row = c.fetchone()
-    conn.close()
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        c.execute(
+            "SELECT user_id FROM password_resets WHERE token=? AND used=0 AND expiry > datetime('now')",
+            (token,)
+        )
+        row = c.fetchone()
     return row[0] if row else None
 
 def mark_token_used(token):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("UPDATE password_resets SET used=1 WHERE token=?", (token,))
-    conn.commit()
-    conn.close()
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        c.execute("UPDATE password_resets SET used=1 WHERE token=?", (token,))
+        conn.commit()
 
 def get_matching_providers_for_job(job_id, title, description, employer_id):
     """Find freelancers whose skills match the job title/description."""
