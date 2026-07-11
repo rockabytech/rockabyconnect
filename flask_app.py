@@ -2848,6 +2848,19 @@ base_template = """
         <img id="lightbox-img" src="" alt="Image">
     </div>
 
+    <!-- ===== UPLOAD PROGRESS OVERLAY ===== -->
+    <div id="uploadOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:99999; align-items:center; justify-content:center; flex-direction:column; color:white; font-family: 'Inter', sans-serif;">
+        <div style="background:var(--card-bg); backdrop-filter:blur(10px); padding:40px 30px; border-radius:20px; text-align:center; max-width:400px; width:90%;">
+            <div style="font-size:3rem; margin-bottom:10px;">📤</div>
+            <h3 style="margin-bottom:10px;">Uploading...</h3>
+            <div style="width:100%; height:8px; background:rgba(255,255,255,0.2); border-radius:10px; overflow:hidden; margin:15px 0;">
+                <div id="uploadProgressBar" style="width:0%; height:100%; background:linear-gradient(90deg, var(--primary), var(--primary-dark)); border-radius:10px; transition:width 0.3s;"></div>
+            </div>
+            <p id="uploadStatus" style="font-size:0.9rem; opacity:0.8;">0%</p>
+            <button id="cancelUploadBtn" style="margin-top:15px; background:transparent; border:1px solid rgba(255,255,255,0.3); color:white; padding:8px 20px; border-radius:30px; cursor:pointer; display:none;">Cancel</button>
+        </div>
+    </div>
+
     <!-- ===== MOBILE MENU OVERLAY ===== -->
     <div class="mobile-menu-overlay" id="mobileOverlay" onclick="closeMobileMenu()"></div>
 
@@ -3212,6 +3225,83 @@ base_template = """
 
             carousel.addEventListener('mouseenter', () => clearInterval(interval));
             carousel.addEventListener('mouseleave', startAutoPlay);
+        });
+
+        // ============================================================
+        // FILE UPLOAD WITH PROGRESS BAR (all file uploads)
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            const overlay = document.getElementById('uploadOverlay');
+            const progressBar = document.getElementById('uploadProgressBar');
+            const statusText = document.getElementById('uploadStatus');
+            const cancelBtn = document.getElementById('cancelUploadBtn');
+            let xhr = null;
+
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                const fileInput = form.querySelector('input[type="file"]');
+                if (!fileInput) return;
+
+                form.addEventListener('submit', function(e) {
+                    if (!fileInput.files || fileInput.files.length === 0) {
+                        return;
+                    }
+                    e.preventDefault();
+
+                    overlay.style.display = 'flex';
+                    progressBar.style.width = '0%';
+                    statusText.textContent = 'Preparing...';
+                    cancelBtn.style.display = 'none';
+
+                    const formData = new FormData(form);
+                    xhr = new XMLHttpRequest();
+
+                    xhr.upload.addEventListener('progress', function(event) {
+                        if (event.lengthComputable) {
+                            const percent = Math.round((event.loaded / event.total) * 100);
+                            progressBar.style.width = percent + '%';
+                            statusText.textContent = percent + '% uploaded';
+                        } else {
+                            progressBar.style.width = '100%';
+                            statusText.textContent = 'Uploading...';
+                        }
+                    });
+
+                    xhr.addEventListener('load', function() {
+                        overlay.style.display = 'none';
+                        if (xhr.status >= 200 && xhr.status < 400) {
+                            if (xhr.responseURL) {
+                                window.location.href = xhr.responseURL;
+                            } else {
+                                window.location.reload();
+                            }
+                        } else {
+                            alert('Upload failed. Status: ' + xhr.status);
+                        }
+                    });
+
+                    xhr.addEventListener('error', function() {
+                        overlay.style.display = 'none';
+                        alert('Network error. Please check your connection.');
+                    });
+
+                    xhr.addEventListener('abort', function() {
+                        overlay.style.display = 'none';
+                        alert('Upload cancelled.');
+                    });
+
+                    xhr.open('POST', form.action || window.location.href);
+                    xhr.send(formData);
+                });
+            });
+
+            cancelBtn.addEventListener('click', function() {
+                if (xhr) {
+                    xhr.abort();
+                    xhr = null;
+                }
+                overlay.style.display = 'none';
+            });
         });
 
         // ============================================================
