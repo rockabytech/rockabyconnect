@@ -8049,14 +8049,12 @@ def admin_create_password_resets_table():
 @login_required
 def push_debug():
     user_id = session['user_id']
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT endpoint FROM push_subscriptions WHERE user_id=?", (user_id,))
-    subs = c.fetchall()
-    conn.close()
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        c.execute("SELECT endpoint FROM push_subscriptions WHERE user_id=?", (user_id,))
+        subs = c.fetchall()
     sub_count = len(subs)
 
-    # Get VAPID key status
     vapid_public = os.environ.get('VAPID_PUBLIC_KEY', '')
     vapid_status = '✅ Set' if vapid_public else '❌ Missing'
 
