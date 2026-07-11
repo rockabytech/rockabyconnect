@@ -8055,19 +8055,24 @@ def push_debug():
     subs = c.fetchall()
     conn.close()
     sub_count = len(subs)
+
+    # Get VAPID key status
+    vapid_public = os.environ.get('VAPID_PUBLIC_KEY', '')
+    vapid_status = '✅ Set' if vapid_public else '❌ Missing'
+
     content = f"""
     <div class="card">
         <div class="card-header">🔔 Push Notification Debug</div>
-        <p>User ID: {user_id}</p>
-        <p>Active subscriptions: <strong>{sub_count}</strong></p>
-        <p>VAPID Public Key: <code>{os.environ.get('VAPID_PUBLIC_KEY', 'NOT SET')}</code></p>
+        <p><strong>User ID:</strong> {user_id}</p>
+        <p><strong>Active subscriptions:</strong> {sub_count}</p>
+        <p><strong>VAPID Public Key:</strong> {vapid_status}</p>
         <hr>
         <a href="/test-push" class="btn">Send Test Push</a>
         <a href="/dashboard" class="btn btn-outline">Back</a>
         <hr>
         <h4>Subscriptions (endpoints):</h4>
         <ul>
-        {''.join([f'<li>{s[0][:80]}...</li>' for s in subs])}
+        {''.join([f'<li style="word-break:break-all;font-size:0.8rem;">{s[0][:80]}...</li>' for s in subs]) if subs else '<li>No subscriptions found.</li>'}
         </ul>
     </div>
     """
