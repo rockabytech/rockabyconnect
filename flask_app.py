@@ -3131,6 +3131,74 @@ base_template = """
                 return;
             }
 
+        // ============================================================
+// MANUAL SUBSCRIBE (with feedback)
+// ============================================================
+function manualSubscribe() {
+    if (!('serviceWorker' in navigator)) {
+        alert('Service Worker not supported.');
+        return;
+    }
+
+    navigator.serviceWorker.ready.then(registration => {
+        registration.pushManager.getSubscription().then(subscription => {
+            if (subscription) {
+                alert('✅ Already subscribed!');
+                return;
+            }
+
+            Notification.requestPermission().then(permission => {
+                if (permission !== 'granted') {
+                    alert('❌ Notification permission denied. Please enable in settings.');
+                    return;
+                }
+
+                const publicKeyElement = document.getElementById('vapid-public-key');
+                if (!publicKeyElement || !publicKeyElement.textContent.trim()) {
+                    alert('❌ VAPID public key missing. Contact support.');
+                    return;
+                }
+
+                // Subscribe
+                const publicKey = publicKeyElement.textContent.trim();
+                const fullKey = urlBase64ToUint8Array(publicKey);
+                const rawKeyWithoutPrefix = fullKey.slice(27);
+                const applicationServerKey = new Uint8Array(65);
+                applicationServerKey[0] = 0x04;
+                applicationServerKey.set(rawKeyWithoutPrefix, 1);
+
+                registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: applicationServerKey
+                }).then(subscription => {
+                    // Send to server
+                    return fetch('/api/subscribe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            endpoint: subscription.endpoint,
+                            keys: {
+                                p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                                auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                            }
+                        })
+                    });
+                }).then(response => response.json())
+                  .then(data => {
+                      if (data.status === 'subscribed') {
+                          alert('✅ Successfully subscribed to notifications!');
+                      } else {
+                          alert('❌ Subscription failed: ' + JSON.stringify(data));
+                      }
+                  })
+                  .catch(err => {
+                      alert('❌ Error: ' + err.message);
+                  });
+            });
+        });
+    });
+}
+
             navigator.serviceWorker.ready.then(registration => {
                 registration.pushManager.getSubscription().then(subscription => {
                     if (subscription) {
@@ -3459,6 +3527,7 @@ dashboard_template = base_template.replace("{title}", "Dashboard").replace("{act
             <a href="/my-applications" class="btn btn-small" style="background:#17a2b8;">📋 My Applications</a>
             <a href="/messages" class="btn btn-small" style="background:#28a745;">📨 Messages</a>
             <a href="/change-password" class="btn btn-small">🔑 Change Password</a>
+            <a href="#" onclick="manualSubscribe()" class="btn btn-small" style="background:#17a2b8; color:white;">🔔 Subscribe to Notifications</a>
         </div>
         <div style="margin-top:15px; padding:15px; background:linear-gradient(135deg, rgba(245,175,25,0.1), rgba(245,175,25,0.05)); border-radius:12px; border:1px solid var(--glass-border);">
             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -7975,6 +8044,34 @@ def admin_create_password_resets_table():
         )''')
         conn.commit()
     return "✅ Table 'password_resets' created successfully. <a href='/admin/dashboard'>Back</a>"
+
+@app.route('/push-debug')
+@login_required
+def push_debug():
+    user_id = session['user_id']
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT endpoint FROM push_subscriptions WHERE user_id=?", (user_id,))
+    subs = c.fetchall()
+    conn.close()
+    sub_count = len(subs)
+    content = f"""
+    <div class="card">
+        <div class="card-header">🔔 Push Notification Debug</div>
+        <p>User ID: {user_id}</p>
+        <p>Active subscriptions: <strong>{sub_count}</strong></p>
+        <p>VAPID Public Key: <code>{os.environ.get('VAPID_PUBLIC_KEY', 'NOT SET')}</code></p>
+        <hr>
+        <a href="/test-push" class="btn">Send Test Push</a>
+        <a href="/dashboard" class="btn btn-outline">Back</a>
+        <hr>
+        <h4>Subscriptions (endpoints):</h4>
+        <ul>
+        {''.join([f'<li>{s[0][:80]}...</li>' for s in subs])}
+        </ul>
+    </div>
+    """
+    return render_user_template(base_template, title="Push Debug", content=content)
 
 # ============================================================
 # RUN APP
