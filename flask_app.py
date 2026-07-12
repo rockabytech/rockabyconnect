@@ -3263,9 +3263,9 @@ base_template = """
                 let interval;
     
                 // Create dots
-                for (let i = 0; i < total; i++) {
+               for (let i = 0; i < total; i++) {
                     const dot = document.createElement('span');
-                    dot.classList.add(i === 0 ? 'active' : '');
+                    if (i === 0) dot.classList.add('active');
                     dot.addEventListener('click', () => goTo(i));
                     dotsContainer.appendChild(dot);
                 }
