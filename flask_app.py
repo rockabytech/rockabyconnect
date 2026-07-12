@@ -8070,6 +8070,7 @@ def push_debug():
         <p><strong>Active subscriptions:</strong> {sub_count}</p>
         <p><strong>VAPID Public Key:</strong> {vapid_status}</p>
         <hr>
+        <a href="#" onclick="manualSubscribe()" class="btn" style="background:#17a2b8; color:white;">📲 Subscribe Now</a>
         <a href="/test-push" class="btn">Send Test Push</a>
         <a href="/dashboard" class="btn btn-outline">Back</a>
         <hr>
@@ -8077,6 +8078,13 @@ def push_debug():
         <ul>
         {''.join([f'<li style="word-break:break-all;font-size:0.8rem;">{s[0][:80]}...</li>' for s in subs]) if subs else '<li>No subscriptions found.</li>'}
         </ul>
+        <hr>
+        <p><strong>Debug steps:</strong></p>
+        <ol>
+            <li>Open browser console (F12 or remote debug)</li>
+            <li>Click "Subscribe Now"</li>
+            <li>Look for errors in the console</li>
+        </ol>
     </div>
     """
     return render_user_template(base_template, title="Push Debug", content=content)
