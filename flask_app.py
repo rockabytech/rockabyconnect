@@ -2971,501 +2971,508 @@ base_template = """
     </footer>
     <a href="https://wa.me/256785686404?text=Hi%20RockabyConnect%20Support" target="_blank" class="whatsapp-float">💬</a>
 
-    <script>
+        <script>
         // ============================================================
         // MOBILE MENU
         // ============================================================
-        function toggleMobileMenu() {
-            const menu = document.getElementById('mobileMenu');
-            const overlay = document.getElementById('mobileOverlay');
-            menu.classList.toggle('open');
-            overlay.classList.toggle('show');
-            document.body.style.overflow = menu.classList.contains('open') ? 'hidden' : 'auto';
-        }
-        function closeMobileMenu() {
-            const menu = document.getElementById('mobileMenu');
-            const overlay = document.getElementById('mobileOverlay');
-            menu.classList.remove('open');
-            overlay.classList.remove('show');
-            document.body.style.overflow = 'auto';
-        }
-
-        // ============================================================
-        // LIGHTBOX
-        // ============================================================
-        function openLightbox(src) {
-            document.getElementById('lightbox').style.display = 'flex';
-            document.getElementById('lightbox-img').src = src;
-            document.body.style.overflow = 'hidden';
-        }
-        function closeLightbox() {
-            document.getElementById('lightbox').style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
-        document.getElementById('lightbox').addEventListener('click', function(e) {
-            if (e.target === this) closeLightbox();
-        });
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') closeLightbox();
-        });
-
-        // ============================================================
-        // THEME TOGGLE
-        // ============================================================
-        function toggleTheme() {
-            document.body.classList.toggle('dark-mode');
-            const theme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
-            localStorage.setItem('rockabyconnect-theme', theme);
-        }
-        const savedTheme = localStorage.getItem('rockabyconnect-theme');
-        if (savedTheme === 'dark') {
-            document.body.classList.add('dark-mode');
-        }
-
-        // ============================================================
-        // UNREAD BADGES
-        // ============================================================
-        function updateUnreadBadge() {
-            fetch('/api/unread-count')
-                .then(r => r.json())
-                .then(data => {
-                    const count = data.count || 0;
-                    
-                    const badge = document.getElementById('messagesBadge');
-                    if (badge) {
-                        badge.textContent = count;
-                        badge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                    
-                    const mobileBadge = document.getElementById('mobileMsgBadge');
-                    if (mobileBadge) {
-                        mobileBadge.textContent = count;
-                        mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                    
-                    const bottomBadge = document.getElementById('bottomMsgBadge');
-                    if (bottomBadge) {
-                        bottomBadge.textContent = count;
-                        bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                })
-                .catch(err => console.log('Error fetching unread count:', err));
-        }
-
-        function updateNotifBadge() {
-            fetch('/api/unread-notifications')
-                .then(r => r.json())
-                .then(data => {
-                    const count = data.count || 0;
-                    
-                    const badge = document.getElementById('notifBadge');
-                    if (badge) {
-                        badge.textContent = count;
-                        badge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                    
-                    const mobileBadge = document.getElementById('mobileNotifBadge');
-                    if (mobileBadge) {
-                        mobileBadge.textContent = count;
-                        mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                    
-                    const bottomBadge = document.getElementById('bottomNotifBadge');
-                    if (bottomBadge) {
-                        bottomBadge.textContent = count;
-                        bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                })
-                .catch(err => console.log('Error fetching unread notifications:', err));
-        }
-
-        // ============================================================
-        // PWA INSTALL PROMPT
-        // ============================================================
-        let deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            const installBtn = document.getElementById('installBtnMobile');
-            if (installBtn) installBtn.style.display = 'block';
-            const installBtnGuest = document.getElementById('installBtnMobileGuest');
-            if (installBtnGuest) installBtnGuest.style.display = 'block';
-        });
-
-        function installApp() {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((result) => {
-                    if (result.outcome === 'accepted') {
-                        document.getElementById('installBtnMobile').style.display = 'none';
-                        document.getElementById('installBtnMobileGuest').style.display = 'none';
-                    }
-                    deferredPrompt = null;
-                });
+            function toggleMobileMenu() {
+                const menu = document.getElementById('mobileMenu');
+                const overlay = document.getElementById('mobileOverlay');
+                menu.classList.toggle('open');
+                overlay.classList.toggle('show');
+                document.body.style.overflow = menu.classList.contains('open') ? 'hidden' : 'auto';
             }
-        }
-
-        window.addEventListener('appinstalled', () => {
-            document.getElementById('installBtnMobile').style.display = 'none';
-            document.getElementById('installBtnMobileGuest').style.display = 'none';
-        });
-
-        // ============================================================
-        // PUSH NOTIFICATIONS
-        // ============================================================
-        function urlBase64ToUint8Array(base64String) {
-            base64String = base64String.trim();
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
+            function closeMobileMenu() {
+                const menu = document.getElementById('mobileMenu');
+                const overlay = document.getElementById('mobileOverlay');
+                menu.classList.remove('open');
+                overlay.classList.remove('show');
+                document.body.style.overflow = 'auto';
             }
-            return outputArray;
-        }
-
-        function subscribeToPush() {
-            if (!('serviceWorker' in navigator)) {
-                console.log('Service Worker not supported');
-                return;
+    
+            // ============================================================
+            // LIGHTBOX
+            // ============================================================
+            function openLightbox(src) {
+                document.getElementById('lightbox').style.display = 'flex';
+                document.getElementById('lightbox-img').src = src;
+                document.body.style.overflow = 'hidden';
             }
-
-        // ============================================================
-        // MANUAL SUBSCRIBE (with feedback)
-        // ============================================================
-        function manualSubscribe() {
-            if (!('serviceWorker' in navigator)) {
-                alert('Service Worker not supported.');
-                return;
+            function closeLightbox() {
+                document.getElementById('lightbox').style.display = 'none';
+                document.body.style.overflow = 'auto';
             }
-        
-            navigator.serviceWorker.ready.then(registration => {
-                registration.pushManager.getSubscription().then(subscription => {
-                    if (subscription) {
-                        alert('✅ Already subscribed!');
-                        return;
-                    }
-        
-                    Notification.requestPermission().then(permission => {
-                        if (permission !== 'granted') {
-                            alert('❌ Notification permission denied. Please enable in settings.');
-                            return;
-                        }
-        
-                        const publicKeyElement = document.getElementById('vapid-public-key');
-                        if (!publicKeyElement || !publicKeyElement.textContent.trim()) {
-                            alert('❌ VAPID public key missing. Contact support.');
-                            return;
-                        }
-        
-                        const publicKey = publicKeyElement.textContent.trim();
-                        const fullKey = urlBase64ToUint8Array(publicKey);
-                        const rawKeyWithoutPrefix = fullKey.slice(27);
-                        const applicationServerKey = new Uint8Array(65);
-                        applicationServerKey[0] = 0x04;
-                        applicationServerKey.set(rawKeyWithoutPrefix, 1);
-        
-                        registration.pushManager.subscribe({
-                            userVisibleOnly: true,
-                            applicationServerKey: applicationServerKey
-                        }).then(subscription => {
-                            return fetch('/api/subscribe', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    endpoint: subscription.endpoint,
-                                    keys: {
-                                        p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
-                                        auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
-                                    }
-                                })
-                            });
-                        }).then(response => response.json())
-                          .then(data => {
-                              if (data.status === 'subscribed') {
-                                  alert('✅ Successfully subscribed to notifications!');
-                              } else {
-                                  alert('❌ Subscription failed: ' + JSON.stringify(data));
-                              }
-                          })
-                          .catch(err => {
-                              alert('❌ Error: ' + err.message);
-                          });
-                    });
-                });
+            document.getElementById('lightbox').addEventListener('click', function(e) {
+                if (e.target === this) closeLightbox();
             });
-        }
-
-            navigator.serviceWorker.ready.then(registration => {
-                registration.pushManager.getSubscription().then(subscription => {
-                    if (subscription) {
-                        console.log('Already subscribed to push');
-                        return;
-                    }
-
-                    Notification.requestPermission().then(permission => {
-                        if (permission !== 'granted') {
-                            console.log('Push permission denied');
-                            return;
-                        }
-
-                        const publicKeyElement = document.getElementById('vapid-public-key');
-                        if (!publicKeyElement) {
-                            console.error('VAPID public key element not found');
-                            return;
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeLightbox();
+            });
+    
+            // ============================================================
+            // THEME TOGGLE
+            // ============================================================
+            function toggleTheme() {
+                document.body.classList.toggle('dark-mode');
+                const theme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
+                localStorage.setItem('rockabyconnect-theme', theme);
+            }
+            const savedTheme = localStorage.getItem('rockabyconnect-theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+            }
+    
+            // ============================================================
+            // UNREAD BADGES
+            // ============================================================
+            function updateUnreadBadge() {
+                fetch('/api/unread-count')
+                    .then(r => r.json())
+                    .then(data => {
+                        const count = data.count || 0;
+                        
+                        const badge = document.getElementById('messagesBadge');
+                        if (badge) {
+                            badge.textContent = count;
+                            badge.style.display = count > 0 ? 'inline-block' : 'none';
                         }
                         
-                        const publicKey = publicKeyElement.textContent.trim();
-                        const fullKey = urlBase64ToUint8Array(publicKey);
-                        const rawKeyWithoutPrefix = fullKey.slice(27);
-                        const applicationServerKey = new Uint8Array(65);
-                        applicationServerKey[0] = 0x04;
-                        applicationServerKey.set(rawKeyWithoutPrefix, 1);
-
-                        registration.pushManager.subscribe({
-                            userVisibleOnly: true,
-                            applicationServerKey: applicationServerKey
-                        }).then(subscription => {
-                            console.log('Push subscription created:', subscription);
-                            return fetch('/api/subscribe', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    endpoint: subscription.endpoint,
-                                    keys: {
-                                        p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
-                                        auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
-                                    }
-                                })
-                            });
-                        }).then(response => response.json())
-                          .then(data => console.log('Subscription saved:', data))
-                          .catch(err => console.log('Push subscription error:', err));
-                    });
-                });
-            });
-        }
-
-        // ============================================================
-        // CAROUSEL (Homepage)
-        // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            const carousel = document.querySelector('.ad-carousel');
-            if (!carousel) return;
-            
-            const track = carousel.querySelector('.carousel-track');
-            const slides = track.querySelectorAll('.carousel-slide');
-            const prevBtn = carousel.querySelector('.carousel-prev');
-            const nextBtn = carousel.querySelector('.carousel-next');
-            const dotsContainer = carousel.querySelector('.carousel-dots');
-            let current = 0;
-            const total = slides.length;
-            let interval;
-
-            // Create dots
-            for (let i = 0; i < total; i++) {
-                const dot = document.createElement('span');
-                dot.classList.add(i === 0 ? 'active' : '');
-                dot.addEventListener('click', () => goTo(i));
-                dotsContainer.appendChild(dot);
-            }
-            const dots = dotsContainer.querySelectorAll('span');
-
-            function goTo(index) {
-                current = (index + total) % total;
-                track.style.transform = `translateX(-${current * 100}%)`;
-                dots.forEach((d, i) => d.classList.toggle('active', i === current));
-            }
-
-            function nextSlide() { goTo(current + 1); }
-            function prevSlide() { goTo(current - 1); }
-
-            nextBtn.addEventListener('click', () => { clearInterval(interval); nextSlide(); startAutoPlay(); });
-            prevBtn.addEventListener('click', () => { clearInterval(interval); prevSlide(); startAutoPlay(); });
-
-            function startAutoPlay() {
-                interval = setInterval(nextSlide, 5000);
-            }
-            startAutoPlay();
-
-            carousel.addEventListener('mouseenter', () => clearInterval(interval));
-            carousel.addEventListener('mouseleave', startAutoPlay);
-        });
-
-        // ============================================================
-        // FILE UPLOAD WITH PROGRESS BAR (all file uploads)
-        // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            const overlay = document.getElementById('uploadOverlay');
-            const progressBar = document.getElementById('uploadProgressBar');
-            const statusText = document.getElementById('uploadStatus');
-            const cancelBtn = document.getElementById('cancelUploadBtn');
-            let xhr = null;
-
-            const forms = document.querySelectorAll('form');
-            forms.forEach(form => {
-                const fileInput = form.querySelector('input[type="file"]');
-                if (!fileInput) return;
-
-                form.addEventListener('submit', function(e) {
-                    if (!fileInput.files || fileInput.files.length === 0) {
-                        return;
-                    }
-                    e.preventDefault();
-
-                    overlay.style.display = 'flex';
-                    progressBar.style.width = '0%';
-                    statusText.textContent = 'Preparing...';
-                    cancelBtn.style.display = 'none';
-
-                    const formData = new FormData(form);
-                    xhr = new XMLHttpRequest();
-
-                    xhr.upload.addEventListener('progress', function(event) {
-                        if (event.lengthComputable) {
-                            const percent = Math.round((event.loaded / event.total) * 100);
-                            progressBar.style.width = percent + '%';
-                            statusText.textContent = percent + '% uploaded';
-                        } else {
-                            progressBar.style.width = '100%';
-                            statusText.textContent = 'Uploading...';
+                        const mobileBadge = document.getElementById('mobileMsgBadge');
+                        if (mobileBadge) {
+                            mobileBadge.textContent = count;
+                            mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
                         }
-                    });
-
-                    xhr.addEventListener('load', function() {
-                        overlay.style.display = 'none';
-                        if (xhr.status >= 200 && xhr.status < 400) {
-                            if (xhr.responseURL) {
-                                window.location.href = xhr.responseURL;
-                            } else {
-                                window.location.reload();
-                            }
-                        } else {
-                            alert('Upload failed. Status: ' + xhr.status);
+                        
+                        const bottomBadge = document.getElementById('bottomMsgBadge');
+                        if (bottomBadge) {
+                            bottomBadge.textContent = count;
+                            bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
                         }
-                    });
-
-                    xhr.addEventListener('error', function() {
-                        overlay.style.display = 'none';
-                        alert('Network error. Please check your connection.');
-                    });
-
-                    xhr.addEventListener('abort', function() {
-                        overlay.style.display = 'none';
-                        alert('Upload cancelled.');
-                    });
-
-                    xhr.open('POST', form.action || window.location.href);
-                    xhr.send(formData);
-                });
+                    })
+                    .catch(err => console.log('Error fetching unread count:', err));
+            }
+    
+            function updateNotifBadge() {
+                fetch('/api/unread-notifications')
+                    .then(r => r.json())
+                    .then(data => {
+                        const count = data.count || 0;
+                        
+                        const badge = document.getElementById('notifBadge');
+                        if (badge) {
+                            badge.textContent = count;
+                            badge.style.display = count > 0 ? 'inline-block' : 'none';
+                        }
+                        
+                        const mobileBadge = document.getElementById('mobileNotifBadge');
+                        if (mobileBadge) {
+                            mobileBadge.textContent = count;
+                            mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
+                        }
+                        
+                        const bottomBadge = document.getElementById('bottomNotifBadge');
+                        if (bottomBadge) {
+                            bottomBadge.textContent = count;
+                            bottomBadge.style.display = count > 0 ? 'inline-block' : 'none';
+                        }
+                    })
+                    .catch(err => console.log('Error fetching unread notifications:', err));
+            }
+    
+            // ============================================================
+            // PWA INSTALL PROMPT
+            // ============================================================
+            let deferredPrompt;
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                const installBtn = document.getElementById('installBtnMobile');
+                if (installBtn) installBtn.style.display = 'block';
+                const installBtnGuest = document.getElementById('installBtnMobileGuest');
+                if (installBtnGuest) installBtnGuest.style.display = 'block';
             });
-
-            cancelBtn.addEventListener('click', function() {
-                if (xhr) {
-                    xhr.abort();
-                    xhr = null;
+    
+            function installApp() {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then((result) => {
+                        if (result.outcome === 'accepted') {
+                            document.getElementById('installBtnMobile').style.display = 'none';
+                            document.getElementById('installBtnMobileGuest').style.display = 'none';
+                        }
+                        deferredPrompt = null;
+                    });
                 }
-                overlay.style.display = 'none';
+            }
+    
+            window.addEventListener('appinstalled', () => {
+                document.getElementById('installBtnMobile').style.display = 'none';
+                document.getElementById('installBtnMobileGuest').style.display = 'none';
             });
-        });
-
-        // ============================================================
-        // INITIALIZE BADGES AND PUSH
-        // ============================================================
-        if (document.querySelector('#messagesBadge')) {
-            updateUnreadBadge();
-            setInterval(updateUnreadBadge, 10000);
-        }
-        if (document.querySelector('#notifBadge')) {
-            updateNotifBadge();
-            setInterval(updateNotifBadge, 10000);
-        }
-
-        {% if session.user_id %}
-            setTimeout(subscribeToPush, 3000);
-        {% endif %}
-
-        // ============================================================
-        // CLIENT-SIDE IMAGE COMPRESSION
-        // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            const forms = document.querySelectorAll('form');
-            forms.forEach(form => {
-                const fileInputs = form.querySelectorAll('input[type="file"][accept*="image/"]');
-                if (fileInputs.length === 0) return;
-
-                form.addEventListener('submit', function(e) {
-                    let hasLargeFile = false;
-                    const promises = [];
-
-                    fileInputs.forEach(input => {
-                        if (input.files.length > 0) {
-                            const file = input.files[0];
-                            if (file.size > 1 * 1024 * 1024) {
-                                hasLargeFile = true;
-                                promises.push(new Promise((resolve) => {
-                                    compressImage(file, function(compressedFile) {
-                                        const dt = new DataTransfer();
-                                        dt.items.add(compressedFile);
-                                        input.files = dt.files;
-                                        resolve();
-                                    });
-                                }));
-                            }
+    
+            // ============================================================
+            // PUSH NOTIFICATIONS
+            // ============================================================
+            function urlBase64ToUint8Array(base64String) {
+                base64String = base64String.trim();
+                const padding = '='.repeat((4 - base64String.length % 4) % 4);
+                const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+                const rawData = window.atob(base64);
+                const outputArray = new Uint8Array(rawData.length);
+                for (let i = 0; i < rawData.length; ++i) {
+                    outputArray[i] = rawData.charCodeAt(i);
+                }
+                return outputArray;
+            }
+    
+            // ---- Automatic subscribe on page load ----
+            function subscribeToPush() {
+                if (!('serviceWorker' in navigator)) {
+                    console.log('Service Worker not supported');
+                    return;
+                }
+    
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.pushManager.getSubscription().then(subscription => {
+                        if (subscription) {
+                            console.log('Already subscribed to push');
+                            return;
                         }
-                    });
-
-                    if (hasLargeFile) {
-                        e.preventDefault();
-                        Promise.all(promises).then(() => {
-                            form.submit();
+    
+                        Notification.requestPermission().then(permission => {
+                            if (permission !== 'granted') {
+                                console.log('Push permission denied');
+                                return;
+                            }
+    
+                            const publicKeyElement = document.getElementById('vapid-public-key');
+                            if (!publicKeyElement) {
+                                console.error('VAPID public key element not found');
+                                return;
+                            }
+                            
+                            const publicKey = publicKeyElement.textContent.trim();
+                            const fullKey = urlBase64ToUint8Array(publicKey);
+                            const rawKeyWithoutPrefix = fullKey.slice(27);
+                            const applicationServerKey = new Uint8Array(65);
+                            applicationServerKey[0] = 0x04;
+                            applicationServerKey.set(rawKeyWithoutPrefix, 1);
+    
+                            registration.pushManager.subscribe({
+                                userVisibleOnly: true,
+                                applicationServerKey: applicationServerKey
+                            }).then(subscription => {
+                                console.log('Push subscription created:', subscription);
+                                return fetch('/api/subscribe', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        endpoint: subscription.endpoint,
+                                        keys: {
+                                            p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                                            auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                                        }
+                                    })
+                                });
+                            }).then(response => response.json())
+                              .then(data => console.log('Subscription saved:', data))
+                              .catch(err => console.log('Push subscription error:', err));
                         });
+                    });
+                });
+            }
+    
+            // ---- MANUAL SUBSCRIBE (for the dashboard button) ----
+            function manualSubscribe() {
+                if (!('serviceWorker' in navigator)) {
+                    alert('Service Worker not supported.');
+                    return;
+                }
+    
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.pushManager.getSubscription().then(subscription => {
+                        if (subscription) {
+                            alert('✅ Already subscribed!');
+                            return;
+                        }
+    
+                        Notification.requestPermission().then(permission => {
+                            if (permission !== 'granted') {
+                                alert('❌ Notification permission denied. Please enable in settings.');
+                                return;
+                            }
+    
+                            const publicKeyElement = document.getElementById('vapid-public-key');
+                            if (!publicKeyElement || !publicKeyElement.textContent.trim()) {
+                                alert('❌ VAPID public key missing. Contact support.');
+                                return;
+                            }
+    
+                            const publicKey = publicKeyElement.textContent.trim();
+                            const fullKey = urlBase64ToUint8Array(publicKey);
+                            const rawKeyWithoutPrefix = fullKey.slice(27);
+                            const applicationServerKey = new Uint8Array(65);
+                            applicationServerKey[0] = 0x04;
+                            applicationServerKey.set(rawKeyWithoutPrefix, 1);
+    
+                            registration.pushManager.subscribe({
+                                userVisibleOnly: true,
+                                applicationServerKey: applicationServerKey
+                            }).then(subscription => {
+                                return fetch('/api/subscribe', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        endpoint: subscription.endpoint,
+                                        keys: {
+                                            p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                                            auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                                        }
+                                    })
+                                });
+                            }).then(response => response.json())
+                              .then(data => {
+                                  if (data.status === 'subscribed') {
+                                      alert('✅ Successfully subscribed to notifications!');
+                                  } else {
+                                      alert('❌ Subscription failed: ' + JSON.stringify(data));
+                                  }
+                              })
+                              .catch(err => {
+                                  alert('❌ Error: ' + err.message);
+                              });
+                        });
+                    });
+                });
+            }
+    
+            // ============================================================
+            // CAROUSEL (Homepage)
+            // ============================================================
+            document.addEventListener('DOMContentLoaded', function() {
+                const carousel = document.querySelector('.ad-carousel');
+                if (!carousel) return;
+                
+                const track = carousel.querySelector('.carousel-track');
+                const slides = track.querySelectorAll('.carousel-slide');
+                const prevBtn = carousel.querySelector('.carousel-prev');
+                const nextBtn = carousel.querySelector('.carousel-next');
+                const dotsContainer = carousel.querySelector('.carousel-dots');
+                let current = 0;
+                const total = slides.length;
+                let interval;
+    
+                // Create dots
+                for (let i = 0; i < total; i++) {
+                    const dot = document.createElement('span');
+                    dot.classList.add(i === 0 ? 'active' : '');
+                    dot.addEventListener('click', () => goTo(i));
+                    dotsContainer.appendChild(dot);
+                }
+                const dots = dotsContainer.querySelectorAll('span');
+    
+                function goTo(index) {
+                    current = (index + total) % total;
+                    track.style.transform = `translateX(-${current * 100}%)`;
+                    dots.forEach((d, i) => d.classList.toggle('active', i === current));
+                }
+    
+                function nextSlide() { goTo(current + 1); }
+                function prevSlide() { goTo(current - 1); }
+    
+                nextBtn.addEventListener('click', () => { clearInterval(interval); nextSlide(); startAutoPlay(); });
+                prevBtn.addEventListener('click', () => { clearInterval(interval); prevSlide(); startAutoPlay(); });
+    
+                function startAutoPlay() {
+                    interval = setInterval(nextSlide, 5000);
+                }
+                startAutoPlay();
+    
+                carousel.addEventListener('mouseenter', () => clearInterval(interval));
+                carousel.addEventListener('mouseleave', startAutoPlay);
+            });
+    
+            // ============================================================
+            // FILE UPLOAD WITH PROGRESS BAR (all file uploads)
+            // ============================================================
+            document.addEventListener('DOMContentLoaded', function() {
+                const overlay = document.getElementById('uploadOverlay');
+                const progressBar = document.getElementById('uploadProgressBar');
+                const statusText = document.getElementById('uploadStatus');
+                const cancelBtn = document.getElementById('cancelUploadBtn');
+                let xhr = null;
+    
+                const forms = document.querySelectorAll('form');
+                forms.forEach(form => {
+                    const fileInput = form.querySelector('input[type="file"]');
+                    if (!fileInput) return;
+    
+                    form.addEventListener('submit', function(e) {
+                        if (!fileInput.files || fileInput.files.length === 0) {
+                            return;
+                        }
+                        e.preventDefault();
+    
+                        const file = fileInput.files[0];
+                        const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
+    
+                        if (file.size > MAX_SIZE) {
+                            alert('❌ File is too large. Maximum allowed size is 100 MB. Please compress your video and try again.');
+                            return;
+                        }
+    
+                        overlay.style.display = 'flex';
+                        progressBar.style.width = '0%';
+                        statusText.textContent = 'Preparing...';
+                        cancelBtn.style.display = 'none';
+    
+                        const formData = new FormData(form);
+                        xhr = new XMLHttpRequest();
+    
+                        xhr.upload.addEventListener('progress', function(event) {
+                            if (event.lengthComputable) {
+                                const percent = Math.round((event.loaded / event.total) * 100);
+                                progressBar.style.width = percent + '%';
+                                statusText.textContent = percent + '% uploaded';
+                            } else {
+                                progressBar.style.width = '100%';
+                                statusText.textContent = 'Uploading...';
+                            }
+                        });
+    
+                        xhr.addEventListener('load', function() {
+                            overlay.style.display = 'none';
+                            if (xhr.status >= 200 && xhr.status < 400) {
+                                if (xhr.responseURL) {
+                                    window.location.href = xhr.responseURL;
+                                } else {
+                                    window.location.reload();
+                                }
+                            } else {
+                                alert('Upload failed. Status: ' + xhr.status);
+                            }
+                        });
+    
+                        xhr.addEventListener('error', function() {
+                            overlay.style.display = 'none';
+                            alert('Network error. Please check your connection.');
+                        });
+    
+                        xhr.addEventListener('abort', function() {
+                            overlay.style.display = 'none';
+                            alert('Upload cancelled.');
+                        });
+    
+                        xhr.open('POST', form.action || window.location.href);
+                        xhr.send(formData);
+                    });
+                });
+    
+                cancelBtn.addEventListener('click', function() {
+                    if (xhr) {
+                        xhr.abort();
+                        xhr = null;
                     }
+                    overlay.style.display = 'none';
                 });
             });
-        });
-
-        function compressImage(file, callback) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 1200;
-                    const MAX_HEIGHT = 1200;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_WIDTH) {
-                            height = Math.round(height * MAX_WIDTH / width);
-                            width = MAX_WIDTH;
-                        }
-                    } else {
-                        if (height > MAX_HEIGHT) {
-                            width = Math.round(width * MAX_HEIGHT / height);
-                            height = MAX_HEIGHT;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    canvas.toBlob(function(blob) {
-                        const compressedFile = new File([blob], file.name, {
-                            type: 'image/jpeg',
-                            lastModified: Date.now()
+    
+            // ============================================================
+            // INITIALIZE BADGES AND PUSH
+            // ============================================================
+            if (document.querySelector('#messagesBadge')) {
+                updateUnreadBadge();
+                setInterval(updateUnreadBadge, 10000);
+            }
+            if (document.querySelector('#notifBadge')) {
+                updateNotifBadge();
+                setInterval(updateNotifBadge, 10000);
+            }
+    
+            {% if session.user_id %}
+                setTimeout(subscribeToPush, 3000);
+            {% endif %}
+    
+            // ============================================================
+            // CLIENT-SIDE IMAGE COMPRESSION
+            // ============================================================
+            document.addEventListener('DOMContentLoaded', function() {
+                const forms = document.querySelectorAll('form');
+                forms.forEach(form => {
+                    const fileInputs = form.querySelectorAll('input[type="file"][accept*="image/"]');
+                    if (fileInputs.length === 0) return;
+    
+                    form.addEventListener('submit', function(e) {
+                        let hasLargeFile = false;
+                        const promises = [];
+    
+                        fileInputs.forEach(input => {
+                            if (input.files.length > 0) {
+                                const file = input.files[0];
+                                if (file.size > 1 * 1024 * 1024) {
+                                    hasLargeFile = true;
+                                    promises.push(new Promise((resolve) => {
+                                        compressImage(file, function(compressedFile) {
+                                            const dt = new DataTransfer();
+                                            dt.items.add(compressedFile);
+                                            input.files = dt.files;
+                                            resolve();
+                                        });
+                                    }));
+                                }
+                            }
                         });
-                        callback(compressedFile);
-                    }, 'image/jpeg', 0.85);
+    
+                        if (hasLargeFile) {
+                            e.preventDefault();
+                            Promise.all(promises).then(() => {
+                                form.submit();
+                            });
+                        }
+                    });
+                });
+            });
+    
+            function compressImage(file, callback) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 1200;
+                        const MAX_HEIGHT = 1200;
+                        let width = img.width;
+                        let height = img.height;
+    
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height = Math.round(height * MAX_WIDTH / width);
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width = Math.round(width * MAX_HEIGHT / height);
+                                height = MAX_HEIGHT;
+                            }
+                        }
+    
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        canvas.toBlob(function(blob) {
+                            const compressedFile = new File([blob], file.name, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now()
+                            });
+                            callback(compressedFile);
+                        }, 'image/jpeg', 0.85);
+                    };
+                    img.src = e.target.result;
                 };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-    </script>
+                reader.readAsDataURL(file);
+            }
+        </script>
 </body>
 </html>
 """
