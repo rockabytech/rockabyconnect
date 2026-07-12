@@ -3132,72 +3132,70 @@ base_template = """
             }
 
         // ============================================================
-// MANUAL SUBSCRIBE (with feedback)
-// ============================================================
-function manualSubscribe() {
-    if (!('serviceWorker' in navigator)) {
-        alert('Service Worker not supported.');
-        return;
-    }
-
-    navigator.serviceWorker.ready.then(registration => {
-        registration.pushManager.getSubscription().then(subscription => {
-            if (subscription) {
-                alert('✅ Already subscribed!');
+        // MANUAL SUBSCRIBE (with feedback)
+        // ============================================================
+        function manualSubscribe() {
+            if (!('serviceWorker' in navigator)) {
+                alert('Service Worker not supported.');
                 return;
             }
-
-            Notification.requestPermission().then(permission => {
-                if (permission !== 'granted') {
-                    alert('❌ Notification permission denied. Please enable in settings.');
-                    return;
-                }
-
-                const publicKeyElement = document.getElementById('vapid-public-key');
-                if (!publicKeyElement || !publicKeyElement.textContent.trim()) {
-                    alert('❌ VAPID public key missing. Contact support.');
-                    return;
-                }
-
-                // Subscribe
-                const publicKey = publicKeyElement.textContent.trim();
-                const fullKey = urlBase64ToUint8Array(publicKey);
-                const rawKeyWithoutPrefix = fullKey.slice(27);
-                const applicationServerKey = new Uint8Array(65);
-                applicationServerKey[0] = 0x04;
-                applicationServerKey.set(rawKeyWithoutPrefix, 1);
-
-                registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: applicationServerKey
-                }).then(subscription => {
-                    // Send to server
-                    return fetch('/api/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            endpoint: subscription.endpoint,
-                            keys: {
-                                p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
-                                auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
-                            }
-                        })
+        
+            navigator.serviceWorker.ready.then(registration => {
+                registration.pushManager.getSubscription().then(subscription => {
+                    if (subscription) {
+                        alert('✅ Already subscribed!');
+                        return;
+                    }
+        
+                    Notification.requestPermission().then(permission => {
+                        if (permission !== 'granted') {
+                            alert('❌ Notification permission denied. Please enable in settings.');
+                            return;
+                        }
+        
+                        const publicKeyElement = document.getElementById('vapid-public-key');
+                        if (!publicKeyElement || !publicKeyElement.textContent.trim()) {
+                            alert('❌ VAPID public key missing. Contact support.');
+                            return;
+                        }
+        
+                        const publicKey = publicKeyElement.textContent.trim();
+                        const fullKey = urlBase64ToUint8Array(publicKey);
+                        const rawKeyWithoutPrefix = fullKey.slice(27);
+                        const applicationServerKey = new Uint8Array(65);
+                        applicationServerKey[0] = 0x04;
+                        applicationServerKey.set(rawKeyWithoutPrefix, 1);
+        
+                        registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: applicationServerKey
+                        }).then(subscription => {
+                            return fetch('/api/subscribe', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    endpoint: subscription.endpoint,
+                                    keys: {
+                                        p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                                        auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                                    }
+                                })
+                            });
+                        }).then(response => response.json())
+                          .then(data => {
+                              if (data.status === 'subscribed') {
+                                  alert('✅ Successfully subscribed to notifications!');
+                              } else {
+                                  alert('❌ Subscription failed: ' + JSON.stringify(data));
+                              }
+                          })
+                          .catch(err => {
+                              alert('❌ Error: ' + err.message);
+                          });
                     });
-                }).then(response => response.json())
-                  .then(data => {
-                      if (data.status === 'subscribed') {
-                          alert('✅ Successfully subscribed to notifications!');
-                      } else {
-                          alert('❌ Subscription failed: ' + JSON.stringify(data));
-                      }
-                  })
-                  .catch(err => {
-                      alert('❌ Error: ' + err.message);
-                  });
+                });
             });
-        });
-    });
-}
+        }
 
             navigator.serviceWorker.ready.then(registration => {
                 registration.pushManager.getSubscription().then(subscription => {
