@@ -58,7 +58,8 @@ self.addEventListener('push', function(event) {
         body: 'You have a new notification',
         icon: '/static/icon-192.png',
         badge: '/static/icon-192.png',
-        url: '/'
+        url: '/',
+        badgeCount: 0
     };
 
     if (event.data) {
@@ -70,8 +71,8 @@ self.addEventListener('push', function(event) {
             data.icon = parsed.icon || data.icon;
             data.badge = parsed.badge || data.badge;
             data.url = parsed.url || data.url;
+            data.badgeCount = parsed.badgeCount || 0;
         } catch (e) {
-            // If payload is not JSON, use the raw text as body
             const raw = event.data.text();
             console.log('[SW] Raw text payload:', raw);
             data.body = raw || data.body;
@@ -87,24 +88,35 @@ self.addEventListener('push', function(event) {
         vibrate: [200, 100, 200, 100, 200],
         requireInteraction: true,
         data: {
-            url: data.url
+            url: data.url,
+            badgeCount: data.badgeCount
         }
     };
 
     event.waitUntil(
         self.registration.showNotification(data.title, options)
-            .then(() => console.log('[SW] ✅ Notification shown'))
+            .then(() => {
+                // Set app badge if supported (PWA installed on Android)
+                if ('setAppBadge' in navigator && data.badgeCount > 0) {
+                    navigator.setAppBadge(data.badgeCount);
+                }
+                console.log('[SW] ✅ Notification shown. Badge count:', data.badgeCount);
+            })
             .catch(err => console.log('[SW] ❌ Notification error:', err))
     );
 });
 
 // ==============================================================
-// 👆 NOTIFICATION CLICK HANDLER – opens the app
+// 👆 NOTIFICATION CLICK HANDLER – opens the app and clears badge
 // ==============================================================
 self.addEventListener('notificationclick', function(event) {
     console.log('[SW] Notification clicked');
     event.notification.close();
     const url = event.notification.data?.url || '/';
+    // Clear badge when notification is clicked
+    if ('clearAppBadge' in navigator) {
+        navigator.clearAppBadge();
+    }
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then(windowClients => {
