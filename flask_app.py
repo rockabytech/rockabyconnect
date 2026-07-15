@@ -3110,7 +3110,7 @@ base_template = """
                 document.getElementById('installBtnMobileGuest').style.display = 'none';
             });
     
-            // ============================================================
+                       // ============================================================
             // PUSH NOTIFICATIONS
             // ============================================================
             function urlBase64ToUint8Array(base64String) {
@@ -3124,97 +3124,94 @@ base_template = """
                 }
                 return outputArray;
             }
-    
-            // ---- Automatic subscribe on page load ----
-            function subscribeToPush() {
-                if (!('serviceWorker' in navigator)) {
-                    console.log('Service Worker not supported');
-                    return;
-                }
-    
-                navigator.serviceWorker.ready.then(registration => {
-                    registration.pushManager.getSubscription().then(subscription => {
-                        if (subscription) {
-                            console.log('Already subscribed to push');
-                            return;
-                        }
-    
-                        Notification.requestPermission().then(permission => {
-                            if (permission !== 'granted') {
-                                console.log('Push permission denied');
-                                return;
-                            }
-    
-                            const publicKeyElement = document.getElementById('vapid-public-key');
-                            if (!publicKeyElement) {
-                                console.error('VAPID public key element not found');
-                                return;
-                            }
-                            
-                            const publicKey = publicKeyElement.textContent.trim();
-                            const fullKey = urlBase64ToUint8Array(publicKey);
-                            const rawKeyWithoutPrefix = fullKey.slice(27);
-                            const applicationServerKey = new Uint8Array(65);
-                            applicationServerKey[0] = 0x04;
-                            applicationServerKey.set(rawKeyWithoutPrefix, 1);
-    
-                            registration.pushManager.subscribe({
-                                userVisibleOnly: true,
-                                applicationServerKey: applicationServerKey
-                            }).then(subscription => {
-                                console.log('Push subscription created:', subscription);
-                                return fetch('/api/subscribe', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        endpoint: subscription.endpoint,
-                                        keys: {
-                                            p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
-                                            auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
-                                        }
-                                    })
+
+            // ---- Automatic register & subscribe on page load ----
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
+                        .then(reg => {
+                            console.log('✅ SW registered:', reg);
+                            // Now subscribe to push (if not already)
+                            reg.pushManager.getSubscription().then(sub => {
+                                if (sub) {
+                                    console.log('Already subscribed to push');
+                                    return;
+                                }
+                                Notification.requestPermission().then(permission => {
+                                    if (permission !== 'granted') {
+                                        console.log('Push permission denied');
+                                        return;
+                                    }
+                                    const publicKeyElement = document.getElementById('vapid-public-key');
+                                    if (!publicKeyElement) {
+                                        console.error('VAPID public key element not found');
+                                        return;
+                                    }
+                                    const publicKey = publicKeyElement.textContent.trim();
+                                    const fullKey = urlBase64ToUint8Array(publicKey);
+                                    const rawKeyWithoutPrefix = fullKey.slice(27);
+                                    const applicationServerKey = new Uint8Array(65);
+                                    applicationServerKey[0] = 0x04;
+                                    applicationServerKey.set(rawKeyWithoutPrefix, 1);
+                                    reg.pushManager.subscribe({
+                                        userVisibleOnly: true,
+                                        applicationServerKey: applicationServerKey
+                                    }).then(subscription => {
+                                        console.log('Push subscription created:', subscription);
+                                        return fetch('/api/subscribe', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                endpoint: subscription.endpoint,
+                                                keys: {
+                                                    p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                                                    auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                                                }
+                                            })
+                                        });
+                                    }).then(response => response.json())
+                                      .then(data => console.log('Subscription saved:', data))
+                                      .catch(err => console.log('Push subscription error:', err));
                                 });
-                            }).then(response => response.json())
-                              .then(data => console.log('Subscription saved:', data))
-                              .catch(err => console.log('Push subscription error:', err));
-                        });
-                    });
+                            });
+                        })
+                        .catch(err => console.error('❌ SW registration failed:', err));
                 });
             }
-    
+
             // ---- MANUAL SUBSCRIBE (for the dashboard button) ----
             function manualSubscribe() {
                 if (!('serviceWorker' in navigator)) {
                     alert('Service Worker not supported.');
                     return;
                 }
-    
+
                 navigator.serviceWorker.ready.then(registration => {
                     registration.pushManager.getSubscription().then(subscription => {
                         if (subscription) {
                             alert('✅ Already subscribed!');
                             return;
                         }
-    
+
                         Notification.requestPermission().then(permission => {
                             if (permission !== 'granted') {
                                 alert('❌ Notification permission denied. Please enable in settings.');
                                 return;
                             }
-    
+
                             const publicKeyElement = document.getElementById('vapid-public-key');
                             if (!publicKeyElement || !publicKeyElement.textContent.trim()) {
                                 alert('❌ VAPID public key missing. Contact support.');
                                 return;
                             }
-    
+
                             const publicKey = publicKeyElement.textContent.trim();
                             const fullKey = urlBase64ToUint8Array(publicKey);
                             const rawKeyWithoutPrefix = fullKey.slice(27);
                             const applicationServerKey = new Uint8Array(65);
                             applicationServerKey[0] = 0x04;
                             applicationServerKey.set(rawKeyWithoutPrefix, 1);
-    
+
                             registration.pushManager.subscribe({
                                 userVisibleOnly: true,
                                 applicationServerKey: applicationServerKey
@@ -3245,14 +3242,14 @@ base_template = """
                     });
                 });
             }
-    
+
             // ============================================================
             // CAROUSEL (Homepage)
             // ============================================================
             document.addEventListener('DOMContentLoaded', function() {
                 const carousel = document.querySelector('.ad-carousel');
                 if (!carousel) return;
-                
+
                 const track = carousel.querySelector('.carousel-track');
                 const slides = track.querySelectorAll('.carousel-slide');
                 const prevBtn = carousel.querySelector('.carousel-prev');
@@ -3261,37 +3258,37 @@ base_template = """
                 let current = 0;
                 const total = slides.length;
                 let interval;
-    
+
                 // Create dots
-               for (let i = 0; i < total; i++) {
+                for (let i = 0; i < total; i++) {
                     const dot = document.createElement('span');
                     if (i === 0) dot.classList.add('active');
                     dot.addEventListener('click', () => goTo(i));
                     dotsContainer.appendChild(dot);
                 }
                 const dots = dotsContainer.querySelectorAll('span');
-    
+
                 function goTo(index) {
                     current = (index + total) % total;
                     track.style.transform = `translateX(-${current * 100}%)`;
                     dots.forEach((d, i) => d.classList.toggle('active', i === current));
                 }
-    
+
                 function nextSlide() { goTo(current + 1); }
                 function prevSlide() { goTo(current - 1); }
-    
+
                 nextBtn.addEventListener('click', () => { clearInterval(interval); nextSlide(); startAutoPlay(); });
                 prevBtn.addEventListener('click', () => { clearInterval(interval); prevSlide(); startAutoPlay(); });
-    
+
                 function startAutoPlay() {
                     interval = setInterval(nextSlide, 5000);
                 }
                 startAutoPlay();
-    
+
                 carousel.addEventListener('mouseenter', () => clearInterval(interval));
                 carousel.addEventListener('mouseleave', startAutoPlay);
             });
-    
+
             // ============================================================
             // FILE UPLOAD WITH PROGRESS BAR (all file uploads)
             // ============================================================
@@ -3301,34 +3298,34 @@ base_template = """
                 const statusText = document.getElementById('uploadStatus');
                 const cancelBtn = document.getElementById('cancelUploadBtn');
                 let xhr = null;
-    
+
                 const forms = document.querySelectorAll('form');
                 forms.forEach(form => {
                     const fileInput = form.querySelector('input[type="file"]');
                     if (!fileInput) return;
-    
+
                     form.addEventListener('submit', function(e) {
                         if (!fileInput.files || fileInput.files.length === 0) {
                             return;
                         }
                         e.preventDefault();
-    
+
                         const file = fileInput.files[0];
                         const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
-    
+
                         if (file.size > MAX_SIZE) {
                             alert('❌ File is too large. Maximum allowed size is 100 MB. Please compress your video and try again.');
                             return;
                         }
-    
+
                         overlay.style.display = 'flex';
                         progressBar.style.width = '0%';
                         statusText.textContent = 'Preparing...';
                         cancelBtn.style.display = 'none';
-    
+
                         const formData = new FormData(form);
                         xhr = new XMLHttpRequest();
-    
+
                         xhr.upload.addEventListener('progress', function(event) {
                             if (event.lengthComputable) {
                                 const percent = Math.round((event.loaded / event.total) * 100);
@@ -3339,7 +3336,7 @@ base_template = """
                                 statusText.textContent = 'Uploading...';
                             }
                         });
-    
+
                         xhr.addEventListener('load', function() {
                             overlay.style.display = 'none';
                             if (xhr.status >= 200 && xhr.status < 400) {
@@ -3352,22 +3349,22 @@ base_template = """
                                 alert('Upload failed. Status: ' + xhr.status);
                             }
                         });
-    
+
                         xhr.addEventListener('error', function() {
                             overlay.style.display = 'none';
                             alert('Network error. Please check your connection.');
                         });
-    
+
                         xhr.addEventListener('abort', function() {
                             overlay.style.display = 'none';
                             alert('Upload cancelled.');
                         });
-    
+
                         xhr.open('POST', form.action || window.location.href);
                         xhr.send(formData);
                     });
                 });
-    
+
                 cancelBtn.addEventListener('click', function() {
                     if (xhr) {
                         xhr.abort();
@@ -3376,7 +3373,7 @@ base_template = """
                     overlay.style.display = 'none';
                 });
             });
-    
+
             // ============================================================
             // INITIALIZE BADGES AND PUSH
             // ============================================================
@@ -3388,10 +3385,7 @@ base_template = """
                 updateNotifBadge();
                 setInterval(updateNotifBadge, 10000);
             }
-    
-            {% if session.user_id %}
-                setTimeout(subscribeToPush, 3000);
-            {% endif %}
+            // (No setTimeout needed – auto-register & subscribe happens on page load)
     
             // ============================================================
             // CLIENT-SIDE IMAGE COMPRESSION
