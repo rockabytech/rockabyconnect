@@ -991,6 +991,10 @@ def set_user_theme(user_id, theme):
             conn.close()
 
 def render_user_template(template, title="", active_page="", **kwargs):
+    # ---- Get VAPID public key ----
+    vapid_public_key = os.environ.get('VAPID_PUBLIC_KEY', '')
+
+    # ---- Theme handling ----
     theme_class = ''
     if 'user_id' in session:
         if 'user_theme' in session:
@@ -1000,38 +1004,40 @@ def render_user_template(template, title="", active_page="", **kwargs):
             session['user_theme'] = theme
         if theme and theme != 'default':
             theme_class = f"theme-{theme}"
-    
+
     if theme_class:
         template = template.replace('<body>', f'<body class="{theme_class}">')
         template = template.replace('<body class="">', f'<body class="{theme_class}">')
     else:
         template = template.replace('<body class="theme-neon">', '<body>')
         template = template.replace('<body class="{theme_class}">', '<body>')
-    
-    # ⭐ CRITICAL: Replace {title} and {active_page} FIRST
+
+    # ---- Replace title and active_page ----
     if '{title}' in template:
         template = template.replace('{title}', title)
     if '{active_page}' in template:
         template = template.replace('{active_page}', active_page)
-    
-    # ---- Replace VAPID public key placeholder ----
+
+     # ---- Replace VAPID public key placeholder ----
     vapid_public_key = os.environ.get('VAPID_PUBLIC_KEY', '')
     template = template.replace('{{ VAPID_PUBLIC_KEY }}', vapid_public_key)
-    
+    template = template.replace('{VAPID_PUBLIC_KEY}', vapid_public_key)
+
     # ---- Replace all kwargs placeholders (including {content}) ----
     for key, value in kwargs.items():
         template = template.replace(f'{{{key}}}', str(value))
-    
-    # ---- Debug: Print to verify content replacement ----
+
+    # ---- Debug ----
     print(f"[DEBUG] Content in kwargs: {kwargs.get('content', 'NOT FOUND')[:100]}...")
-    
-    # ⭐ Return rendered template with session and request
+
+    # ---- Render ----
     return render_template_string(
         template,
         session=session,
         request=request,
         **kwargs
     )
+
 # ============================================================
 # REFERRAL HELPERS
 # ============================================================
