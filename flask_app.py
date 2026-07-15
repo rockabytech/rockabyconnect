@@ -7693,35 +7693,26 @@ def delete_job(job_id):
 @app.route('/api/subscribe', methods=['POST'])
 @login_required
 def subscribe_push():
-    """Subscribe a user to push notifications."""
     data = request.get_json()
     if not data or 'endpoint' not in data or 'keys' not in data:
         return {'error': 'Invalid subscription data'}, 400
-    
+
     user_id = session['user_id']
     endpoint = data['endpoint']
     p256dh = data['keys']['p256dh']
     auth = data['keys']['auth']
-    
+
     with get_db_connection() as conn:
         c = conn.cursor()
-        # Check if subscription already exists
-        c.execute("SELECT id FROM push_subscriptions WHERE user_id=? AND endpoint=?", (user_id, endpoint))
-        if c.fetchone():
-            # Update existing
-            c.execute("""
-                UPDATE push_subscriptions 
-                SET p256dh=?, auth=?, created_at=CURRENT_TIMESTAMP
-                WHERE user_id=? AND endpoint=?
-            """, (p256dh, auth, user_id, endpoint))
-        else:
-            # Insert new
-            c.execute("""
-                INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
-                VALUES (?, ?, ?, ?)
-            """, (user_id, endpoint, p256dh, auth))
+        # Delete existing subscription with same endpoint to prevent duplicates
+        c.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+        # Insert new subscription
+        c.execute("""
+            INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+            VALUES (?, ?, ?, ?)
+        """, (user_id, endpoint, p256dh, auth))
         conn.commit()
-    
+
     return {'status': 'subscribed'}, 201
 
 @app.route('/test-push')
