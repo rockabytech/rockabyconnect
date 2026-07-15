@@ -665,6 +665,17 @@ def get_db_connection():
         yield conn
     finally:
         conn.close()
+
+def get_unread_total(user_id):
+    """Return total unread notifications + messages for a user."""
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0", (user_id,))
+        notif_count = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM messages WHERE receiver_id=? AND is_read=0", (user_id,))
+        msg_count = c.fetchone()[0]
+    return notif_count + msg_count
+
 # ===== END INSERT =====
 
 import secrets
@@ -1228,21 +1239,22 @@ def send_push_notification(user_id, title, body, url='/'):
         print(f"[DEBUG] No subscriptions found for user {user_id}")
         return
 
-    # Get VAPID keys from environment
     vapid_private = os.environ.get('VAPID_PRIVATE_KEY', '')
     vapid_public = os.environ.get('VAPID_PUBLIC_KEY', '')
     if not vapid_private or not vapid_public:
         print("[DEBUG] VAPID keys missing")
         return
 
-    print(f"[DEBUG] Sending push to {len(subscriptions)} subscriptions")
+    # Get badge count (total unread)
+    badge_count = get_unread_total(user_id)
 
     payload = {
         'title': title,
         'body': body,
         'url': url,
         'icon': '/static/icon-192.png',
-        'badge': '/static/icon-192.png'
+        'badge': '/static/icon-192.png',
+        'badgeCount': badge_count   # <-- NEW
     }
 
     for endpoint, p256dh, auth in subscriptions:
@@ -1250,16 +1262,11 @@ def send_push_notification(user_id, title, body, url='/'):
             webpush(
                 subscription_info={
                     "endpoint": endpoint,
-                    "keys": {
-                        "p256dh": p256dh,
-                        "auth": auth
-                    }
+                    "keys": {"p256dh": p256dh, "auth": auth}
                 },
                 data=json.dumps(payload),
                 vapid_private_key=vapid_private,
-                vapid_claims={
-                    "sub": "mailto:support@rockabytech.com"
-                }
+                vapid_claims={"sub": "mailto:support@rockabytech.com"}
             )
             print(f"[DEBUG] Push sent to {endpoint[:50]}...")
         except WebPushException as e:
