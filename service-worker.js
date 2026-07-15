@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3'; // increment when you update this file
+const CACHE_VERSION = 'v5'; // increment every time you change this file
 const CACHE_NAME = 'rockabyconnect-' + CACHE_VERSION;
 const urlsToCache = [
     '/',
@@ -51,7 +51,7 @@ self.addEventListener('fetch', event => {
 // 🔔 PUSH NOTIFICATION HANDLER – reads payload from server
 // ==============================================================
 self.addEventListener('push', function(event) {
-    console.log('[SW] Push event received');
+    console.log('[SW] 🚀 Push event received');
 
     let data = {
         title: 'RockabyConnect',
@@ -64,6 +64,7 @@ self.addEventListener('push', function(event) {
     if (event.data) {
         try {
             const parsed = event.data.json();
+            console.log('[SW] Parsed JSON payload:', parsed);
             data.title = parsed.title || data.title;
             data.body = parsed.body || data.body;
             data.icon = parsed.icon || data.icon;
@@ -71,8 +72,12 @@ self.addEventListener('push', function(event) {
             data.url = parsed.url || data.url;
         } catch (e) {
             // If payload is not JSON, use the raw text as body
-            data.body = event.data.text() || data.body;
+            const raw = event.data.text();
+            console.log('[SW] Raw text payload:', raw);
+            data.body = raw || data.body;
         }
+    } else {
+        console.log('[SW] No payload data');
     }
 
     const options = {
@@ -88,8 +93,8 @@ self.addEventListener('push', function(event) {
 
     event.waitUntil(
         self.registration.showNotification(data.title, options)
-            .then(() => console.log('[SW] Notification shown'))
-            .catch(err => console.log('[SW] Notification error:', err))
+            .then(() => console.log('[SW] ✅ Notification shown'))
+            .catch(err => console.log('[SW] ❌ Notification error:', err))
     );
 });
 
