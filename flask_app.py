@@ -8090,6 +8090,16 @@ def push_debug():
     """
     return render_user_template(base_template, title="Push Debug", content=content)
 
+@app.route('/admin/clear-push-subscriptions')
+def admin_clear_push_subscriptions():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        c.execute("DELETE FROM push_subscriptions")
+        conn.commit()
+    return "✅ All push subscriptions cleared. Users will re-subscribe automatically on next visit. <a href='/admin/dashboard'>Back</a>"
+
 # ============================================================
 # RUN APP
 # ============================================================
