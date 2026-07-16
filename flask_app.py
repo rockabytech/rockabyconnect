@@ -4438,7 +4438,8 @@ def home():
         </a>
     """
 
-            content = f"""
+    # ---- CONTENT WITH NEW ORDER ----
+    content = f"""
     <!-- HERO -->
     <div class="hero-full">
         <h1>Get Work Done – <span>or Get Paid</span></h1>
