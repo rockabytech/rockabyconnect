@@ -8196,6 +8196,34 @@ def debug_vapid():
     """
     return render_user_template(base_template, title="VAPID Debug", content=content)
 
+@app.route('/debug/featured')
+@login_required
+def debug_featured():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    today = date.today().isoformat()
+    featured_providers = c.execute("SELECT user_id, featured, featured_expiry FROM providers WHERE featured=1").fetchall()
+    featured_vendors = c.execute("SELECT user_id, featured, featured_expiry FROM vendors WHERE featured=1").fetchall()
+    featured_jobs = c.execute("SELECT employer_id, featured, featured_expiry FROM jobs WHERE featured=1").fetchall()
+    conn.close()
+    html = "<div class='card'><h2>🔍 Featured Items Debug</h2>"
+    html += "<h3>Providers</h3><ul>"
+    for row in featured_providers:
+        active = row[1] and (row[2] is None or row[2] >= today)
+        html += f"<li>User {row[0]}: featured={row[1]}, expiry={row[2]}, active={active}</li>"
+    html += "</ul><h3>Vendors</h3><ul>"
+    for row in featured_vendors:
+        active = row[1] and (row[2] is None or row[2] >= today)
+        html += f"<li>User {row[0]}: featured={row[1]}, expiry={row[2]}, active={active}</li>"
+    html += "</ul><h3>Jobs</h3><ul>"
+    for row in featured_jobs:
+        active = row[1] and (row[2] is None or row[2] >= today)
+        html += f"<li>Employer {row[0]}: featured={row[1]}, expiry={row[2]}, active={active}</li>"
+    html += "</ul></div>"
+    return render_user_template(base_template, title="Debug Featured", content=html)
+
 
 # ============================================================
 # RUN APP
