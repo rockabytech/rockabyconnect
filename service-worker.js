@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v8'; // increment every time you change this file
+const CACHE_VERSION = 'v8';
 const CACHE_NAME = 'rockabyconnect-' + CACHE_VERSION;
 const urlsToCache = [
     '/',
@@ -96,48 +96,49 @@ self.addEventListener('push', function(event) {
     event.waitUntil(
         self.registration.showNotification(data.title, options)
             .then(() => {
-                // Set app badge if supported (PWA installed on Android)
+                console.log('[SW] ✅ Notification shown');
+                // Set app badge if supported and count > 0
                 if ('setAppBadge' in navigator && data.badgeCount > 0) {
-                    navigator.setAppBadge(data.badgeCount);
+                    navigator.setAppBadge(data.badgeCount)
+                        .then(() => console.log('[SW] ✅ Badge set to', data.badgeCount))
+                        .catch(err => console.log('[SW] ❌ Failed to set badge:', err));
+                } else if ('setAppBadge' in navigator && data.badgeCount === 0) {
+                    // Optionally clear badge if count is 0
+                    navigator.clearAppBadge()
+                        .then(() => console.log('[SW] ✅ Badge cleared'))
+                        .catch(err => console.log('[SW] ❌ Failed to clear badge:', err));
+                } else {
+                    console.log('[SW] ⚠️ Badge API not available');
                 }
-                console.log('[SW] ✅ Notification shown. Badge count:', data.badgeCount);
             })
             .catch(err => console.log('[SW] ❌ Notification error:', err))
     );
 });
 
 // ==============================================================
-// 👆 NOTIFICATION CLICK HANDLER – opens the app (PWA or browser)
+// 👆 NOTIFICATION CLICK HANDLER – opens the app and clears badge
 // ==============================================================
 self.addEventListener('notificationclick', function(event) {
     console.log('[SW] Notification clicked');
     event.notification.close();
     const url = event.notification.data?.url || '/';
-
+    // Clear badge when notification is clicked
+    if ('clearAppBadge' in navigator) {
+        navigator.clearAppBadge()
+            .then(() => console.log('[SW] ✅ Badge cleared on click'))
+            .catch(err => console.log('[SW] ❌ Failed to clear badge:', err));
+    }
     event.waitUntil(
-        // Try to find an existing client window (the PWA)
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then(windowClients => {
-                // If there’s already a window with the same URL, focus it
                 for (let client of windowClients) {
                     if (client.url === url && 'focus' in client) {
                         return client.focus();
                     }
                 }
-                // Otherwise open a new window – this will open in the PWA if installed
-                return clients.openWindow(url);
-            })
-            .then(client => {
-                if (!client) {
-                    // Fallback: if openWindow fails, try to navigate the existing client
-                    return clients.matchAll({ type: 'window', includeUncontrolled: true })
-                        .then(clients => {
-                            if (clients.length > 0) {
-                                return clients[0].navigate(url);
-                            }
-                        });
+                if (clients.openWindow) {
+                    return clients.openWindow(url);
                 }
             })
-            .catch(err => console.log('[SW] Notification click error:', err))
     );
 });
