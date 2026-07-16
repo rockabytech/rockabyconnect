@@ -4719,7 +4719,7 @@ def login():
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect('/')
+    return redirect(url_for('login'))
 
 @app.route('/edit-name')
 @login_required
@@ -6274,15 +6274,24 @@ def admin_approve_boost(req_id):
         user_id, plan, btype, item_id = req
         days = int(plan)
         expiry = date.today() + timedelta(days=days)
-        if btype == 'profile':
-            c.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
-        elif btype == 'job':
-            c.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, item_id))
-        elif btype == 'vendor':
-            c.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
+        
+        # ---- APPLY BOOST TO ALL ITEMS OF THIS USER ----
+        # 1. Provider profile (if exists)
+        c.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
+        # 2. Vendor profile (if exists)
+        c.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
+        # 3. All jobs of this user
+        c.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE employer_id=?", (expiry, user_id))
+        
+        # Mark the boost request as approved
         c.execute("UPDATE boost_requests SET status='approved' WHERE id=?", (req_id,))
         conn.commit()
-        add_notification(user_id, 'sms', 'Your boost has been approved and is now live!')
+        
+        add_notification(
+            user_id,
+            'boost_approved',
+            f'Your boost for {days} days has been approved! Your profile, vendor (if any), and all your jobs are now featured.'
+        )
     
     conn.close()
     return redirect('/admin/dashboard')
