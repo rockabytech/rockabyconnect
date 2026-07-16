@@ -7837,29 +7837,32 @@ def search_users():
 # APP STARTUP
 # ============================================================
 
-# ---- RESTORE BACKUP ON STARTUP ----
-print("[STARTUP] Attempting to restore from backup...")
-restore_from_github()
-restore_uploads_from_github()
-
-# ---- INIT DB (only if restore fails or no tables exist) ----
-def ensure_db():
+# ---- RESTORE BACKUP ON STARTUP (only if database is empty) ----
+def restore_if_empty():
+    """Restore from backup only if the database is empty (no 'users' table)."""
+    if not os.path.exists(DB_PATH):
+        print("[STARTUP] No database found – creating fresh.")
+        init_db()
+        return
+    
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-        if not c.fetchone():
-            print("[STARTUP] No users table found — initializing fresh DB")
-            conn.close()
-            init_db()
-        else:
-            print("[STARTUP] Database already has tables — skipping init")
+        has_users = c.fetchone() is not None
         conn.close()
+        
+        if has_users:
+            print("[STARTUP] Database already has users – skipping restore.")
+        else:
+            print("[STARTUP] Empty database – restoring from backup.")
+            restore_from_github()
+            restore_uploads_from_github()
     except Exception as e:
-        print(f"[STARTUP] ❌ DB check failed: {e}")
+        print(f"[STARTUP] ❌ Restore check failed: {e}")
         init_db()
 
-ensure_db()
+restore_if_empty()
 
 # ---- START BACKUP SCHEDULER ----
 print("[STARTUP] Starting backup scheduler (every 30 minutes)...")
@@ -8105,23 +8108,18 @@ def admin_clear_push_subscriptions():
 def debug_vapid():
     if not session.get('admin'):
         return redirect('/admin/login')
-    private_key = os.environ.get('VAPID_PRIVATE_KEY', '')
-    public_key = os.environ.get('VAPID_PUBLIC_KEY', '')
+    private = os.environ.get('VAPID_PRIVATE_KEY', '')
+    public = os.environ.get('VAPID_PUBLIC_KEY', '')
     content = f"""
     <div class="card">
-        <div class="card-header">🔑 VAPID Keys Debug</div>
-        <p><strong>Public Key:</strong> {public_key[:30]}... (length: {len(public_key)})</p>
-        <p><strong>Private Key:</strong> {private_key[:10]}... (length: {len(private_key)})</p>
-        <p><strong>Expected:</strong></p>
-        <ul>
-            <li>Public: <code>BAs08ixM3Y6S8Pp9rkJmvwKN998S0hP7q7JkbproVdYJ6k9Vm1PdzAc9eRWSwSgv5mgUQ7kI5ifKdzcQb1uG050</code></li>
-            <li>Private: <code>dFYz93CFtnagZU48l2FDz_6V-zriVJ5clx8L_Bd-eaE</code></li>
-        </ul>
-        <hr>
-        <a href="/admin/dashboard" class="btn btn-outline">Back</a>
+        <div class="card-header">🔑 VAPID Keys</div>
+        <p><strong>Public:</strong> {public[:30]}... (len {len(public)})</p>
+        <p><strong>Private:</strong> {private[:10]}... (len {len(private)})</p>
+        <p><strong>Expected:</strong> dFYz93CFtnagZU48l2FDz_6V-zriVJ5clx8L_Bd-eaE</p>
     </div>
     """
     return render_user_template(base_template, title="VAPID Debug", content=content)
+
 
 # ============================================================
 # RUN APP
