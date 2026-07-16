@@ -1228,7 +1228,6 @@ def get_user_name(user_id):
     return row[0] if row else 'Unknown'
 
 def send_push_notification(user_id, title, body, url='/'):
-    """Send a push notification to a user's subscribed devices."""
     try:
         from pywebpush import webpush, WebPushException
     except ImportError:
@@ -1251,7 +1250,9 @@ def send_push_notification(user_id, title, body, url='/'):
         print("[DEBUG] VAPID keys missing")
         return
 
-    # Get badge count (total unread)
+    # Debug: check private key length
+    print(f"[DEBUG] Private key length: {len(vapid_private)} (should be 43)")
+
     badge_count = get_unread_total(user_id)
 
     payload = {
@@ -1260,7 +1261,7 @@ def send_push_notification(user_id, title, body, url='/'):
         'url': url,
         'icon': '/static/icon-192.png',
         'badge': '/static/icon-192.png',
-        'badgeCount': badge_count   # <-- NEW
+        'badgeCount': badge_count
     }
 
     for endpoint, p256dh, auth in subscriptions:
@@ -1273,7 +1274,7 @@ def send_push_notification(user_id, title, body, url='/'):
                 data=json.dumps(payload),
                 vapid_private_key=vapid_private,
                 vapid_claims={"sub": "mailto:support@rockabytech.com"},
-                ttl=86400   # <-- Add this
+                ttl=86400
             )
             print(f"[DEBUG] Push sent to {endpoint[:50]}...")
         except WebPushException as e:
@@ -3194,68 +3195,74 @@ base_template = """
             }
 
             // ---- MANUAL SUBSCRIBE (for the dashboard button) ----
-            function manualSubscribe() {
-                if (!('serviceWorker' in navigator)) {
-                    alert('Service Worker not supported.');
-                    return;
-                }
+            // This must be at the top level of the script (not inside another function)
+window.manualSubscribe = function() {
+    console.log('📲 manualSubscribe called');
+    if (!('serviceWorker' in navigator)) {
+        alert('Service Worker not supported.');
+        return;
+    }
 
-                navigator.serviceWorker.ready.then(registration => {
-                    registration.pushManager.getSubscription().then(subscription => {
-                        if (subscription) {
-                            alert('✅ Already subscribed!');
-                            return;
-                        }
-
-                        Notification.requestPermission().then(permission => {
-                            if (permission !== 'granted') {
-                                alert('❌ Notification permission denied. Please enable in settings.');
-                                return;
-                            }
-
-                            const publicKeyElement = document.getElementById('vapid-public-key');
-                            if (!publicKeyElement || !publicKeyElement.textContent.trim()) {
-                                alert('❌ VAPID public key missing. Contact support.');
-                                return;
-                            }
-
-                            const publicKey = publicKeyElement.textContent.trim();
-                            const fullKey = urlBase64ToUint8Array(publicKey);
-                            const rawKeyWithoutPrefix = fullKey.slice(27);
-                            const applicationServerKey = new Uint8Array(65);
-                            applicationServerKey[0] = 0x04;
-                            applicationServerKey.set(rawKeyWithoutPrefix, 1);
-
-                            registration.pushManager.subscribe({
-                                userVisibleOnly: true,
-                                applicationServerKey: applicationServerKey
-                            }).then(subscription => {
-                                return fetch('/api/subscribe', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        endpoint: subscription.endpoint,
-                                        keys: {
-                                            p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
-                                            auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
-                                        }
-                                    })
-                                });
-                            }).then(response => response.json())
-                              .then(data => {
-                                  if (data.status === 'subscribed') {
-                                      alert('✅ Successfully subscribed to notifications!');
-                                  } else {
-                                      alert('❌ Subscription failed: ' + JSON.stringify(data));
-                                  }
-                              })
-                              .catch(err => {
-                                  alert('❌ Error: ' + err.message);
-                              });
-                        });
+    navigator.serviceWorker.ready
+        .then(reg => {
+            // First, unsubscribe any existing subscription
+            return reg.pushManager.getSubscription()
+                .then(sub => {
+                    if (sub) {
+                        console.log('Unsubscribing old subscription...');
+                        return sub.unsubscribe();
+                    }
+                })
+                .then(() => {
+                    console.log('Now subscribing with new key...');
+                    const key = document.getElementById('vapid-public-key').textContent.trim();
+                    if (!key) {
+                        alert('VAPID public key missing.');
+                        return Promise.reject('No key');
+                    }
+                    const fullKey = urlBase64ToUint8Array(key);
+                    const appKey = new Uint8Array(65);
+                    appKey[0] = 0x04;
+                    appKey.set(fullKey.slice(27), 1);
+                    return reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: appKey
                     });
                 });
+        })
+        .then(sub => {
+            if (!sub) {
+                console.log('No subscription created (maybe unsubscribed?)');
+                return;
             }
+            console.log('✅ Subscribed:', sub);
+            return fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    endpoint: sub.endpoint,
+                    keys: {
+                        p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),
+                        auth: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))))
+                    }
+                })
+            });
+        })
+        .then(response => {
+            if (response) return response.json();
+        })
+        .then(data => {
+            if (data && data.status === 'subscribed') {
+                alert('✅ Successfully subscribed to notifications!');
+            } else if (data) {
+                alert('❌ Subscription failed: ' + JSON.stringify(data));
+            }
+        })
+        .catch(err => {
+            console.error('❌ Error:', err);
+            alert('❌ Error: ' + err.message);
+        });
+};
 
             // ============================================================
             // CAROUSEL (Homepage)
