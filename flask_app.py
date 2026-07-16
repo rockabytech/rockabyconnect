@@ -3480,6 +3480,8 @@ base_template = """
                 reader.readAsDataURL(file);
             }
         </script>
+        <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+        <script>eruda.init();</script>
 </body>
 </html>
 """
