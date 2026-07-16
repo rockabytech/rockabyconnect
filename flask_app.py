@@ -4438,7 +4438,7 @@ def home():
         </a>
     """
 
-    content = f"""
+        content = f"""
     <!-- HERO -->
     <div class="hero-full">
         <h1>Get Work Done – <span>or Get Paid</span></h1>
@@ -4446,6 +4446,24 @@ def home():
         <div class="hero-buttons">
             <a href="/offer-skill" class="btn-hero-primary">Offer Your Skill</a>
             <a href="/post-job" class="btn-hero-secondary">Post a Job</a>
+        </div>
+    </div>
+
+    <!-- FEATURED CAROUSEL (first after hero) -->
+    <div class="ad-carousel">
+        <div class="carousel-track">
+            {carousel_slides}
+        </div>
+        <button class="carousel-prev">‹</button>
+        <button class="carousel-next">›</button>
+        <div class="carousel-dots"></div>
+    </div>
+
+    <!-- SPONSORED LISTINGS (second) -->
+    <div class="sponsored-section">
+        <h2>⭐ Sponsored Listings</h2>
+        <div class="sponsored-grid">
+            {sponsored_html}
         </div>
     </div>
 
@@ -4492,24 +4510,6 @@ def home():
                 <h3>3. Work & Grow</h3>
                 <p>Get paid for your skills or find the right talent for your business.</p>
             </div>
-        </div>
-    </div>
-
-    <!-- FEATURED CAROUSEL -->
-    <div class="ad-carousel">
-        <div class="carousel-track">
-            {carousel_slides}
-        </div>
-        <button class="carousel-prev">‹</button>
-        <button class="carousel-next">›</button>
-        <div class="carousel-dots"></div>
-    </div>
-
-    <!-- SPONSORED LISTINGS -->
-    <div class="sponsored-section">
-        <h2>⭐ Sponsored Listings</h2>
-        <div class="sponsored-grid">
-            {sponsored_html}
         </div>
     </div>
 
