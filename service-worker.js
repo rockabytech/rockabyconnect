@@ -107,27 +107,37 @@ self.addEventListener('push', function(event) {
 });
 
 // ==============================================================
-// 👆 NOTIFICATION CLICK HANDLER – opens the app and clears badge
+// 👆 NOTIFICATION CLICK HANDLER – opens the app (PWA or browser)
 // ==============================================================
 self.addEventListener('notificationclick', function(event) {
     console.log('[SW] Notification clicked');
     event.notification.close();
     const url = event.notification.data?.url || '/';
-    // Clear badge when notification is clicked
-    if ('clearAppBadge' in navigator) {
-        navigator.clearAppBadge();
-    }
+
     event.waitUntil(
+        // Try to find an existing client window (the PWA)
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then(windowClients => {
+                // If there’s already a window with the same URL, focus it
                 for (let client of windowClients) {
                     if (client.url === url && 'focus' in client) {
                         return client.focus();
                     }
                 }
-                if (clients.openWindow) {
-                    return clients.openWindow(url);
+                // Otherwise open a new window – this will open in the PWA if installed
+                return clients.openWindow(url);
+            })
+            .then(client => {
+                if (!client) {
+                    // Fallback: if openWindow fails, try to navigate the existing client
+                    return clients.matchAll({ type: 'window', includeUncontrolled: true })
+                        .then(clients => {
+                            if (clients.length > 0) {
+                                return clients[0].navigate(url);
+                            }
+                        });
                 }
             })
+            .catch(err => console.log('[SW] Notification click error:', err))
     );
 });
