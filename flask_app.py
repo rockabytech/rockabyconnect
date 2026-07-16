@@ -3407,6 +3407,59 @@ window.manualSubscribe = function() {
                 setInterval(updateNotifBadge, 10000);
             }
             // (No setTimeout needed – auto-register & subscribe happens on page load)
+
+                        // ---- Auto-register & auto-subscribe on page load ----
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
+                        .then(reg => {
+                            console.log('✅ SW registered:', reg);
+                            return reg.pushManager.getSubscription().then(sub => {
+                                if (sub) {
+                                    console.log('Already subscribed to push');
+                                    return;
+                                }
+                                Notification.requestPermission().then(permission => {
+                                    if (permission !== 'granted') {
+                                        console.log('Push permission denied');
+                                        return;
+                                    }
+                                    const publicKeyElement = document.getElementById('vapid-public-key');
+                                    if (!publicKeyElement) {
+                                        console.error('VAPID public key element not found');
+                                        return;
+                                    }
+                                    const publicKey = publicKeyElement.textContent.trim();
+                                    const fullKey = urlBase64ToUint8Array(publicKey);
+                                    const rawKeyWithoutPrefix = fullKey.slice(27);
+                                    const applicationServerKey = new Uint8Array(65);
+                                    applicationServerKey[0] = 0x04;
+                                    applicationServerKey.set(rawKeyWithoutPrefix, 1);
+                                    reg.pushManager.subscribe({
+                                        userVisibleOnly: true,
+                                        applicationServerKey: applicationServerKey
+                                    }).then(subscription => {
+                                        console.log('Push subscription created:', subscription);
+                                        return fetch('/api/subscribe', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                endpoint: subscription.endpoint,
+                                                keys: {
+                                                    p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                                                    auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                                                }
+                                            })
+                                        });
+                                    }).then(response => response.json())
+                                      .then(data => console.log('Subscription saved:', data))
+                                      .catch(err => console.log('Push subscription error:', err));
+                                });
+                            });
+                        })
+                        .catch(err => console.error('❌ SW registration failed:', err));
+                });
+            }
     
             // ============================================================
             // CLIENT-SIDE IMAGE COMPRESSION
