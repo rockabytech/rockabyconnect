@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v5'; // increment every time you change this file
+const CACHE_VERSION = 'v8'; // increment every time you change this file
 const CACHE_NAME = 'rockabyconnect-' + CACHE_VERSION;
 const urlsToCache = [
     '/',
