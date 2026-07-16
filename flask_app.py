@@ -1272,7 +1272,8 @@ def send_push_notification(user_id, title, body, url='/'):
                 },
                 data=json.dumps(payload),
                 vapid_private_key=vapid_private,
-                vapid_claims={"sub": "mailto:support@rockabytech.com"}
+                vapid_claims={"sub": "mailto:support@rockabytech.com"},
+                ttl=86400   # <-- Add this
             )
             print(f"[DEBUG] Push sent to {endpoint[:50]}...")
         except WebPushException as e:
@@ -8098,6 +8099,29 @@ def admin_clear_push_subscriptions():
         c.execute("DELETE FROM push_subscriptions")
         conn.commit()
     return "✅ All push subscriptions cleared. Users will re-subscribe automatically on next visit. <a href='/admin/dashboard'>Back</a>"
+
+@app.route('/debug/vapid')
+@login_required
+def debug_vapid():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    private_key = os.environ.get('VAPID_PRIVATE_KEY', '')
+    public_key = os.environ.get('VAPID_PUBLIC_KEY', '')
+    content = f"""
+    <div class="card">
+        <div class="card-header">🔑 VAPID Keys Debug</div>
+        <p><strong>Public Key:</strong> {public_key[:30]}... (length: {len(public_key)})</p>
+        <p><strong>Private Key:</strong> {private_key[:10]}... (length: {len(private_key)})</p>
+        <p><strong>Expected:</strong></p>
+        <ul>
+            <li>Public: <code>BAs08ixM3Y6S8Pp9rkJmvwKN998S0hP7q7JkbproVdYJ6k9Vm1PdzAc9eRWSwSgv5mgUQ7kI5ifKdzcQb1uG050</code></li>
+            <li>Private: <code>dFYz93CFtnagZU48l2FDz_6V-zriVJ5clx8L_Bd-eaE</code></li>
+        </ul>
+        <hr>
+        <a href="/admin/dashboard" class="btn btn-outline">Back</a>
+    </div>
+    """
+    return render_user_template(base_template, title="VAPID Debug", content=content)
 
 # ============================================================
 # RUN APP
