@@ -4662,8 +4662,7 @@ def signup():
                 c.execute("INSERT INTO users (phone, name, password_hash) VALUES (?, ?, ?)", (phone, name, hashed))
                 user_id = c.lastrowid
                 
-                # ---- AUTO-ASSIGN FREE SUBSCRIPTION ----
-                # Get the Free Trial package
+                # Assign free trial subscription (existing code)
                 c.execute("SELECT id, duration_days FROM subscription_packages WHERE name='Free Trial' AND is_active=1 LIMIT 1")
                 free_pkg = c.fetchone()
                 if free_pkg:
@@ -4677,16 +4676,22 @@ def signup():
                     print(f"[DEBUG] Free trial assigned to user {user_id} for {duration_days} days")
                 else:
                     print("[WARNING] No Free Trial package found. Please create one in admin panel.")
-                # --------------------------------------------
                 
                 conn.commit()
             
-            # ---- PROCESS REFERRAL ----
+            # Process referral (if any)
             process_referral(user_id, phone)
             
+            # Add welcome notification
             add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready with a 7-day free trial.', link='/dashboard')
             
-            return redirect(url_for('login'))
+            # ---- Auto-login ----
+            session['user_id'] = user_id
+            session['user_name'] = name
+            session['user_phone'] = phone
+            
+            return redirect(url_for('list_jobs'))   # <-- redirect to jobs page
+            
         except sqlite3.IntegrityError:
             return "Phone number already registered. <a href='/login'>Login</a>"
         except sqlite3.OperationalError as e:
@@ -4706,7 +4711,7 @@ def login():
             session['user_id'] = user[0]
             session['user_name'] = user[1]
             session['user_phone'] = phone
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('list_jobs'))
         else:
             return "Invalid credentials. <a href='/login'>Try again</a>"
     return render_user_template(login_page, title="Login", active_page="login")
