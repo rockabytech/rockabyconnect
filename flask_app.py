@@ -2852,7 +2852,7 @@ base_template = """
 </head>
 <body>
     <!-- VAPID Public Key (hidden) -->
-    <span id="vapid-public-key" style="display:none;">{{ VAPID_PUBLIC_KEY }}</span>
+    <span id="vapid-public-key" style="display:none;">{VAPID_PUBLIC_KEY}</span>
 
     <!-- ===== LIGHTBOX ===== -->
     <div id="lightbox">
