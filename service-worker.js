@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';  // increment this every time you deploy
 const CACHE_NAME = 'rockabyconnect-' + CACHE_VERSION;
 const urlsToCache = [
     '/',
@@ -20,21 +20,27 @@ self.addEventListener('install', event => {
             return cache.addAll(urlsToCache);
         })
     );
+    // Force the new service worker to activate immediately
+    self.skipWaiting();
 });
 
-// ----- ACTIVATE (delete old caches) -----
+// ----- ACTIVATE (delete old caches AND claim clients) -----
 self.addEventListener('activate', event => {
     event.waitUntil(
-        caches.keys().then(cacheNames => {
-            return Promise.all(
-                cacheNames.map(cacheName => {
-                    if (cacheName !== CACHE_NAME) {
-                        console.log('[SW] Deleting old cache:', cacheName);
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        })
+        Promise.all([
+            caches.keys().then(cacheNames => {
+                return Promise.all(
+                    cacheNames.map(cacheName => {
+                        if (cacheName !== CACHE_NAME) {
+                            console.log('[SW] Deleting old cache:', cacheName);
+                            return caches.delete(cacheName);
+                        }
+                    })
+                );
+            }),
+            // Take control of all open clients (pages)
+            self.clients.claim()
+        ])
     );
 });
 
@@ -97,7 +103,6 @@ self.addEventListener('push', function(event) {
         self.registration.showNotification(data.title, options)
             .then(() => {
                 console.log('[SW] ✅ Notification shown');
-                // Set app badge if supported and count > 0
                 if ('setAppBadge' in navigator && data.badgeCount > 0) {
                     navigator.setAppBadge(data.badgeCount)
                         .then(() => console.log('[SW] ✅ Badge set to', data.badgeCount))
@@ -121,7 +126,6 @@ self.addEventListener('notificationclick', function(event) {
     console.log('[SW] Notification clicked');
     event.notification.close();
     const url = event.notification.data?.url || '/';
-    // Clear badge when notification is clicked
     if ('clearAppBadge' in navigator) {
         navigator.clearAppBadge()
             .then(() => console.log('[SW] ✅ Badge cleared on click'))
