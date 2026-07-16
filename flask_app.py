@@ -4438,7 +4438,7 @@ def home():
         </a>
     """
 
-        content = f"""
+            content = f"""
     <!-- HERO -->
     <div class="hero-full">
         <h1>Get Work Done – <span>or Get Paid</span></h1>
