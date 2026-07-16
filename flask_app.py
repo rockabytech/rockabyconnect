@@ -4439,7 +4439,7 @@ def home():
     """
 
     # ---- CONTENT WITH NEW ORDER ----
-       content = f"""
+    content = f"""
     <!-- FEATURED CAROUSEL (1) -->
     <div class="ad-carousel">
         <div class="carousel-track">
