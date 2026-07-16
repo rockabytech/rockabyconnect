@@ -6275,15 +6275,11 @@ def admin_approve_boost(req_id):
         days = int(plan)
         expiry = date.today() + timedelta(days=days)
         
-        # ---- APPLY BOOST TO ALL ITEMS OF THIS USER ----
-        # 1. Provider profile (if exists)
+        # ---- FEATURE ALL ITEMS OF THIS USER ----
         c.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
-        # 2. Vendor profile (if exists)
         c.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
-        # 3. All jobs of this user
         c.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE employer_id=?", (expiry, user_id))
         
-        # Mark the boost request as approved
         c.execute("UPDATE boost_requests SET status='approved' WHERE id=?", (req_id,))
         conn.commit()
         
