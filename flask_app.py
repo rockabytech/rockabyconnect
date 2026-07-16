@@ -7906,32 +7906,29 @@ def search_users():
 # APP STARTUP
 # ============================================================
 
-# ---- RESTORE BACKUP ON STARTUP (only if database is empty) ----
-def restore_if_empty():
-    """Restore from backup only if the database is empty (no 'users' table)."""
-    if not os.path.exists(DB_PATH):
-        print("[STARTUP] No database found – creating fresh.")
-        init_db()
-        return
-    
+# ---- RESTORE BACKUP ON STARTUP (unconditional) ----
+print("[STARTUP] Attempting to restore from backup...")
+restore_from_github()
+restore_uploads_from_github()
+
+# ---- INIT DB (only if restore fails or no tables exist) ----
+def ensure_db():
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-        has_users = c.fetchone() is not None
-        conn.close()
-        
-        if has_users:
-            print("[STARTUP] Database already has users – skipping restore.")
+        if not c.fetchone():
+            print("[STARTUP] No users table found — initializing fresh DB")
+            conn.close()
+            init_db()
         else:
-            print("[STARTUP] Empty database – restoring from backup.")
-            restore_from_github()
-            restore_uploads_from_github()
+            print("[STARTUP] Database already has tables — skipping init")
+        conn.close()
     except Exception as e:
-        print(f"[STARTUP] ❌ Restore check failed: {e}")
+        print(f"[STARTUP] ❌ DB check failed: {e}")
         init_db()
 
-restore_if_empty()
+ensure_db()
 
 # ---- START BACKUP SCHEDULER ----
 print("[STARTUP] Starting backup scheduler (every 30 minutes)...")
