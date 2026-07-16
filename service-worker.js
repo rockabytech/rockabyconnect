@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v10';  // increment this every time you deploy
+const CACHE_VERSION = 'v11';
 const CACHE_NAME = 'rockabyconnect-' + CACHE_VERSION;
 const urlsToCache = [
     '/',
@@ -20,11 +20,10 @@ self.addEventListener('install', event => {
             return cache.addAll(urlsToCache);
         })
     );
-    // Force the new service worker to activate immediately
     self.skipWaiting();
 });
 
-// ----- ACTIVATE (delete old caches AND claim clients) -----
+// ----- ACTIVATE (delete old caches and claim clients) -----
 self.addEventListener('activate', event => {
     event.waitUntil(
         Promise.all([
@@ -38,23 +37,32 @@ self.addEventListener('activate', event => {
                     })
                 );
             }),
-            // Take control of all open clients (pages)
             self.clients.claim()
         ])
     );
 });
 
-// ----- FETCH (serve from cache if available) -----
+// ----- FETCH (network first, fallback to cache) -----
 self.addEventListener('fetch', event => {
     event.respondWith(
-        caches.match(event.request).then(response => {
-            return response || fetch(event.request);
-        })
+        fetch(event.request)
+            .then(response => {
+                // Cache the fresh response for offline use
+                const clonedResponse = response.clone();
+                caches.open(CACHE_NAME).then(cache => {
+                    cache.put(event.request, clonedResponse);
+                });
+                return response;
+            })
+            .catch(() => {
+                // If offline, serve from cache
+                return caches.match(event.request);
+            })
     );
 });
 
 // ==============================================================
-// 🔔 PUSH NOTIFICATION HANDLER – reads payload from server
+// 🔔 PUSH NOTIFICATION HANDLER
 // ==============================================================
 self.addEventListener('push', function(event) {
     console.log('[SW] 🚀 Push event received');
@@ -120,7 +128,7 @@ self.addEventListener('push', function(event) {
 });
 
 // ==============================================================
-// 👆 NOTIFICATION CLICK HANDLER – opens the app and clears badge
+// 👆 NOTIFICATION CLICK HANDLER
 // ==============================================================
 self.addEventListener('notificationclick', function(event) {
     console.log('[SW] Notification clicked');
