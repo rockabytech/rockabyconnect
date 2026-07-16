@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9';
 const CACHE_NAME = 'rockabyconnect-' + CACHE_VERSION;
 const urlsToCache = [
     '/',
@@ -103,7 +103,6 @@ self.addEventListener('push', function(event) {
                         .then(() => console.log('[SW] ✅ Badge set to', data.badgeCount))
                         .catch(err => console.log('[SW] ❌ Failed to set badge:', err));
                 } else if ('setAppBadge' in navigator && data.badgeCount === 0) {
-                    // Optionally clear badge if count is 0
                     navigator.clearAppBadge()
                         .then(() => console.log('[SW] ✅ Badge cleared'))
                         .catch(err => console.log('[SW] ❌ Failed to clear badge:', err));
