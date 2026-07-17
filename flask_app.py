@@ -5998,7 +5998,7 @@ def admin_login():
         else:
             content = """
             <div class="card" style="max-width: 500px; margin: 0 auto;">
-                <div class="card-header">🔐 Admin Login</div>
+                <div class="card-header">&#128274; Admin Login</div>
                 <div class="alert alert-error">Wrong password. Please try again.</div>
                 <form method="POST">
                     <label>Password</label>
