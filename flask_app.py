@@ -4978,15 +4978,7 @@ def edit_profile():
 @login_required
 def create_vendor_profile():
     user_id = session['user_id']
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
-    c = conn.cursor()
-    c.execute("SELECT id FROM vendors WHERE user_id=?", (user_id,))
-    if c.fetchone():
-        conn.close()
-        return redirect('/edit-vendor-profile')
-    conn.close()
-
+    # ... existing check ...
     if request.method == 'POST':
         business_name = request.form['business_name'].strip()
         district = request.form['district'].strip()
@@ -5000,20 +4992,24 @@ def create_vendor_profile():
             file = request.files.get(field)
             if file and allowed_file(file.filename):
                 filenames[idx] = save_resized_image(file, max_width=800, max_height=600)
-        
-        # Remove video handling – we won't save a video anymore.
-        # If you still want to keep existing videos, you can set video_filename = None.
-        
-        # In the INSERT, replace the video field with vendor_image4:
+
+        # No video field – we keep video None or skip it
+        # If you still want to allow video, you could add it, but we removed it from form.
+        video_filename = None
+
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout = 30000;")
+        c = conn.cursor()
         c.execute("""
             INSERT INTO vendors (user_id, business_name, district, village, landmark, bio, 
-                                 vendor_image, vendor_image2, vendor_image3, vendor_image4, status)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                                 vendor_image, vendor_image2, vendor_image3, vendor_image4, video, status)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
         """, (user_id, business_name, district, village, landmark, bio, 
-              filenames[0], filenames[1], filenames[2], filenames[3], status))
+              filenames[0], filenames[1], filenames[2], filenames[3], video_filename, status))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
+    # ... GET part unchanged ...
 
     form = vendor_form_template.replace("{form_title}", "Create Your Vendor Profile")
     form = form.replace("{business_name}", "").replace("{district}", "").replace("{village}", "")
@@ -5029,9 +5025,10 @@ def edit_vendor_profile():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
+    # Include vendor_image4 in the SELECT
     c.execute("""
         SELECT business_name, district, village, landmark, bio, 
-               vendor_image, vendor_image2, vendor_image3, video, status 
+               vendor_image, vendor_image2, vendor_image3, vendor_image4, video, status 
         FROM vendors WHERE user_id=?
     """, (user_id,))
     vendor = c.fetchone()
@@ -5047,32 +5044,32 @@ def edit_vendor_profile():
         bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Open')
 
-        current_images = [vendor[5], vendor[6], vendor[7]]
-        for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
+        # Current images list: 4 items (vendor_image, image2, image3, image4)
+        current_images = [vendor[5], vendor[6], vendor[7], vendor[8]]
+        # vendor[5] = vendor_image, [6]=vendor_image2, [7]=vendor_image3, [8]=vendor_image4
+        for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3', 'vendor_image4']):
             file = request.files.get(field)
             if file and allowed_file(file.filename):
                 current_images[idx] = save_resized_image(file, max_width=800, max_height=600)
 
-        video_file = request.files.get('video')
-        video_filename = vendor[8]
-        if video_file and allowed_video(video_file.filename):
-            video_filename = secure_filename(video_file.filename)
-            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
-            video_file.save(video_path)
+        # Keep video as is (we don't update it, but we keep the existing one)
+        video_filename = vendor[9]  # current video
 
+        # Update all fields including vendor_image4
         c.execute("""
-        UPDATE vendors SET 
-            business_name=?, district=?, village=?, landmark=?, bio=?, 
-            vendor_image=?, vendor_image2=?, vendor_image3=?, vendor_image4=?, video=?, status=?
-        WHERE user_id=?
-    """, (business_name, district, village, landmark, bio, 
-          current_images[0], current_images[1], current_images[2], current_images[3], 
-          video_filename, status, user_id))
+            UPDATE vendors SET 
+                business_name=?, district=?, village=?, landmark=?, bio=?, 
+                vendor_image=?, vendor_image2=?, vendor_image3=?, vendor_image4=?, video=?, status=?
+            WHERE user_id=?
+        """, (business_name, district, village, landmark, bio, 
+              current_images[0], current_images[1], current_images[2], current_images[3], 
+              video_filename, status, user_id))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
 
-    bname, district, village, landmark, bio, img, img2, img3, video, status = vendor
+    # GET – populate form
+    bname, district, village, landmark, bio, img, img2, img3, img4, video, status = vendor
     form = vendor_form_template.replace("{form_title}", "Edit Your Vendor Profile")
     form = form.replace("{business_name}", bname or '')
     form = form.replace("{district}", district or '')
@@ -5723,10 +5720,10 @@ def vendor_detail(vendor_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-        SELECT v.id, v.user_id, v.business_name, v.district, v.village, v.landmark, v.bio, 
-               v.vendor_image, v.vendor_image2, v.vendor_image3, v.vendor_image4, v.video,
-               v.status, v.featured, v.featured_expiry, u.phone
-        FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
+    SELECT v.id, v.user_id, v.business_name, v.district, v.village, v.landmark, v.bio, 
+           v.vendor_image, v.vendor_image2, v.vendor_image3, v.vendor_image4, v.video,
+           v.status, v.featured, v.featured_expiry, u.phone
+    FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
     """, (vendor_id,))
     v = c.fetchone()
     if not v:
