@@ -362,7 +362,6 @@ def init_db():
     conn.execute("PRAGMA busy_timeout = 30000;")
     conn.execute("PRAGMA journal_mode=WAL;")
     
-    # ⭐ CREATE THE CURSOR HERE ⭐
     c = conn.cursor()
     
     # ---- USERS TABLE ----
@@ -728,12 +727,9 @@ def init_db():
     # ---- INSERT DEFAULT PACKAGES ----
     c.execute("SELECT COUNT(*) FROM subscription_packages")
     if c.fetchone()[0] == 0:
-        # FREE package (default for new users)
         c.execute("""INSERT INTO subscription_packages 
             (name, duration_days, price, points_required, is_active) 
             VALUES ('Free Trial', 7, 0, 0, 1)""")
-        
-        # Paid packages
         c.execute("""INSERT INTO subscription_packages 
             (name, duration_days, price, points_required, is_active) 
             VALUES ('1 Week', 7, 1000, 50, 1)""")
@@ -744,7 +740,6 @@ def init_db():
             (name, duration_days, price, points_required, is_active) 
             VALUES ('3 Months', 90, 7000, 300, 1)""")
 
-    # ---- COMMIT & CLOSE ----
     conn.commit()
     conn.close()
 
@@ -754,6 +749,73 @@ init_db()
 # ============================================================
 # HELPERS
 # ============================================================
+def migrate_db():
+    """Add new tables and columns for the payment system to an existing database."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 30000;")
+    c = conn.cursor()
+
+    # ---- PAYMENT SETTINGS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS payment_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mtn_number TEXT,
+        airtel_number TEXT,
+        payment_name TEXT DEFAULT 'RockabyTech',
+        active_payment_methods TEXT DEFAULT '["manual"]',
+        yo_username TEXT,
+        yo_password TEXT,
+        yo_auto_pay INTEGER DEFAULT 0,
+        iotec_wallet_id TEXT,
+        iotec_client_id TEXT,
+        iotec_api_secret TEXT,
+        pawapay_api_key TEXT,
+        pawapay_merchant_id TEXT,
+        pesapal_consumer_key TEXT,
+        pesapal_consumer_secret TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # ---- PAYMENT TRANSACTIONS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS payment_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        phone TEXT,
+        amount INTEGER,
+        status TEXT DEFAULT 'pending',
+        transaction_id TEXT,
+        payment_method TEXT,
+        raw_sms TEXT,
+        recipient TEXT,
+        payment_date TEXT,
+        description TEXT,
+        item_type TEXT,
+        item_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
+    # ---- EXTEND BOOST_REQUESTS ----
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boost_requests'")
+    if c.fetchone():
+        c.execute("PRAGMA table_info(boost_requests)")
+        existing_cols = [col[1] for col in c.fetchall()]
+        for col in ['payment_method', 'raw_sms', 'amount', 'recipient', 'payment_date']:
+            if col not in existing_cols:
+                c.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
+
+    # ---- Insert default payment settings if empty ----
+    c.execute("SELECT COUNT(*) FROM payment_settings")
+    if c.fetchone()[0] == 0:
+        c.execute("""
+            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
+            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
+        """)
+
+    conn.commit()
+    conn.close()
+    print("[MIGRATION] Database migration completed.")
+
 def parse_mtn_sms(sms):
     tid = re.search(r'ID:\s*(\d+)', sms)
     amount = re.search(r'UGX\s*([\d,]+)', sms)
@@ -8546,7 +8608,7 @@ def search_users():
 # APP STARTUP
 # ============================================================
 
-# ---- RESTORE BACKUP ON STARTUP (unconditional) ----
+# ---- RESTORE BACKUP ON STARTUP ----
 print("[STARTUP] Attempting to restore from backup...")
 restore_from_github()
 restore_uploads_from_github()
@@ -8569,6 +8631,9 @@ def ensure_db():
         init_db()
 
 ensure_db()
+
+# ---- RUN MIGRATION TO ADD PAYMENT TABLES/COLUMNS ----
+migrate_db()
 
 # ---- START BACKUP SCHEDULER ----
 print("[STARTUP] Starting backup scheduler (every 30 minutes)...")
