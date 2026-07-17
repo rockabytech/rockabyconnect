@@ -1099,6 +1099,17 @@ def whatsapp_link(phone):
         digits = '256' + digits
     return f"https://wa.me/{digits}"
 
+def clean_number(num):
+    """Normalize Ugandan phone number: remove non-digits, convert 0 to 256, ensure 256 prefix."""
+    digits = ''.join(filter(str.isdigit, num))
+    if not digits:
+        return num
+    if digits.startswith('0'):
+        digits = '256' + digits[1:]
+    elif not digits.startswith('256'):
+        digits = '256' + digits
+    return digits
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -5973,6 +5984,7 @@ def manual_sms_verify():
             sms_num = clean_number(parsed['recipient_number'])
             mtn = clean_number(settings['mtn_number']) if settings['mtn_number'] else ''
             airtel = clean_number(settings['airtel_number']) if settings['airtel_number'] else ''
+            sms_num = clean_number(parsed.get('recipient_number', '')) if parsed.get('recipient_number') else ''
             if sms_num != mtn and sms_num != airtel:
                 errors.append("Payment was not sent to the correct provider number.")
         else:
