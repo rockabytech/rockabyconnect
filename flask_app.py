@@ -541,6 +541,17 @@ def init_db():
         if 'video' not in existing:
             c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
 
+            # ---- Add extra photo columns ----
+        c.execute("PRAGMA table_info(vendors)")
+        vendor_cols = [col[1] for col in c.fetchall()]
+        if 'vendor_image4' not in vendor_cols:
+            c.execute("ALTER TABLE vendors ADD COLUMN vendor_image4 TEXT")
+        
+        c.execute("PRAGMA table_info(jobs)")
+        job_cols = [col[1] for col in c.fetchall()]
+        if 'job_image2' not in job_cols:
+            c.execute("ALTER TABLE jobs ADD COLUMN job_image2 TEXT")
+
     # ============================================================
     # ⭐ NEW: SUBSCRIPTION & POINTS TABLES ⭐
     # ============================================================
@@ -3695,9 +3706,9 @@ vendor_form_template = base_template.replace("{title}", "My Vendor Profile").rep
             <input type="file" name="vendor_image2" accept="image/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
             <label style="display:block; margin-top:12px; font-weight:600;">Additional Photo 2</label>
             <input type="file" name="vendor_image3" accept="image/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-            <label style="display:block; margin-top:12px; font-weight:600;">Upload a Video (optional)</label>
-            <input type="file" name="video" accept="video/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-            <p style="font-size:0.75rem; color:var(--text-secondary);">MP4, WebM, OGG, MOV, AVI, MKV</p>
+            <label style="display:block; margin-top:12px; font-weight:600;">Additional Photo 3</label>
+            <input type="file" name="vendor_image4" accept="image/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <p style="font-size:0.75rem; color:var(--text-secondary);">JPG, PNG, GIF (max 800x600)</p>
             <label style="display:block; margin-top:12px; font-weight:600;">Status</label>
             <select name="status" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
                 {status_options}
@@ -3786,9 +3797,9 @@ job_form_template = base_template.replace("{title}", "{job_form_title}").replace
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Job Image (optional)</label>
             <input type="file" name="job_image" accept="image/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
             
-            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Upload a Video (optional)</label>
-            <input type="file" name="video" accept="video/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-            <p style="font-size:0.75rem; color:var(--text-secondary);">MP4, WebM, OGG, MOV, AVI, MKV</p>
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Additional Image (optional)</label>
+            <input type="file" name="job_image2" accept="image/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <p style="font-size:0.75rem; color:var(--text-secondary);">JPG, PNG, GIF (max 800x600)</p>
             
             <button type="submit" class="btn" style="margin-top:20px; width:100%;">{submit_button}</button>
         </form>
@@ -3955,8 +3966,14 @@ job_detail_template = base_template.replace("{title}", "Job Detail").replace("{a
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
             <img src="{img_url}" class="detail-image clickable-img" alt="{job_title}">
         </a>
-
-        {video_display}
+        
+        <!-- Second image (if exists) -->
+        {second_image}
+        second_image = ""
+        if job_image2:
+            second_image = f'<a href="#" onclick="openLightbox(\'/static/uploads/{job_image2}\'); return false;"><img src="/static/uploads/{job_image2}" class="detail-image clickable-img" alt="Additional image"></a>'
+                
+        <!-- Remove video_display -->
 
         <!-- Pill for job title -->
         {title_pill}
@@ -4878,20 +4895,18 @@ def create_profile():
         video_file = request.files.get('video')
 
         filename = None
-        video_filename = None
+        filename2 = None
         if file and allowed_file(file.filename):
             filename = save_resized_image(file, max_width=800, max_height=600)
-        if video_file and allowed_video(video_file.filename):
-            video_filename = secure_filename(video_file.filename)
-            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
-            video_file.save(video_path)
-
-        with get_db_connection() as conn:
-            c = conn.cursor()
-            c.execute("""
-                INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, video, status)
-                VALUES (?,?,?,?,?,?,?,?)
-            """, (user_id, skills, district, village, bio, filename, video_filename, status))
+        file2 = request.files.get('job_image2')
+        if file2 and allowed_file(file2.filename):
+            filename2 = save_resized_image(file2, max_width=800, max_height=600)
+        
+        # INSERT: job_image, job_image2 (remove video)
+        c.execute("""
+            INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image, job_image2, urgent)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """, (session['user_id'], title, company, description, location, village, contact, 'Open', filename, filename2, urgent))
             conn.commit()
         return redirect('/dashboard')
 
@@ -4980,28 +4995,22 @@ def create_vendor_profile():
         bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Open')
 
-        filenames = [None, None, None]
-        for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
+        filenames = [None, None, None, None]  # 4 images
+        for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3', 'vendor_image4']):
             file = request.files.get(field)
             if file and allowed_file(file.filename):
                 filenames[idx] = save_resized_image(file, max_width=800, max_height=600)
-
-        video_file = request.files.get('video')
-        video_filename = None
-        if video_file and allowed_video(video_file.filename):
-            video_filename = secure_filename(video_file.filename)
-            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
-            video_file.save(video_path)
-
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 30000;")
-        c = conn.cursor()
+        
+        # Remove video handling – we won't save a video anymore.
+        # If you still want to keep existing videos, you can set video_filename = None.
+        
+        # In the INSERT, replace the video field with vendor_image4:
         c.execute("""
             INSERT INTO vendors (user_id, business_name, district, village, landmark, bio, 
-                                 vendor_image, vendor_image2, vendor_image3, video, status)
+                                 vendor_image, vendor_image2, vendor_image3, vendor_image4, status)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, (user_id, business_name, district, village, landmark, bio, 
-              filenames[0], filenames[1], filenames[2], video_filename, status))
+              filenames[0], filenames[1], filenames[2], filenames[3], status))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
@@ -5052,12 +5061,13 @@ def edit_vendor_profile():
             video_file.save(video_path)
 
         c.execute("""
-            UPDATE vendors SET 
-                business_name=?, district=?, village=?, landmark=?, bio=?, 
-                vendor_image=?, vendor_image2=?, vendor_image3=?, video=?, status=?
-            WHERE user_id=?
-        """, (business_name, district, village, landmark, bio, 
-              current_images[0], current_images[1], current_images[2], video_filename, status, user_id))
+        UPDATE vendors SET 
+            business_name=?, district=?, village=?, landmark=?, bio=?, 
+            vendor_image=?, vendor_image2=?, vendor_image3=?, vendor_image4=?, video=?, status=?
+        WHERE user_id=?
+    """, (business_name, district, village, landmark, bio, 
+          current_images[0], current_images[1], current_images[2], current_images[3], 
+          video_filename, status, user_id))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
@@ -5311,7 +5321,7 @@ def post_job():
 def edit_job(job_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT title, company, description, location, village, contact, status, employer_id, job_image, video, urgent FROM jobs WHERE id=?", (job_id,))
+    c.execute("SELECT title, company, description, location, village, contact, status, employer_id, job_image, job_image2, video, urgent FROM jobs WHERE id=?", (job_id,))
     job = c.fetchone()
     
     if not job:
@@ -5334,22 +5344,23 @@ def edit_job(job_id):
         file = request.files.get('job_image')
         video_file = request.files.get('video')
 
-        filename = job[8]  # current job_image
-        video_filename = job[9]  # current video
+        filename = job[8]   # current job_image
+        filename2 = job[9]  # current job_image2
+        video_filename = job[10]  # keep existing video
         
         if file and allowed_file(file.filename):
             filename = save_resized_image(file, max_width=800, max_height=600)
-        if video_file and allowed_video(video_file.filename):
-            video_filename = secure_filename(video_file.filename)
-            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
-            video_file.save(video_path)
-
+        file2 = request.files.get('job_image2')
+        if file2 and allowed_file(file2.filename):
+            filename2 = save_resized_image(file2, max_width=800, max_height=600)
+        
+        # Update query includes job_image and job_image2, but no video update
         c.execute("""
             UPDATE jobs SET 
                 title=?, company=?, description=?, location=?, village=?, 
-                contact=?, status=?, job_image=?, video=?, urgent=?
+                contact=?, status=?, job_image=?, job_image2=?, urgent=?
             WHERE id=?
-        """, (title, company, description, location, village, contact, status, filename, video_filename, urgent, job_id))
+        """, (title, company, description, location, village, contact, status, filename, filename2, urgent, job_id))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
@@ -5713,7 +5724,7 @@ def vendor_detail(vendor_id):
     c = conn.cursor()
     c.execute("""
         SELECT v.id, v.user_id, v.business_name, v.district, v.village, v.landmark, v.bio, 
-               v.vendor_image, v.vendor_image2, v.vendor_image3, v.video,
+               v.vendor_image, v.vendor_image2, v.vendor_image3, v.vendor_image4, v.video,
                v.status, v.featured, v.featured_expiry, u.phone
         FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
     """, (vendor_id,))
@@ -5748,12 +5759,14 @@ def vendor_detail(vendor_id):
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
     extra_images = ""
-    if img2 or img3:
+    if img2 or img3 or img4:
         extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; margin-bottom:15px;">'
         if img2:
             extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img2}\'); return false;"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         if img3:
             extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
+        if img4:
+            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img4}\'); return false;"><img src="/static/uploads/{img4}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         extra_images += '</div>'
 
     name_pill = f'<span class="pill-title"><i class="fas fa-store"></i> {bname}</span>'
@@ -7269,7 +7282,7 @@ def job_detail(job_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.video,
+        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.job_image2, j.video,
                u.name as employer_name, u.phone as employer_phone, j.employer_id
         FROM jobs j
         JOIN users u ON j.employer_id = u.id
