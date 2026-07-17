@@ -6011,6 +6011,18 @@ def admin_login():
     
     content = """
     <div class="card" style="max-width: 500px; margin: 0 auto;">
+        <div class="card-header">&#128274; Admin Login</div>
+        <form method="POST">
+            <label>Password</label>
+            <input type="password" name="password" required>
+            <button type="submit" class="btn" style="width:100%; margin-top:20px;">Login</button>
+        </form>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Login").replace("{active_page}", "").replace("{content}", content))
+    
+    content = """
+    <div class="card" style="max-width: 500px; margin: 0 auto;">
         <div class="card-header">🔐 Admin Login</div>
         <form method="POST">
             <label>Password</label>
