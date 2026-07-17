@@ -4907,7 +4907,7 @@ def create_profile():
             INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image, job_image2, urgent)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, (session['user_id'], title, company, description, location, village, contact, 'Open', filename, filename2, urgent))
-            conn.commit()
+        conn.commit()
         return redirect('/dashboard')
 
     # GET – show form
