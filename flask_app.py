@@ -364,27 +364,6 @@ def init_db():
     
     # ⭐ CREATE THE CURSOR HERE ⭐
     c = conn.cursor()
-
-    # ---- PAYMENT TRANSACTIONS TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS payment_transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        phone TEXT,
-        amount INTEGER,
-        status TEXT DEFAULT 'pending',
-        transaction_id TEXT,
-        payment_method TEXT,
-        raw_sms TEXT,
-        recipient TEXT,
-        payment_date TEXT,
-        description TEXT,
-        item_type TEXT,           -- 'boost_profile', 'boost_vendor', 'boost_job', 'subscription'
-        item_id INTEGER,          -- ID of the item to be boosted or subscription package
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )''')
-    
     # ---- USERS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -397,41 +376,6 @@ def init_db():
     columns = [col[1] for col in c.fetchall()]
     if 'theme' not in columns:
         c.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'default'")
-
-        # ---- PAYMENT SETTINGS TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS payment_settings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        mtn_number TEXT,
-        airtel_number TEXT,
-        payment_name TEXT DEFAULT 'RockabyTech',
-        active_payment_methods TEXT DEFAULT '["manual"]',
-        yo_username TEXT,
-        yo_password TEXT,
-        yo_auto_pay INTEGER DEFAULT 0,
-        iotec_wallet_id TEXT,
-        iotec_client_id TEXT,
-        iotec_api_secret TEXT,
-        pawapay_api_key TEXT,
-        pawapay_merchant_id TEXT,
-        pesapal_consumer_key TEXT,
-        pesapal_consumer_secret TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    # Insert default row if empty
-    c.execute("SELECT COUNT(*) FROM payment_settings")
-    if c.fetchone()[0] == 0:
-        c.execute("""
-            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
-            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
-        """)
-    
-    # ---- EXTEND BOOST_REQUESTS FOR PAYMENTS ----
-    c.execute("PRAGMA table_info(boost_requests)")
-    existing_cols = [col[1] for col in c.fetchall()]
-    for col in ['payment_method', 'raw_sms', 'amount', 'recipient', 'payment_date']:
-        if col not in existing_cols:
-            c.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
 
     # ---- PROVIDERS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS providers (
@@ -487,13 +431,6 @@ def init_db():
         urgent INTEGER DEFAULT 0,
         FOREIGN KEY(employer_id) REFERENCES users(id)
     )''')
-
-    # ---- Add 'urgent' column if missing (for existing databases) ----
-    c.execute("PRAGMA table_info(jobs)")
-    columns = [col[1] for col in c.fetchall()]
-    if 'urgent' not in columns:
-        c.execute("ALTER TABLE jobs ADD COLUMN urgent INTEGER DEFAULT 0")
-        print("[DB] Added 'urgent' column to jobs table")
 
     # ---- BOOST REQUESTS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS boost_requests (
@@ -658,6 +595,74 @@ def init_db():
         is_active INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
+
+    # Insert default row if empty
+    c.execute("SELECT COUNT(*) FROM payment_settings")
+    if c.fetchone()[0] == 0:
+        c.execute("""
+            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
+            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
+        """)
+
+    # ---- PAYMENT SETTINGS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS payment_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mtn_number TEXT,
+        airtel_number TEXT,
+        payment_name TEXT DEFAULT 'RockabyTech',
+        active_payment_methods TEXT DEFAULT '["manual"]',
+        yo_username TEXT,
+        yo_password TEXT,
+        yo_auto_pay INTEGER DEFAULT 0,
+        iotec_wallet_id TEXT,
+        iotec_client_id TEXT,
+        iotec_api_secret TEXT,
+        pawapay_api_key TEXT,
+        pawapay_merchant_id TEXT,
+        pesapal_consumer_key TEXT,
+        pesapal_consumer_secret TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+     # ---- PAYMENT TRANSACTIONS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS payment_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        phone TEXT,
+        amount INTEGER,
+        status TEXT DEFAULT 'pending',
+        transaction_id TEXT,
+        payment_method TEXT,
+        raw_sms TEXT,
+        recipient TEXT,
+        payment_date TEXT,
+        description TEXT,
+        item_type TEXT,           -- 'boost_profile', 'boost_vendor', 'boost_job', 'subscription'
+        item_id INTEGER,          -- ID of the item to be boosted or subscription package
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
+
+    # ---- EXTEND BOOST_REQUESTS FOR PAYMENTS ----
+    # First ensure the table exists (it should, but guard against missing)
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boost_requests'")
+    if c.fetchone():
+        c.execute("PRAGMA table_info(boost_requests)")
+        existing_cols = [col[1] for col in c.fetchall()]
+        for col in ['payment_method', 'raw_sms', 'amount', 'recipient', 'payment_date']:
+            if col not in existing_cols:
+                c.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
+    else:
+        print("[DB] boost_requests table does not exist; skipping ALTER.")
+
+    # ---- Add 'urgent' column if missing (for existing databases) ----
+    c.execute("PRAGMA table_info(jobs)")
+    columns = [col[1] for col in c.fetchall()]
+    if 'urgent' not in columns:
+        c.execute("ALTER TABLE jobs ADD COLUMN urgent INTEGER DEFAULT 0")
+        print("[DB] Added 'urgent' column to jobs table")
 
     # ---- USER SUBSCRIPTIONS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS user_subscriptions (
