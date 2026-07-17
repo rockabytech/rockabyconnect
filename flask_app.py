@@ -5733,12 +5733,15 @@ def vendor_detail(vendor_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
+    c.execute("""
     SELECT v.id, v.user_id, v.business_name, v.district, v.village, v.landmark, v.bio, 
            v.vendor_image, v.vendor_image2, v.vendor_image3, v.vendor_image4, v.video,
            v.status, v.featured, v.featured_expiry, u.phone
     FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
     """, (vendor_id,))
     v = c.fetchone()
+    # Unpack with 16 values (added vendor_image4 at index 10)
+    vid, user_id, bname, district, village, landmark, bio, img, img2, img3, img4, video, status, featured, expiry, phone = v
     if not v:
         conn.close()
         return "Vendor not found.", 404
@@ -5770,13 +5773,11 @@ def vendor_detail(vendor_id):
 
     extra_images = ""
     if img2 or img3 or img4:
-        extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; margin-bottom:15px;">'
-        if img2:
-            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img2}\'); return false;"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
-        if img3:
-            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
+        extra_images = '<div style="display:grid; ...">'
+        if img2: ...
+        if img3: ...
         if img4:
-            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img4}\'); return false;"><img src="/static/uploads/{img4}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
+            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img4}\'); return false;"><img src="/static/uploads/{img4}" ...></a>'
         extra_images += '</div>'
 
     name_pill = f'<span class="pill-title"><i class="fas fa-store"></i> {bname}</span>'
@@ -8249,19 +8250,18 @@ def admin_add_missing_columns():
         return redirect('/admin/login')
     with get_db_connection() as conn:
         c = conn.cursor()
-        # Add vendor_image4
+        # Add vendor_image4 to vendors
         c.execute("PRAGMA table_info(vendors)")
         cols = [row[1] for row in c.fetchall()]
         if 'vendor_image4' not in cols:
             c.execute("ALTER TABLE vendors ADD COLUMN vendor_image4 TEXT")
-        # Add job_image2
+        # Add job_image2 to jobs
         c.execute("PRAGMA table_info(jobs)")
         cols = [row[1] for row in c.fetchall()]
         if 'job_image2' not in cols:
             c.execute("ALTER TABLE jobs ADD COLUMN job_image2 TEXT")
         conn.commit()
-    return "✅ Columns `vendor_image4` and `job_image2` added successfully. <a href='/admin/dashboard'>Back</a>"
-
+    return "✅ Columns added. <a href='/dashboard'>Back</a>"
 
 # ============================================================
 # RUN APP
