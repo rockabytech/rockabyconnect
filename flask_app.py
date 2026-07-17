@@ -541,17 +541,6 @@ def init_db():
         if 'video' not in existing:
             c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
 
-            # ---- Add extra photo columns ----
-        c.execute("PRAGMA table_info(vendors)")
-        vendor_cols = [col[1] for col in c.fetchall()]
-        if 'vendor_image4' not in vendor_cols:
-            c.execute("ALTER TABLE vendors ADD COLUMN vendor_image4 TEXT")
-        
-        c.execute("PRAGMA table_info(jobs)")
-        job_cols = [col[1] for col in c.fetchall()]
-        if 'job_image2' not in job_cols:
-            c.execute("ALTER TABLE jobs ADD COLUMN job_image2 TEXT")
-
     # ============================================================
     # ⭐ NEW: SUBSCRIPTION & POINTS TABLES ⭐
     # ============================================================
@@ -3706,9 +3695,9 @@ vendor_form_template = base_template.replace("{title}", "My Vendor Profile").rep
             <input type="file" name="vendor_image2" accept="image/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
             <label style="display:block; margin-top:12px; font-weight:600;">Additional Photo 2</label>
             <input type="file" name="vendor_image3" accept="image/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-            <label style="display:block; margin-top:12px; font-weight:600;">Additional Photo 3</label>
-            <input type="file" name="vendor_image4" accept="image/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-            <p style="font-size:0.75rem; color:var(--text-secondary);">JPG, PNG, GIF (max 800x600)</p>
+            <label style="display:block; margin-top:12px; font-weight:600;">Upload a Video (optional)</label>
+            <input type="file" name="video" accept="video/*" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <p style="font-size:0.75rem; color:var(--text-secondary);">MP4, WebM, OGG, MOV, AVI, MKV</p>
             <label style="display:block; margin-top:12px; font-weight:600;">Status</label>
             <select name="status" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
                 {status_options}
@@ -3797,9 +3786,9 @@ job_form_template = base_template.replace("{title}", "{job_form_title}").replace
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Job Image (optional)</label>
             <input type="file" name="job_image" accept="image/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
             
-            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Additional Image (optional)</label>
-            <input type="file" name="job_image2" accept="image/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-            <p style="font-size:0.75rem; color:var(--text-secondary);">JPG, PNG, GIF (max 800x600)</p>
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Upload a Video (optional)</label>
+            <input type="file" name="video" accept="video/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <p style="font-size:0.75rem; color:var(--text-secondary);">MP4, WebM, OGG, MOV, AVI, MKV</p>
             
             <button type="submit" class="btn" style="margin-top:20px; width:100%;">{submit_button}</button>
         </form>
@@ -3966,14 +3955,8 @@ job_detail_template = base_template.replace("{title}", "Job Detail").replace("{a
         <a href="#" onclick="openLightbox('{img_url}'); return false;">
             <img src="{img_url}" class="detail-image clickable-img" alt="{job_title}">
         </a>
-        
-        <!-- Second image (if exists) -->
-        {second_image}
-        second_image = ""
-        if job_image2:
-            second_image = f'<a href="#" onclick="openLightbox(\'/static/uploads/{job_image2}\'); return false;"><img src="/static/uploads/{job_image2}" class="detail-image clickable-img" alt="Additional image"></a>'
-                
-        <!-- Remove video_display -->
+
+        {video_display}
 
         <!-- Pill for job title -->
         {title_pill}
@@ -4455,35 +4438,18 @@ def home():
         </a>
     """
 
-    # ---- CONTENT WITH NEW ORDER ----
     content = f"""
-    <!-- FEATURED CAROUSEL (1) -->
-    <div class="ad-carousel">
-        <div class="carousel-track">
-            {carousel_slides}
-        </div>
-        <button class="carousel-prev">‹</button>
-        <button class="carousel-next">›</button>
-        <div class="carousel-dots"></div>
-    </div>
-
-    <!-- SPONSORED LISTINGS (2) -->
-    <div class="sponsored-section">
-        <h2>⭐ Sponsored Listings</h2>
-        <div class="sponsored-grid">
-            {sponsored_html}
+    <!-- HERO -->
+    <div class="hero-full">
+        <h1>Get Work Done – <span>or Get Paid</span></h1>
+        <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
+        <div class="hero-buttons">
+            <a href="/offer-skill" class="btn-hero-primary">Offer Your Skill</a>
+            <a href="/post-job" class="btn-hero-secondary">Post a Job</a>
         </div>
     </div>
 
-    <!-- TESTIMONIALS (3) -->
-    <div class="testimonials">
-        <h2>What Our Users Say</h2>
-        <div class="testimonial-grid">
-            {testimonials_html}
-        </div>
-    </div>
-
-    <!-- STATS BAR (4) -->
+    <!-- STATS BAR -->
     <div class="stats-bar">
         <div class="stat-item">
             <i class="fas fa-users"></i>
@@ -4507,22 +4473,60 @@ def home():
         </div>
     </div>
 
-    <!-- HERO (5) -->
-    <div class="hero-full">
-        <h1>Get Work Done – <span>or Get Paid</span></h1>
-        <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
-        <div class="hero-buttons">
-            <a href="/offer-skill" class="btn-hero-primary">Offer Your Skill</a>
-            <a href="/post-job" class="btn-hero-secondary">Post a Job</a>
+    <!-- HOW IT WORKS -->
+    <div class="how-it-works">
+        <h2>How It Works</h2>
+        <div class="steps">
+            <div class="step">
+                <span class="step-icon">🔍</span>
+                <h3>1. Find Skills</h3>
+                <p>Browse verified workers or search by skill, location, or rating.</p>
+            </div>
+            <div class="step">
+                <span class="step-icon">📝</span>
+                <h3>2. Connect</h3>
+                <p>Post a job, send a message, or apply for opportunities.</p>
+            </div>
+            <div class="step">
+                <span class="step-icon">💬</span>
+                <h3>3. Work & Grow</h3>
+                <p>Get paid for your skills or find the right talent for your business.</p>
+            </div>
         </div>
     </div>
 
-    <!-- BANNER ADS (6) -->
+    <!-- FEATURED CAROUSEL -->
+    <div class="ad-carousel">
+        <div class="carousel-track">
+            {carousel_slides}
+        </div>
+        <button class="carousel-prev">‹</button>
+        <button class="carousel-next">›</button>
+        <div class="carousel-dots"></div>
+    </div>
+
+    <!-- SPONSORED LISTINGS -->
+    <div class="sponsored-section">
+        <h2>⭐ Sponsored Listings</h2>
+        <div class="sponsored-grid">
+            {sponsored_html}
+        </div>
+    </div>
+
+    <!-- BANNER ADS -->
     <div class="banner-ads">
         {banners}
     </div>
 
-    <!-- CTA SECTION (7) -->
+    <!-- TESTIMONIALS -->
+    <div class="testimonials">
+        <h2>What Our Users Say</h2>
+        <div class="testimonial-grid">
+            {testimonials_html}
+        </div>
+    </div>
+
+    <!-- CTA SECTION -->
     <div class="cta-section">
         <h2>Ready to Get Started?</h2>
         <p>Join thousands of users in Uganda's growing freelance community.</p>
@@ -4715,7 +4719,7 @@ def login():
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('login'))
+    return redirect('/')
 
 @app.route('/edit-name')
 @login_required
@@ -4813,7 +4817,7 @@ def dashboard():
     # ---- Vendor Profile Section ----
     vendor_section = ""
     if vendor:
-        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vvideo, vstatus, vfeatured, vexpiry = vendor
+        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vvideo, vstatus, vfeatured, vexpiry = vendor
         vstatus_class = vstatus.lower()
         location = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
         vendor_section = f"""
@@ -4895,19 +4899,21 @@ def create_profile():
         video_file = request.files.get('video')
 
         filename = None
-        filename2 = None
+        video_filename = None
         if file and allowed_file(file.filename):
             filename = save_resized_image(file, max_width=800, max_height=600)
-        file2 = request.files.get('job_image2')
-        if file2 and allowed_file(file2.filename):
-            filename2 = save_resized_image(file2, max_width=800, max_height=600)
-        
-        # INSERT: job_image, job_image2 (remove video)
-        c.execute("""
-            INSERT INTO jobs (employer_id, title, company, description, location, village, contact, status, job_image, job_image2, urgent)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
-        """, (session['user_id'], title, company, description, location, village, contact, 'Open', filename, filename2, urgent))
-        conn.commit()
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
+
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO providers (user_id, skills, district, village, bio, profile_pic, video, status)
+                VALUES (?,?,?,?,?,?,?,?)
+            """, (user_id, skills, district, village, bio, filename, video_filename, status))
+            conn.commit()
         return redirect('/dashboard')
 
     # GET – show form
@@ -4978,7 +4984,15 @@ def edit_profile():
 @login_required
 def create_vendor_profile():
     user_id = session['user_id']
-    # ... existing check ...
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 30000;")
+    c = conn.cursor()
+    c.execute("SELECT id FROM vendors WHERE user_id=?", (user_id,))
+    if c.fetchone():
+        conn.close()
+        return redirect('/edit-vendor-profile')
+    conn.close()
+
     if request.method == 'POST':
         business_name = request.form['business_name'].strip()
         district = request.form['district'].strip()
@@ -4987,29 +5001,31 @@ def create_vendor_profile():
         bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Open')
 
-        filenames = [None, None, None, None]  # 4 images
-        for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3', 'vendor_image4']):
+        filenames = [None, None, None]
+        for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
             file = request.files.get(field)
             if file and allowed_file(file.filename):
                 filenames[idx] = save_resized_image(file, max_width=800, max_height=600)
 
-        # No video field – we keep video None or skip it
-        # If you still want to allow video, you could add it, but we removed it from form.
+        video_file = request.files.get('video')
         video_filename = None
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
 
         conn = sqlite3.connect(DB_PATH)
         conn.execute("PRAGMA busy_timeout = 30000;")
         c = conn.cursor()
         c.execute("""
             INSERT INTO vendors (user_id, business_name, district, village, landmark, bio, 
-                                 vendor_image, vendor_image2, vendor_image3, vendor_image4, video, status)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                                 vendor_image, vendor_image2, vendor_image3, video, status)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, (user_id, business_name, district, village, landmark, bio, 
-              filenames[0], filenames[1], filenames[2], filenames[3], video_filename, status))
+              filenames[0], filenames[1], filenames[2], video_filename, status))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
-    # ... GET part unchanged ...
 
     form = vendor_form_template.replace("{form_title}", "Create Your Vendor Profile")
     form = form.replace("{business_name}", "").replace("{district}", "").replace("{village}", "")
@@ -5025,10 +5041,9 @@ def edit_vendor_profile():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
-    # Include vendor_image4 in the SELECT
     c.execute("""
         SELECT business_name, district, village, landmark, bio, 
-               vendor_image, vendor_image2, vendor_image3, vendor_image4, video, status 
+               vendor_image, vendor_image2, vendor_image3, video, status 
         FROM vendors WHERE user_id=?
     """, (user_id,))
     vendor = c.fetchone()
@@ -5044,32 +5059,31 @@ def edit_vendor_profile():
         bio = request.form.get('bio', '').strip()
         status = request.form.get('status', 'Open')
 
-        # Current images list: 4 items (vendor_image, image2, image3, image4)
-        current_images = [vendor[5], vendor[6], vendor[7], vendor[8]]
-        # vendor[5] = vendor_image, [6]=vendor_image2, [7]=vendor_image3, [8]=vendor_image4
-        for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3', 'vendor_image4']):
+        current_images = [vendor[5], vendor[6], vendor[7]]
+        for idx, field in enumerate(['vendor_image', 'vendor_image2', 'vendor_image3']):
             file = request.files.get(field)
             if file and allowed_file(file.filename):
                 current_images[idx] = save_resized_image(file, max_width=800, max_height=600)
 
-        # Keep video as is (we don't update it, but we keep the existing one)
-        video_filename = vendor[9]  # current video
+        video_file = request.files.get('video')
+        video_filename = vendor[8]
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
 
-        # Update all fields including vendor_image4
         c.execute("""
             UPDATE vendors SET 
                 business_name=?, district=?, village=?, landmark=?, bio=?, 
-                vendor_image=?, vendor_image2=?, vendor_image3=?, vendor_image4=?, video=?, status=?
+                vendor_image=?, vendor_image2=?, vendor_image3=?, video=?, status=?
             WHERE user_id=?
         """, (business_name, district, village, landmark, bio, 
-              current_images[0], current_images[1], current_images[2], current_images[3], 
-              video_filename, status, user_id))
+              current_images[0], current_images[1], current_images[2], video_filename, status, user_id))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
 
-    # GET – populate form
-    bname, district, village, landmark, bio, img, img2, img3, img4, video, status = vendor
+    bname, district, village, landmark, bio, img, img2, img3, video, status = vendor
     form = vendor_form_template.replace("{form_title}", "Edit Your Vendor Profile")
     form = form.replace("{business_name}", bname or '')
     form = form.replace("{district}", district or '')
@@ -5080,19 +5094,6 @@ def edit_vendor_profile():
     form = form.replace("{status_options}", status_options)
     conn.close()
     return render_user_template(form, title="Edit Vendor Profile", active_page="dashboard")
-
-@app.route('/add-job-image2-column')
-def add_job_image2_column():
-    with get_db_connection() as conn:
-        c = conn.cursor()
-        c.execute("PRAGMA table_info(jobs)")
-        columns = [row[1] for row in c.fetchall()]
-        if 'job_image2' not in columns:
-            c.execute("ALTER TABLE jobs ADD COLUMN job_image2 TEXT")
-            conn.commit()
-            return "✅ Column 'job_image2' added to jobs table."
-        else:
-            return "Column 'job_image2' already exists."
 
 # ---------- Boost Vendor ----------
 @app.route('/boost-vendor')
@@ -5331,7 +5332,7 @@ def post_job():
 def edit_job(job_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT title, company, description, location, village, contact, status, employer_id, job_image, job_image2, video, urgent FROM jobs WHERE id=?", (job_id,))
+    c.execute("SELECT title, company, description, location, village, contact, status, employer_id, job_image, video, urgent FROM jobs WHERE id=?", (job_id,))
     job = c.fetchone()
     
     if not job:
@@ -5354,23 +5355,22 @@ def edit_job(job_id):
         file = request.files.get('job_image')
         video_file = request.files.get('video')
 
-        filename = job[8]   # current job_image
-        filename2 = job[9]  # current job_image2
-        video_filename = job[10]  # keep existing video
+        filename = job[8]  # current job_image
+        video_filename = job[9]  # current video
         
         if file and allowed_file(file.filename):
             filename = save_resized_image(file, max_width=800, max_height=600)
-        file2 = request.files.get('job_image2')
-        if file2 and allowed_file(file2.filename):
-            filename2 = save_resized_image(file2, max_width=800, max_height=600)
-        
-        # Update query includes job_image and job_image2, but no video update
+        if video_file and allowed_video(video_file.filename):
+            video_filename = secure_filename(video_file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_filename)
+            video_file.save(video_path)
+
         c.execute("""
             UPDATE jobs SET 
                 title=?, company=?, description=?, location=?, village=?, 
-                contact=?, status=?, job_image=?, job_image2=?, urgent=?
+                contact=?, status=?, job_image=?, video=?, urgent=?
             WHERE id=?
-        """, (title, company, description, location, village, contact, status, filename, filename2, urgent, job_id))
+        """, (title, company, description, location, village, contact, status, filename, video_filename, urgent, job_id))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
@@ -5733,15 +5733,12 @@ def vendor_detail(vendor_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-    c.execute("""
-    SELECT v.id, v.user_id, v.business_name, v.district, v.village, v.landmark, v.bio, 
-           v.vendor_image, v.vendor_image2, v.vendor_image3, v.vendor_image4, v.video,
-           v.status, v.featured, v.featured_expiry, u.phone
-    FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
+        SELECT v.id, v.user_id, v.business_name, v.district, v.village, v.landmark, v.bio, 
+               v.vendor_image, v.vendor_image2, v.vendor_image3, v.video,
+               v.status, v.featured, v.featured_expiry, u.phone
+        FROM vendors v JOIN users u ON v.user_id = u.id WHERE v.id=?
     """, (vendor_id,))
     v = c.fetchone()
-    # Unpack with 16 values (added vendor_image4 at index 10)
-    vid, user_id, bname, district, village, landmark, bio, img, img2, img3, img4, video, status, featured, expiry, phone = v
     if not v:
         conn.close()
         return "Vendor not found.", 404
@@ -5772,12 +5769,12 @@ def vendor_detail(vendor_id):
         video_display = f'<video src="/static/uploads/{video}" controls style="width:100%; max-height:300px; border-radius:8px; margin-bottom:15px;"></video>'
 
     extra_images = ""
-    if img2 or img3 or img4:
-        extra_images = '<div style="display:grid; ...">'
-        if img2: ...
-        if img3: ...
-        if img4:
-            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img4}\'); return false;"><img src="/static/uploads/{img4}" ...></a>'
+    if img2 or img3:
+        extra_images = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; margin-bottom:15px;">'
+        if img2:
+            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img2}\'); return false;"><img src="/static/uploads/{img2}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
+        if img3:
+            extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{img3}\'); return false;"><img src="/static/uploads/{img3}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         extra_images += '</div>'
 
     name_pill = f'<span class="pill-title"><i class="fas fa-store"></i> {bname}</span>'
@@ -5998,7 +5995,7 @@ def admin_login():
         else:
             content = """
             <div class="card" style="max-width: 500px; margin: 0 auto;">
-                <div class="card-header">&#128274; Admin Login</div>
+                <div class="card-header">🔐 Admin Login</div>
                 <div class="alert alert-error">Wrong password. Please try again.</div>
                 <form method="POST">
                     <label>Password</label>
@@ -6008,18 +6005,6 @@ def admin_login():
             </div>
             """
             return render_template_string(admin_base_template.replace("{title}", "Login").replace("{active_page}", "").replace("{content}", content))
-    
-    content = """
-    <div class="card" style="max-width: 500px; margin: 0 auto;">
-        <div class="card-header">&#128274; Admin Login</div>
-        <form method="POST">
-            <label>Password</label>
-            <input type="password" name="password" required>
-            <button type="submit" class="btn" style="width:100%; margin-top:20px;">Login</button>
-        </form>
-    </div>
-    """
-    return render_template_string(admin_base_template.replace("{title}", "Login").replace("{active_page}", "").replace("{content}", content))
     
     content = """
     <div class="card" style="max-width: 500px; margin: 0 auto;">
@@ -6289,20 +6274,15 @@ def admin_approve_boost(req_id):
         user_id, plan, btype, item_id = req
         days = int(plan)
         expiry = date.today() + timedelta(days=days)
-        
-        # ---- FEATURE ALL ITEMS OF THIS USER ----
-        c.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
-        c.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
-        c.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE employer_id=?", (expiry, user_id))
-        
+        if btype == 'profile':
+            c.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
+        elif btype == 'job':
+            c.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, item_id))
+        elif btype == 'vendor':
+            c.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
         c.execute("UPDATE boost_requests SET status='approved' WHERE id=?", (req_id,))
         conn.commit()
-        
-        add_notification(
-            user_id,
-            'boost_approved',
-            f'Your boost for {days} days has been approved! Your profile, vendor (if any), and all your jobs are now featured.'
-        )
+        add_notification(user_id, 'sms', 'Your boost has been approved and is now live!')
     
     conn.close()
     return redirect('/admin/dashboard')
@@ -7305,7 +7285,7 @@ def job_detail(job_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.job_image2, j.video,
+        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.video,
                u.name as employer_name, u.phone as employer_phone, j.employer_id
         FROM jobs j
         JOIN users u ON j.employer_id = u.id
@@ -8211,69 +8191,6 @@ def debug_vapid():
     """
     return render_user_template(base_template, title="VAPID Debug", content=content)
 
-@app.route('/debug/featured')
-@login_required
-def debug_featured():
-    if not session.get('admin'):
-        return redirect('/admin/login')
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    today = date.today().isoformat()
-    featured_providers = c.execute("SELECT user_id, featured, featured_expiry FROM providers WHERE featured=1").fetchall()
-    featured_vendors = c.execute("SELECT user_id, featured, featured_expiry FROM vendors WHERE featured=1").fetchall()
-    featured_jobs = c.execute("SELECT employer_id, featured, featured_expiry FROM jobs WHERE featured=1").fetchall()
-    conn.close()
-    html = "<div class='card'><h2>🔍 Featured Items Debug</h2>"
-    html += "<h3>Providers</h3><ul>"
-    for row in featured_providers:
-        active = row[1] and (row[2] is None or row[2] >= today)
-        html += f"<li>User {row[0]}: featured={row[1]}, expiry={row[2]}, active={active}</li>"
-    html += "</ul><h3>Vendors</h3><ul>"
-    for row in featured_vendors:
-        active = row[1] and (row[2] is None or row[2] >= today)
-        html += f"<li>User {row[0]}: featured={row[1]}, expiry={row[2]}, active={active}</li>"
-    html += "</ul><h3>Jobs</h3><ul>"
-    for row in featured_jobs:
-        active = row[1] and (row[2] is None or row[2] >= today)
-        html += f"<li>Employer {row[0]}: featured={row[1]}, expiry={row[2]}, active={active}</li>"
-    html += "</ul></div>"
-    return render_user_template(base_template, title="Debug Featured", content=html)
-
-@app.route('/fix-missing-columns')
-def fix_missing_columns():
-    with get_db_connection() as conn:
-        c = conn.cursor()
-        # Add vendor_image4
-        c.execute("PRAGMA table_info(vendors)")
-        cols = [row[1] for row in c.fetchall()]
-        if 'vendor_image4' not in cols:
-            c.execute("ALTER TABLE vendors ADD COLUMN vendor_image4 TEXT")
-        # Add job_image2
-        c.execute("PRAGMA table_info(jobs)")
-        cols = [row[1] for row in c.fetchall()]
-        if 'job_image2' not in cols:
-            c.execute("ALTER TABLE jobs ADD COLUMN job_image2 TEXT")
-        conn.commit()
-    return "✅ Missing columns added. <a href='/dashboard'>Back</a>"
-
-@app.route('/admin/add-missing-columns')
-def admin_add_missing_columns():
-    if not session.get('admin'):
-        return redirect('/admin/login')
-    with get_db_connection() as conn:
-        c = conn.cursor()
-        # Add vendor_image4 to vendors
-        c.execute("PRAGMA table_info(vendors)")
-        cols = [row[1] for row in c.fetchall()]
-        if 'vendor_image4' not in cols:
-            c.execute("ALTER TABLE vendors ADD COLUMN vendor_image4 TEXT")
-        # Add job_image2 to jobs
-        c.execute("PRAGMA table_info(jobs)")
-        cols = [row[1] for row in c.fetchall()]
-        if 'job_image2' not in cols:
-            c.execute("ALTER TABLE jobs ADD COLUMN job_image2 TEXT")
-        conn.commit()
-    return "✅ Columns added. <a href='/dashboard'>Back</a>"
 
 # ============================================================
 # RUN APP
