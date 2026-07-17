@@ -8243,6 +8243,25 @@ def fix_missing_columns():
         conn.commit()
     return "✅ Missing columns added. <a href='/dashboard'>Back</a>"
 
+@app.route('/admin/add-missing-columns')
+def admin_add_missing_columns():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        # Add vendor_image4
+        c.execute("PRAGMA table_info(vendors)")
+        cols = [row[1] for row in c.fetchall()]
+        if 'vendor_image4' not in cols:
+            c.execute("ALTER TABLE vendors ADD COLUMN vendor_image4 TEXT")
+        # Add job_image2
+        c.execute("PRAGMA table_info(jobs)")
+        cols = [row[1] for row in c.fetchall()]
+        if 'job_image2' not in cols:
+            c.execute("ALTER TABLE jobs ADD COLUMN job_image2 TEXT")
+        conn.commit()
+    return "✅ Columns `vendor_image4` and `job_image2` added successfully. <a href='/admin/dashboard'>Back</a>"
+
 
 # ============================================================
 # RUN APP
