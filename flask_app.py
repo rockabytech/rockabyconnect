@@ -542,10 +542,10 @@ def init_db():
             c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
 
             # ---- Add extra photo columns ----
-        c.execute("PRAGMA table_info(vendors)")
-        vendor_cols = [col[1] for col in c.fetchall()]
-        if 'vendor_image4' not in vendor_cols:
-            c.execute("ALTER TABLE vendors ADD COLUMN vendor_image4 TEXT")
+c.execute("PRAGMA table_info(vendors)")
+vendor_cols = [col[1] for col in c.fetchall()]
+if 'vendor_image4' not in vendor_cols:
+    c.execute("ALTER TABLE vendors ADD COLUMN vendor_image4 TEXT")
         
         c.execute("PRAGMA table_info(jobs)")
         job_cols = [col[1] for col in c.fetchall()]
@@ -5080,6 +5080,19 @@ def edit_vendor_profile():
     form = form.replace("{status_options}", status_options)
     conn.close()
     return render_user_template(form, title="Edit Vendor Profile", active_page="dashboard")
+
+@app.route('/add-job-image2-column')
+def add_job_image2_column():
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        c.execute("PRAGMA table_info(jobs)")
+        columns = [row[1] for row in c.fetchall()]
+        if 'job_image2' not in columns:
+            c.execute("ALTER TABLE jobs ADD COLUMN job_image2 TEXT")
+            conn.commit()
+            return "✅ Column 'job_image2' added to jobs table."
+        else:
+            return "Column 'job_image2' already exists."
 
 # ---------- Boost Vendor ----------
 @app.route('/boost-vendor')
