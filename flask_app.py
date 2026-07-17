@@ -307,11 +307,9 @@ def save_resized_image(file, max_width=800):
         return None
 
 def activate_payment(user_id, context):
-    """Activate the purchased item based on context."""
+    """Activate the purchased item based on context (boost or subscription)."""
     item_type = context['item_type']
     item_id = context['item_id']
-    plan_days = context.get('plan', '7')  # for boosts
-
     db = get_db()
     c = db.cursor()
 
@@ -320,27 +318,33 @@ def activate_payment(user_id, context):
         c.execute("SELECT id FROM providers WHERE user_id=?", (user_id,))
         prov = c.fetchone()
         if prov:
-            expiry = date.today() + timedelta(days=int(plan_days))
+            # Use duration from context (default 7 days)
+            duration_days = context.get('duration_days', 7)
+            expiry = date.today() + timedelta(days=duration_days)
             c.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
-            add_notification(user_id, 'boost_approved', f'Your profile boost for {plan_days} days is active!')
+            add_notification(user_id, 'boost_approved', f'Your profile boost for {duration_days} days is active!')
+
     elif item_type == 'boost_vendor':
         c.execute("SELECT id FROM vendors WHERE user_id=?", (user_id,))
         vend = c.fetchone()
         if vend:
-            expiry = date.today() + timedelta(days=int(plan_days))
+            duration_days = context.get('duration_days', 7)
+            expiry = date.today() + timedelta(days=duration_days)
             c.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
-            add_notification(user_id, 'boost_approved', f'Your vendor boost for {plan_days} days is active!')
+            add_notification(user_id, 'boost_approved', f'Your vendor boost for {duration_days} days is active!')
+
     elif item_type == 'boost_job':
         # item_id is the job_id
         c.execute("SELECT employer_id FROM jobs WHERE id=?", (item_id,))
         job = c.fetchone()
         if job and job[0] == user_id:
-            expiry = date.today() + timedelta(days=int(plan_days))
+            duration_days = context.get('duration_days', 7)
+            expiry = date.today() + timedelta(days=duration_days)
             c.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, item_id))
-            add_notification(user_id, 'boost_approved', f'Your job boost for {plan_days} days is active!')
+            add_notification(user_id, 'boost_approved', f'Your job boost for {duration_days} days is active!')
+
     elif item_type == 'subscription':
         # item_id is the package_id
-        # Create a subscription record
         c.execute("SELECT duration_days FROM subscription_packages WHERE id=?", (item_id,))
         pkg = c.fetchone()
         if pkg:
@@ -352,7 +356,9 @@ def activate_payment(user_id, context):
                 VALUES (?, ?, ?, ?, 'active', ?)
             """, (user_id, item_id, start_date, end_date, f'payment_{int(datetime.now().timestamp())}'))
             add_notification(user_id, 'subscription_approved', f'Your {context["description"]} subscription is active!')
+
     db.commit()
+    # No db.close() because get_db() uses the Flask g object and is closed by teardown
 
 # ============================================================
 # DATABASE SETUP
@@ -597,6 +603,22 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
+        # ---- BOOST PACKAGES TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS boost_packages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        duration_days INTEGER NOT NULL,
+        price INTEGER NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # Insert default boost packages if empty
+    c.execute("SELECT COUNT(*) FROM boost_packages")
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('7 Days', 7, 5000)")
+        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('30 Days', 30, 15000)")
+
     # ---- PAYMENT SETTINGS TABLE (MUST BE CREATED BEFORE SELECT) ----
     c.execute('''CREATE TABLE IF NOT EXISTS payment_settings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -811,6 +833,22 @@ def migrate_db():
             INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
             VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
         """)
+
+        # ---- BOOST PACKAGES TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS boost_packages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        duration_days INTEGER NOT NULL,
+        price INTEGER NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # Insert default boost packages if empty
+    c.execute("SELECT COUNT(*) FROM boost_packages")
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('7 Days', 7, 5000)")
+        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('30 Days', 30, 15000)")
 
     conn.commit()
     conn.close()
@@ -1937,6 +1975,156 @@ def admin_broadcast():
     </div>
     """
     return render_template_string(admin_base_template.replace("{title}", "Broadcast Announcement").replace("{active_page}", "broadcast").replace("{content}", content))
+
+@app.route('/admin/boost-packages')
+def admin_boost_packages():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT id, name, duration_days, price, is_active FROM boost_packages ORDER BY price")
+    packages = c.fetchall()
+    db.close()
+    
+    rows = ""
+    for pkg in packages:
+        rows += f"""
+        <tr>
+            <td>{pkg[1]}</td>
+            <td>{pkg[2]} days</td>
+            <td>UGX {pkg[3]:,}</td>
+            <td>{'✅ Active' if pkg[4] else '❌ Inactive'}</td>
+            <td>
+                <a href="/admin/edit-boost-package/{pkg[0]}" class="btn btn-small">Edit</a>
+                <a href="/admin/toggle-boost-package/{pkg[0]}" class="btn btn-small">{'Deactivate' if pkg[4] else 'Activate'}</a>
+                <a href="/admin/delete-boost-package/{pkg[0]}" class="btn btn-small btn-danger" onclick="return confirm('Delete this boost package?')">Delete</a>
+            </td>
+        </tr>
+        """
+    if not rows:
+        rows = "<tr><td colspan='5'>No boost packages yet.</td></tr>"
+    
+    content = f"""
+    <div class="card">
+        <div class="card-header">🚀 Boost Packages</div>
+        <a href="/admin/add-boost-package" class="btn" style="margin-bottom:15px;">+ Add Boost Package</a>
+        <table>
+            <thead><tr><th>Name</th><th>Duration</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+        <div style="margin-top:20px;"><a href="/admin/dashboard" class="btn btn-outline">Back to Dashboard</a></div>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Boost Packages").replace("{active_page}", "boost_packages").replace("{content}", content))
+
+@app.route('/admin/add-boost-package', methods=['GET', 'POST'])
+def admin_add_boost_package():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        duration = int(request.form['duration'])
+        price = int(request.form['price'])
+        is_active = 1 if request.form.get('is_active') else 0
+        
+        db = get_db()
+        c = db.cursor()
+        c.execute("INSERT INTO boost_packages (name, duration_days, price, is_active) VALUES (?,?,?,?)",
+                  (name, duration, price, is_active))
+        db.commit()
+        db.close()
+        return redirect('/admin/boost-packages')
+    
+    content = """
+    <div class="card">
+        <div class="card-header">➕ Add Boost Package</div>
+        <form method="POST">
+            <label>Package Name</label>
+            <input type="text" name="name" required placeholder="e.g., 7 Days">
+            <label>Duration (days)</label>
+            <input type="number" name="duration" required min="1">
+            <label>Price (UGX)</label>
+            <input type="number" name="price" required min="0">
+            <label style="margin-top:10px;">
+                <input type="checkbox" name="is_active" checked> Active
+            </label>
+            <button type="submit" class="btn" style="margin-top:20px;">Create Package</button>
+        </form>
+        <a href="/admin/boost-packages" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Add Boost Package").replace("{active_page}", "boost_packages").replace("{content}", content))
+
+@app.route('/admin/edit-boost-package/<int:pkg_id>', methods=['GET', 'POST'])
+def admin_edit_boost_package(pkg_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    db = get_db()
+    c = db.cursor()
+    
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        duration = int(request.form['duration'])
+        price = int(request.form['price'])
+        is_active = 1 if request.form.get('is_active') else 0
+        
+        c.execute("UPDATE boost_packages SET name=?, duration_days=?, price=?, is_active=? WHERE id=?",
+                  (name, duration, price, is_active, pkg_id))
+        db.commit()
+        db.close()
+        return redirect('/admin/boost-packages')
+    
+    c.execute("SELECT id, name, duration_days, price, is_active FROM boost_packages WHERE id=?", (pkg_id,))
+    pkg = c.fetchone()
+    db.close()
+    if not pkg:
+        return "Package not found", 404
+    
+    checked = 'checked' if pkg[4] else ''
+    content = f"""
+    <div class="card">
+        <div class="card-header">✏️ Edit Boost Package</div>
+        <form method="POST">
+            <label>Package Name</label>
+            <input type="text" name="name" value="{pkg[1]}" required>
+            <label>Duration (days)</label>
+            <input type="number" name="duration" value="{pkg[2]}" required min="1">
+            <label>Price (UGX)</label>
+            <input type="number" name="price" value="{pkg[3]}" required min="0">
+            <label style="margin-top:10px;">
+                <input type="checkbox" name="is_active" {checked}> Active
+            </label>
+            <button type="submit" class="btn" style="margin-top:20px;">Update Package</button>
+        </form>
+        <a href="/admin/boost-packages" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_template_string(admin_base_template.replace("{title}", "Edit Boost Package").replace("{active_page}", "boost_packages").replace("{content}", content))
+
+@app.route('/admin/toggle-boost-package/<int:pkg_id>')
+def admin_toggle_boost_package(pkg_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    c.execute("UPDATE boost_packages SET is_active = 1 - is_active WHERE id=?", (pkg_id,))
+    db.commit()
+    db.close()
+    return redirect('/admin/boost-packages')
+
+@app.route('/admin/delete-boost-package/<int:pkg_id>')
+def admin_delete_boost_package(pkg_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    c.execute("DELETE FROM boost_packages WHERE id=?", (pkg_id,))
+    db.commit()
+    db.close()
+    return redirect('/admin/boost-packages')
 
 # ============================================================
 # BASE TEMPLATE (UNCHANGED)
@@ -4670,6 +4858,8 @@ admin_base_template = """
             <a href="/admin/backups" class="{{ 'active' if active_page == 'backups' else '' }}">💾 Backups</a>
             <a href="/admin/stats" class="{{ 'active' if active_page == 'stats' else '' }}">📊 Stats</a>
             <a href="/admin/referral-settings" class="{{ 'active' if active_page == 'referrals' else '' }}">🎁 Referrals</a>
+            <!-- 👇 INSERT YOUR NEW LINK HERE -->
+            <a href="/admin/boost-packages" class="{{ 'active' if active_page == 'boost_packages' else '' }}">🚀 Boost Packages</a>
             <a href="/admin/logout" class="logout-link">🚪 Logout</a>
         </div>
     </nav>
@@ -5504,42 +5694,36 @@ def edit_vendor_profile():
 @app.route('/boost-vendor')
 @login_required
 def boost_vendor():
-    user_id = session['user_id']
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT id FROM vendors WHERE user_id=?", (user_id,))
-    vendor = c.fetchone()
-    conn.close()
-    if not vendor:
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT id FROM vendors WHERE user_id=?", (session['user_id'],))
+    if not c.fetchone():
+        db.close()
         return redirect('/create-vendor-profile')
-    content = """
-        <div class="card">
-            <div class="card-header">Boost Your Vendor Profile</div>
-            <p>Get your shop at the top of the vendor list!</p>
-            <p><strong>Pricing:</strong></p>
-            <ul><li>7 days: <strong>UGX 5,000</strong></li><li>30 days: <strong>UGX 15,000</strong></li></ul>
-            <hr>
-            <p><strong>How to pay:</strong></p>
-            <ol>
-                <li>Send the amount to:<br>
-                    <strong>MTN Mobile Money: 0785686404</strong><br>
-                    <strong>Airtel: 0751318876</strong><br>
-                    <strong>Name: Rocky Peter Abayo</strong>
-                </li>
-                <li>Enter the Transaction ID from your Mobile Money confirmation.</li>
-            </ol>
-            <form method="POST" action="/boost-vendor-submit">
-                <label>Select Plan</label>
-                <select name="plan" required>
-                    <option value="7">7 Days - UGX 5,000</option>
-                    <option value="30">30 Days - UGX 15,000</option>
-                </select>
-                <label>Mobile Money Transaction ID *</label>
-                <input type="text" name="trans_id" required>
-                <button type="submit" class="btn" style="margin-top:20px;">Submit for Verification</button>
-            </form>
+    
+    c.execute("SELECT id, name, duration_days, price FROM boost_packages WHERE is_active=1 ORDER BY price")
+    packages = c.fetchall()
+    db.close()
+    
+    if not packages:
+        content = '<div class="card"><p>No boost packages available. Please contact admin.</p><a href="/dashboard" class="btn">Back</a></div>'
+        return render_user_template(base_template, title="Boost Vendor", active_page="dashboard", content=content)
+    
+    package_buttons = ""
+    for pkg in packages:
+        pkg_id, name, duration, price = pkg
+        package_buttons += f'<a href="/pay/boost_vendor/0?package_id={pkg_id}" class="btn">{name} – UGX {price:,}</a>'
+    
+    content = f'''
+    <div class="card">
+        <div class="card-header">Boost Your Vendor Profile</div>
+        <p>Get your shop at the top of the vendor list!</p>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; margin:20px 0;">
+            {package_buttons}
         </div>
-    """
+        <p><small>You will be redirected to payment selection.</small></p>
+    </div>
+    '''
     return render_user_template(base_template, title="Boost Vendor", active_page="dashboard", content=content)
 
 # ---------- Boost Profile ----------
@@ -5551,16 +5735,29 @@ def boost_profile():
     c = db.cursor()
     c.execute("SELECT id FROM providers WHERE user_id=?", (session['user_id'],))
     if not c.fetchone():
+        db.close()
         return redirect('/create-profile')
-
-    # Show plan selection (buttons for 7 days, 30 days)
-    content = '''
+    
+    # Fetch active boost packages
+    c.execute("SELECT id, name, duration_days, price FROM boost_packages WHERE is_active=1 ORDER BY price")
+    packages = c.fetchall()
+    db.close()
+    
+    if not packages:
+        content = '<div class="card"><p>No boost packages available. Please contact admin.</p><a href="/dashboard" class="btn">Back</a></div>'
+        return render_user_template(base_template, title="Boost Profile", active_page="dashboard", content=content)
+    
+    package_buttons = ""
+    for pkg in packages:
+        pkg_id, name, duration, price = pkg
+        package_buttons += f'<a href="/pay/boost_profile/0?package_id={pkg_id}" class="btn">{name} – UGX {price:,}</a>'
+    
+    content = f'''
     <div class="card">
         <div class="card-header">Boost Your Profile</div>
         <p>Get featured at the top of search results!</p>
         <div style="display:flex; gap:20px; flex-wrap:wrap; margin:20px 0;">
-            <a href="/pay/boost_profile/0?plan=7" class="btn">7 Days – UGX 5,000</a>
-            <a href="/pay/boost_profile/0?plan=30" class="btn">30 Days – UGX 15,000</a>
+            {package_buttons}
         </div>
         <p><small>You will be redirected to payment selection.</small></p>
     </div>
@@ -5571,40 +5768,37 @@ def boost_profile():
 @app.route('/boost-job/<int:job_id>')
 @login_required
 def boost_job(job_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT id, employer_id, title FROM jobs WHERE id=?", (job_id,))
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT employer_id, title FROM jobs WHERE id=?", (job_id,))
     job = c.fetchone()
-    conn.close()
-    if not job or job[1] != session['user_id']:
+    if not job or job[0] != session['user_id']:
+        db.close()
         return "Job not found or unauthorized.", 404
-    content = f"""
-        <div class="card">
-            <div class="card-header">Boost Job: {job[2]}</div>
-            <p>Make your job listing stand out!</p>
-            <p><strong>Pricing:</strong> UGX 5,000 (7 days), UGX 15,000 (30 days).</p>
-            <hr>
-            <p><strong>How to pay:</strong></p>
-            <ol>
-                <li>Send the amount to:<br>
-                    <strong>MTN Mobile Money: 0785686404</strong><br>
-                    <strong>Airtel: 0751318876</strong><br>
-                    <strong>Name: Rocky Peter Abayo</strong>
-                </li>
-                <li>Enter the Transaction ID from your Mobile Money confirmation.</li>
-            </ol>
-            <form method="POST" action="/boost-job-submit/{job_id}">
-                <label>Select Plan</label>
-                <select name="plan" required>
-                    <option value="7">7 Days - UGX 5,000</option>
-                    <option value="30">30 Days - UGX 15,000</option>
-                </select>
-                <label>Mobile Money Transaction ID *</label>
-                <input type="text" name="trans_id" required>
-                <button type="submit" class="btn" style="margin-top:20px;">Submit</button>
-            </form>
+    
+    c.execute("SELECT id, name, duration_days, price FROM boost_packages WHERE is_active=1 ORDER BY price")
+    packages = c.fetchall()
+    db.close()
+    
+    if not packages:
+        content = '<div class="card"><p>No boost packages available. Please contact admin.</p><a href="/dashboard" class="btn">Back</a></div>'
+        return render_user_template(base_template, title="Boost Job", active_page="dashboard", content=content)
+    
+    package_buttons = ""
+    for pkg in packages:
+        pkg_id, name, duration, price = pkg
+        package_buttons += f'<a href="/pay/boost_job/{job_id}?package_id={pkg_id}" class="btn">{name} – UGX {price:,}</a>'
+    
+    content = f'''
+    <div class="card">
+        <div class="card-header">Boost Job: {job[1]}</div>
+        <p>Make your job listing stand out!</p>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; margin:20px 0;">
+            {package_buttons}
         </div>
-    """
+        <p><small>You will be redirected to payment selection.</small></p>
+    </div>
+    '''
     return render_user_template(base_template, title="Boost Job", active_page="dashboard", content=content)
 
 @app.route('/pay/<item_type>/<int:item_id>')
@@ -5619,75 +5813,63 @@ def payment_selection(item_type, item_id):
     # Determine what we are paying for
     description = ""
     amount = 0
+    duration_days = 0
     plan_name = ""
-    if item_type == 'boost_profile':
-        # Get the provider's plan from request (or default)
-        # We'll store plan in session or pass via query
-        # For simplicity, we'll assume we have a plan_id in session or use default
-        # We'll modify boost routes to pass plan_id as query param.
-        plan = request.args.get('plan', '7')  # days
-        # We'll set price based on plan (hardcoded for now)
-        if plan == '7':
-            amount = 5000
-            plan_name = '7 Days'
-        elif plan == '30':
-            amount = 15000
-            plan_name = '30 Days'
-        else:
-            amount = 5000
-            plan_name = '7 Days'
-        description = f"Boost Profile ({plan_name})"
 
-    elif item_type == 'boost_vendor':
-        plan = request.args.get('plan', '7')
-        if plan == '7':
-            amount = 5000
-            plan_name = '7 Days'
-        elif plan == '30':
-            amount = 15000
-            plan_name = '30 Days'
-        else:
-            amount = 5000
-            plan_name = '7 Days'
-        description = f"Boost Vendor ({plan_name})"
+    # ---- BOOST: fetch from boost_packages table ----
+    if item_type in ['boost_profile', 'boost_vendor', 'boost_job']:
+        package_id = request.args.get('package_id')
+        if not package_id:
+            return "Package ID missing.", 400
 
-    elif item_type == 'boost_job':
-        plan = request.args.get('plan', '7')
-        if plan == '7':
-            amount = 5000
-            plan_name = '7 Days'
-        elif plan == '30':
-            amount = 15000
-            plan_name = '30 Days'
-        else:
-            amount = 5000
-            plan_name = '7 Days'
-        description = f"Boost Job ({plan_name})"
-
-    elif item_type == 'subscription':
-        # We need the subscription package id
-        # The item_id is the package_id
         db = get_db()
         c = db.cursor()
-        c.execute("SELECT name, price, duration_days FROM subscription_packages WHERE id=?", (item_id,))
+        c.execute("SELECT id, name, duration_days, price FROM boost_packages WHERE id=? AND is_active=1", (package_id,))
         pkg = c.fetchone()
+        db.close()  # close because get_db() is not used here (we used a manual connection)
+        if not pkg:
+            return "Invalid or inactive boost package.", 400
+
+        pkg_id, pkg_name, duration_days, price = pkg
+        amount = price
+        plan_name = pkg_name
+        description = f"{item_type.replace('_', ' ').title()} ({pkg_name})"
+
+        # Store for activation
+        session['payment_context'] = {
+            'item_type': item_type,
+            'item_id': item_id,
+            'package_id': package_id,
+            'duration_days': duration_days,
+            'amount': amount,
+            'description': description
+        }
+
+    # ---- SUBSCRIPTION: fetch from subscription_packages table ----
+    elif item_type == 'subscription':
+        db = get_db()
+        c = db.cursor()
+        c.execute("SELECT name, price, duration_days FROM subscription_packages WHERE id=? AND is_active=1", (item_id,))
+        pkg = c.fetchone()
+        db.close()
         if not pkg:
             return "Invalid subscription package.", 400
-        amount = pkg[1]
-        plan_name = pkg[0]
-        description = f"Subscription: {plan_name} ({pkg[2]} days)"
+
+        pkg_name, price, duration_days = pkg
+        amount = price
+        plan_name = pkg_name
+        description = f"Subscription: {pkg_name} ({duration_days} days)"
+
+        session['payment_context'] = {
+            'item_type': item_type,
+            'item_id': item_id,
+            'duration_days': duration_days,
+            'amount': amount,
+            'description': description
+        }
 
     else:
         return "Invalid item type.", 400
-
-    # Store payment context in session for later (to avoid passing too many params)
-    session['payment_context'] = {
-        'item_type': item_type,
-        'item_id': item_id,
-        'plan': plan if 'plan' in locals() else None,
-        'amount': amount,
-        'description': description
-    }
 
     # Build payment method options
     method_options = ''
@@ -5733,26 +5915,24 @@ def process_payment():
         return "No payment context found. Please start again.", 400
 
     user_id = session['user_id']
-    phone = session.get('user_phone', '')  # Assume we have user phone
+    phone = session.get('user_phone', '')
 
     if method == 'manual':
-        # Redirect to manual SMS verification page
         return redirect(url_for('manual_sms_verify'))
     elif method == 'yo':
-        # Initiate Yo! payment
         settings = get_payment_settings()
         result = yo_charge(phone, context['amount'], context['description'], settings)
         if result == 'instant_success':
             # Auto-activate
             activate_payment(user_id, context)
+            session.pop('payment_context', None)
             return redirect(url_for('dashboard'))
         elif result and result.startswith('http'):
             # Redirect to Yo! payment page
             return redirect(result)
         else:
-            return render_page("Payment Error", '<div class="card"><div class="alert alert-error">Yo! Payments failed. Please try manual SMS.</div><a href="/pay/' + context['item_type'] + '/' + str(context['item_id']) + '" class="btn">Back</a></div>')
+            return render_page("Payment Error", '<div class="card"><div class="alert alert-error">Yo! Payments failed. Please try manual SMS.</div><a href="/pay/' + context['item_type'] + '/' + str(context['item_id']) + '?package_id=' + str(context.get('package_id', '')) + '" class="btn">Back</a></div>')
     elif method == 'iotec':
-        # Placeholder - redirect to IOTEC payment
         return redirect(url_for('pay_iotec'))
     elif method == 'pawapay':
         return redirect(url_for('pay_pawapay'))
