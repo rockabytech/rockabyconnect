@@ -4439,17 +4439,33 @@ def home():
     """
 
     content = f"""
-    <!-- HERO -->
-    <div class="hero-full">
-        <h1>Get Work Done – <span>or Get Paid</span></h1>
-        <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
-        <div class="hero-buttons">
-            <a href="/offer-skill" class="btn-hero-primary">Offer Your Skill</a>
-            <a href="/post-job" class="btn-hero-secondary">Post a Job</a>
+    <!-- FEATURED CAROUSEL (1) -->
+    <div class="ad-carousel">
+        <div class="carousel-track">
+            {carousel_slides}
+        </div>
+        <button class="carousel-prev">‹</button>
+        <button class="carousel-next">›</button>
+        <div class="carousel-dots"></div>
+    </div>
+
+    <!-- SPONSORED LISTINGS (2) -->
+    <div class="sponsored-section">
+        <h2>⭐ Sponsored Listings</h2>
+        <div class="sponsored-grid">
+            {sponsored_html}
         </div>
     </div>
 
-    <!-- STATS BAR -->
+    <!-- TESTIMONIALS (3) -->
+    <div class="testimonials">
+        <h2>What Our Users Say</h2>
+        <div class="testimonial-grid">
+            {testimonials_html}
+        </div>
+    </div>
+
+    <!-- STATS BAR (4) -->
     <div class="stats-bar">
         <div class="stat-item">
             <i class="fas fa-users"></i>
@@ -4473,60 +4489,22 @@ def home():
         </div>
     </div>
 
-    <!-- HOW IT WORKS -->
-    <div class="how-it-works">
-        <h2>How It Works</h2>
-        <div class="steps">
-            <div class="step">
-                <span class="step-icon">🔍</span>
-                <h3>1. Find Skills</h3>
-                <p>Browse verified workers or search by skill, location, or rating.</p>
-            </div>
-            <div class="step">
-                <span class="step-icon">📝</span>
-                <h3>2. Connect</h3>
-                <p>Post a job, send a message, or apply for opportunities.</p>
-            </div>
-            <div class="step">
-                <span class="step-icon">💬</span>
-                <h3>3. Work & Grow</h3>
-                <p>Get paid for your skills or find the right talent for your business.</p>
-            </div>
+    <!-- HERO (5) -->
+    <div class="hero-full">
+        <h1>Get Work Done – <span>or Get Paid</span></h1>
+        <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
+        <div class="hero-buttons">
+            <a href="/offer-skill" class="btn-hero-primary">Offer Your Skill</a>
+            <a href="/post-job" class="btn-hero-secondary">Post a Job</a>
         </div>
     </div>
 
-    <!-- FEATURED CAROUSEL -->
-    <div class="ad-carousel">
-        <div class="carousel-track">
-            {carousel_slides}
-        </div>
-        <button class="carousel-prev">‹</button>
-        <button class="carousel-next">›</button>
-        <div class="carousel-dots"></div>
-    </div>
-
-    <!-- SPONSORED LISTINGS -->
-    <div class="sponsored-section">
-        <h2>⭐ Sponsored Listings</h2>
-        <div class="sponsored-grid">
-            {sponsored_html}
-        </div>
-    </div>
-
-    <!-- BANNER ADS -->
+    <!-- BANNER ADS (6) -->
     <div class="banner-ads">
         {banners}
     </div>
 
-    <!-- TESTIMONIALS -->
-    <div class="testimonials">
-        <h2>What Our Users Say</h2>
-        <div class="testimonial-grid">
-            {testimonials_html}
-        </div>
-    </div>
-
-    <!-- CTA SECTION -->
+    <!-- CTA SECTION (7) -->
     <div class="cta-section">
         <h2>Ready to Get Started?</h2>
         <p>Join thousands of users in Uganda's growing freelance community.</p>
