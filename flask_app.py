@@ -6642,11 +6642,12 @@ def admin_dashboard():
     if not session.get('admin'):
         return redirect('/admin/login')
     
+    # ---- Open connection ----
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
 
-    # Stats
+    # ---- Stats ----
     c.execute("SELECT COUNT(*) FROM users")
     total_users = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM providers")
@@ -6682,21 +6683,34 @@ def admin_dashboard():
                     total_revenue += 40000
             except:
                 pass
-    
-    # ---- PENDING SUBSCRIPTION REQUESTS ----
+
+    # ---- Pending subscription requests ----
     c.execute("SELECT COUNT(*) FROM boost_requests WHERE boost_type='subscription' AND status='pending'")
     pending_subs = c.fetchone()[0]
-    # -----------------------------------------
 
-    # Pending boost requests
+    # ---- Pending boost requests ----
     c.execute("""
         SELECT br.id, u.phone, u.name, br.transaction_id, br.plan, br.boost_type, br.item_id, br.request_date
         FROM boost_requests br JOIN users u ON br.user_id = u.id
         WHERE br.status = 'pending' ORDER BY br.request_date DESC
     """)
     pending = c.fetchall()
+
+    # ---- Pending payment transactions (new) ----
+    c.execute("""
+        SELECT pt.id, u.name, u.phone, pt.amount, pt.payment_method, pt.raw_sms, pt.created_at,
+               pt.description, pt.item_type, pt.item_id
+        FROM payment_transactions pt
+        JOIN users u ON pt.user_id = u.id
+        WHERE pt.status = 'pending'
+        ORDER BY pt.created_at DESC
+    """)
+    pending_payments = c.fetchall()
+
+    # ---- Close connection after all queries ----
     conn.close()
 
+    # ---- Build HTML for boost requests ----
     rows = ""
     for req in pending:
         rid, phone, name, trans, plan, btype, item_id, rdate = req
@@ -6715,17 +6729,7 @@ def admin_dashboard():
     if not rows:
         rows = "<tr><td colspan='6' style='text-align:center;'>No pending boost requests.</td></tr>"
 
-    # ---- PENDING PAYMENT TRANSACTIONS ----
-    c.execute("""
-        SELECT pt.id, u.name, u.phone, pt.amount, pt.payment_method, pt.raw_sms, pt.created_at,
-               pt.description, pt.item_type, pt.item_id
-        FROM payment_transactions pt
-        JOIN users u ON pt.user_id = u.id
-        WHERE pt.status = 'pending'
-        ORDER BY pt.created_at DESC
-    """)
-    pending_payments = c.fetchall()
-    
+    # ---- Build HTML for payment transactions ----
     payment_rows = ""
     for pp in pending_payments:
         pid, name, phone, amount, method, raw_sms, created_at, desc, item_type, item_id = pp
@@ -6745,6 +6749,7 @@ def admin_dashboard():
     if not payment_rows:
         payment_rows = "<tr><td colspan='6'>No pending payment transactions.</td></tr>"
 
+    # ---- Build final content ----
     content = f"""
     <div class="card">
         <div class="card-header">📊 Platform Statistics</div>
@@ -6776,7 +6781,8 @@ def admin_dashboard():
         <a href="/admin/subscription-requests" class="btn" style="background:#17a2b8; color:white;">📦 Subscription Requests</a>
         <a href="/admin/subscriptions" class="btn" style="background:#28a745; color:white;">📦 Manage Packages</a>
         <a href="/admin/backups" class="btn" style="background:#6c757d; color:white;">💾 Backups</a>
-        <a href="/admin/broadcast" class="btn" style="background:#dc3545; color:white;">📢 Broadcast</a>  <!-- ⭐ ADD THIS -->
+        <a href="/admin/broadcast" class="btn" style="background:#dc3545; color:white;">📢 Broadcast</a>
+        <a href="/admin/payment-settings" class="btn" style="background:#ffc107; color:#000;">💳 Payment Methods</a>
     </div>
 </div>
 
@@ -6791,7 +6797,6 @@ def admin_dashboard():
         <div style="margin-top:20px;">
             <a href="/admin/stats" class="btn btn-outline">📊 Detailed Statistics</a>
             <a href="/admin/referral-settings" class="btn" style="background:#fd7e14; color:white;">🎁 Referral Settings</a>
-            <a href="/admin/payment-settings" class="{{ 'active' if active_page == 'payments' else '' }}">💳 Payment Methods</a>
         </div>
     </div>
     """
