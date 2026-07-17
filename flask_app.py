@@ -4813,7 +4813,7 @@ def dashboard():
     # ---- Vendor Profile Section ----
     vendor_section = ""
     if vendor:
-        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vvideo, vstatus, vfeatured, vexpiry = vendor
+        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vvideo, vstatus, vfeatured, vexpiry = vendor
         vstatus_class = vstatus.lower()
         location = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
         vendor_section = f"""
