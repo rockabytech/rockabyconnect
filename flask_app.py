@@ -5844,14 +5844,15 @@ def yo_callback():
 @app.route('/subscribe', methods=['GET'])
 @login_required
 def subscribe():
-    # Show package selection
+    """Show available subscription packages and redirect to payment selection."""
     packages = get_subscription_packages()
     if not packages:
-        return "No packages available."
+        content = '<div class="card"><p>No subscription packages available at the moment.</p></div>'
+        return render_user_template(base_template, title="Subscribe", content=content)
 
     content = '''
     <div class="card">
-        <div class="card-header">Choose a Subscription Package</div>
+        <div class="card-header">📦 Choose a Subscription Package</div>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:20px;">
     '''
     for pkg in packages:
@@ -8227,59 +8228,6 @@ def pawapay_callback():
 def pesapal_callback():
     print("PesaPal callback received:", request.get_json())
     return 'OK', 200
-
-@app.route('/subscribe', methods=['GET', 'POST'])
-@login_required
-def subscribe():
-    user_id = session['user_id']
-    # Check if already subscribed
-    if is_subscription_active(user_id):
-        # Show current subscription info
-        sub = get_user_subscription(user_id)
-        if sub:
-            content = f"""
-            <div class="card">
-                <div class="card-header">✅ You are subscribed</div>
-                <p>Package: {sub[7]}</p>
-                <p>Valid until: {sub[5]}</p>
-                <a href="/dashboard" class="btn">Back to Dashboard</a>
-            </div>
-            """
-            return render_user_template(base_template, title="My Subscription", content=content)
-    
-    packages = get_subscription_packages()
-    if not packages:
-        content = "<div class='card'><p>No subscription packages available at the moment. Please check back later.</p></div>"
-        return render_user_template(base_template, title="Subscribe", content=content)
-    
-    if request.method == 'POST':
-        package_id = request.form.get('package_id')
-        trans_id = request.form.get('trans_id', '').strip()
-        if not package_id or not trans_id:
-            return "Please select a package and provide a transaction ID.", 400
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT duration_days FROM subscription_packages WHERE id=?", (package_id,))
-        pkg = c.fetchone()
-        if not pkg:
-            conn.close()
-            return "Invalid package", 400
-        duration_days = pkg[0]
-        c.execute("""
-            INSERT INTO boost_requests (user_id, transaction_id, plan, status, boost_type, item_id)
-            VALUES (?,?,?,'pending','subscription',?)
-        """, (user_id, trans_id, duration_days, package_id))
-        conn.commit()
-        conn.close()
-        add_notification(user_id, 'subscription_request', f'Your subscription request for {duration_days} days has been submitted for approval.')
-        content = """
-        <div class="card">
-            <div class="card-header">📩 Request Submitted</div>
-            <p>Your subscription request has been sent for admin approval. You'll receive a notification once it's approved.</p>
-            <a href="/dashboard" class="btn">Back to Dashboard</a>
-        </div>
-        """
-        return render_user_template(base_template, title="Subscription Requested", content=content)
     
     # GET – show packages form
     packages_html = ""
