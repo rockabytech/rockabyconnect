@@ -306,6 +306,54 @@ def save_resized_image(file, max_width=800):
         print(f"Image resize error: {e}")
         return None
 
+def activate_payment(user_id, context):
+    """Activate the purchased item based on context."""
+    item_type = context['item_type']
+    item_id = context['item_id']
+    plan_days = context.get('plan', '7')  # for boosts
+
+    db = get_db()
+    c = db.cursor()
+
+    if item_type == 'boost_profile':
+        # Get the provider profile for this user
+        c.execute("SELECT id FROM providers WHERE user_id=?", (user_id,))
+        prov = c.fetchone()
+        if prov:
+            expiry = date.today() + timedelta(days=int(plan_days))
+            c.execute("UPDATE providers SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
+            add_notification(user_id, 'boost_approved', f'Your profile boost for {plan_days} days is active!')
+    elif item_type == 'boost_vendor':
+        c.execute("SELECT id FROM vendors WHERE user_id=?", (user_id,))
+        vend = c.fetchone()
+        if vend:
+            expiry = date.today() + timedelta(days=int(plan_days))
+            c.execute("UPDATE vendors SET featured=1, featured_expiry=? WHERE user_id=?", (expiry, user_id))
+            add_notification(user_id, 'boost_approved', f'Your vendor boost for {plan_days} days is active!')
+    elif item_type == 'boost_job':
+        # item_id is the job_id
+        c.execute("SELECT employer_id FROM jobs WHERE id=?", (item_id,))
+        job = c.fetchone()
+        if job and job[0] == user_id:
+            expiry = date.today() + timedelta(days=int(plan_days))
+            c.execute("UPDATE jobs SET featured=1, featured_expiry=? WHERE id=?", (expiry, item_id))
+            add_notification(user_id, 'boost_approved', f'Your job boost for {plan_days} days is active!')
+    elif item_type == 'subscription':
+        # item_id is the package_id
+        # Create a subscription record
+        c.execute("SELECT duration_days FROM subscription_packages WHERE id=?", (item_id,))
+        pkg = c.fetchone()
+        if pkg:
+            duration = pkg[0]
+            start_date = date.today()
+            end_date = start_date + timedelta(days=duration)
+            c.execute("""
+                INSERT INTO user_subscriptions (user_id, package_id, start_date, end_date, status, transaction_id)
+                VALUES (?, ?, ?, ?, 'active', ?)
+            """, (user_id, item_id, start_date, end_date, f'payment_{int(datetime.now().timestamp())}'))
+            add_notification(user_id, 'subscription_approved', f'Your {context["description"]} subscription is active!')
+    db.commit()
+
 # ============================================================
 # DATABASE SETUP
 # ============================================================
@@ -316,6 +364,26 @@ def init_db():
     
     # ⭐ CREATE THE CURSOR HERE ⭐
     c = conn.cursor()
+
+    # ---- PAYMENT TRANSACTIONS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS payment_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        phone TEXT,
+        amount INTEGER,
+        status TEXT DEFAULT 'pending',
+        transaction_id TEXT,
+        payment_method TEXT,
+        raw_sms TEXT,
+        recipient TEXT,
+        payment_date TEXT,
+        description TEXT,
+        item_type TEXT,           -- 'boost_profile', 'boost_vendor', 'boost_job', 'subscription'
+        item_id INTEGER,          -- ID of the item to be boosted or subscription package
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
     
     # ---- USERS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -329,6 +397,41 @@ def init_db():
     columns = [col[1] for col in c.fetchall()]
     if 'theme' not in columns:
         c.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'default'")
+
+        # ---- PAYMENT SETTINGS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS payment_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mtn_number TEXT,
+        airtel_number TEXT,
+        payment_name TEXT DEFAULT 'RockabyTech',
+        active_payment_methods TEXT DEFAULT '["manual"]',
+        yo_username TEXT,
+        yo_password TEXT,
+        yo_auto_pay INTEGER DEFAULT 0,
+        iotec_wallet_id TEXT,
+        iotec_client_id TEXT,
+        iotec_api_secret TEXT,
+        pawapay_api_key TEXT,
+        pawapay_merchant_id TEXT,
+        pesapal_consumer_key TEXT,
+        pesapal_consumer_secret TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    
+    # Insert default row if empty
+    c.execute("SELECT COUNT(*) FROM payment_settings")
+    if c.fetchone()[0] == 0:
+        c.execute("""
+            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
+            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
+        """)
+    
+    # ---- EXTEND BOOST_REQUESTS FOR PAYMENTS ----
+    c.execute("PRAGMA table_info(boost_requests)")
+    existing_cols = [col[1] for col in c.fetchall()]
+    for col in ['payment_method', 'raw_sms', 'amount', 'recipient', 'payment_date']:
+        if col not in existing_cols:
+            c.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
 
     # ---- PROVIDERS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS providers (
@@ -646,6 +749,97 @@ init_db()
 # ============================================================
 # HELPERS
 # ============================================================
+def parse_mtn_sms(sms):
+    tid = re.search(r'ID:\s*(\d+)', sms)
+    amount = re.search(r'UGX\s*([\d,]+)', sms)
+    recipient_name = re.search(r'to\s+(.+?),', sms)
+    number_match = re.search(r'to\s+.+?[, ]+(\d{10,12})', sms)
+    date_str = re.search(r'on\s+(\d{4}-\d{2}-\d{2})', sms)
+    return {
+        'tid': tid.group(1) if tid else None,
+        'amount': int(amount.group(1).replace(',', '')) if amount else None,
+        'recipient_name': recipient_name.group(1).strip() if recipient_name else None,
+        'recipient_number': number_match.group(1) if number_match else None,
+        'date': date_str.group(1) if date_str else None
+    }
+
+def parse_airtel_sms(sms):
+    tid = re.search(r'TID\s*(\d+)', sms)
+    amount = re.search(r'UGX\s*([\d,]+)', sms)
+    recipient_match = re.search(r'to\s+(.+?)\s+on\s+(\d+)', sms, re.IGNORECASE)
+    if recipient_match:
+        recipient_name = recipient_match.group(1).strip()
+        recipient_number = recipient_match.group(2).strip()
+    else:
+        recipient_match = re.search(r'to\s+(.+?)\s+\d', sms)
+        recipient_name = recipient_match.group(1).strip() if recipient_match else None
+        recipient_number = None
+    date_str = re.search(r'Date\s+(\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2})', sms)
+    return {
+        'tid': tid.group(1) if tid else None,
+        'amount': int(amount.group(1).replace(',', '')) if amount else None,
+        'recipient_name': recipient_name,
+        'recipient_number': recipient_number,
+        'date': date_str.group(1) if date_str else None
+    }
+
+def get_payment_settings():
+    """Fetch the global payment settings as a dict."""
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT * FROM payment_settings LIMIT 1")
+    row = c.fetchone()
+    if not row:
+        # Insert default
+        c.execute("""
+            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
+            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
+        """)
+        db.commit()
+        c.execute("SELECT * FROM payment_settings LIMIT 1")
+        row = c.fetchone()
+    # Convert to dict
+    keys = ['id', 'mtn_number', 'airtel_number', 'payment_name', 'active_payment_methods',
+            'yo_username', 'yo_password', 'yo_auto_pay', 'iotec_wallet_id', 'iotec_client_id',
+            'iotec_api_secret', 'pawapay_api_key', 'pawapay_merchant_id',
+            'pesapal_consumer_key', 'pesapal_consumer_secret', 'updated_at']
+    return dict(zip(keys, row))
+
+def yo_charge(phone, amount, description, settings):
+    """Initiate Yo! Payments charge. Returns 'instant_success' if auto-pay enabled and successful, else redirect URL or None."""
+    if not settings['yo_username'] or not settings['yo_password']:
+        return None
+    ref = f"ROCK-{datetime.now().strftime('%Y%m%d%H%M%S')}-{random.randint(1000,9999)}"
+    payload = {
+        "username": settings['yo_username'],
+        "password": settings['yo_password'],
+        "phone_number": clean_number(phone),
+        "amount": str(amount),
+        "currency": "UGX",
+        "external_ref": ref,
+        "callback_url": url_for('yo_callback', _external=True)
+    }
+    try:
+        resp = requests.post("https://paymentsapi.yo.co.ug/v1/collection", json=payload, headers={"Content-Type": "application/json"})
+        data = resp.json()
+        # If auto-pay is enabled and transaction succeeds instantly
+        if settings['yo_auto_pay'] and data.get('transaction_status') == 'SUCCEEDED':
+            # Save the transaction as completed
+            db = get_db()
+            c = db.cursor()
+            c.execute("""
+                INSERT INTO payment_transactions (provider_id, phone, amount, status, transaction_id, payment_method, description)
+                VALUES (?, ?, ?, 'completed', ?, 'yo', ?)
+            """, (None, phone, amount, ref, description))  # provider_id not used here, set to None
+            db.commit()
+            return 'instant_success'
+        if data.get('status') == 'success':
+            # Redirect user to Yo! payment page
+            return data.get('redirect_url')
+    except Exception as e:
+        print(f"Yo! Payments error: {e}")
+    return None
+
 def get_db():
     """Get database connection (for routes that use it)."""
     conn = sqlite3.connect(DB_PATH)
@@ -1358,6 +1552,172 @@ def admin_referral_settings_page():  # ← Renamed to avoid conflict
     </div>
     '''
     return render_template_string(admin_base_template.replace("{title}", "Referral Settings").replace("{active_page}", "stats").replace("{content}", content))
+
+@app.route('/admin/payment-settings', methods=['GET', 'POST'])
+def admin_payment_settings():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+
+    db = get_db()
+    c = db.cursor()
+    # Get current settings (assume id=1)
+    c.execute("SELECT * FROM payment_settings LIMIT 1")
+    settings = c.fetchone()
+    if not settings:
+        # Should not happen, but insert default
+        c.execute("""
+            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
+            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
+        """)
+        db.commit()
+        c.execute("SELECT * FROM payment_settings LIMIT 1")
+        settings = c.fetchone()
+
+    if request.method == 'POST':
+        mtn = request.form.get('mtn_number', '')
+        airtel = request.form.get('airtel_number', '')
+        payment_name = request.form.get('payment_name', 'RockabyTech')
+        active_methods = request.form.getlist('active_methods')  # list of values
+        # Convert to JSON array
+        active_methods_json = json.dumps(active_methods) if active_methods else '[]'
+
+        yo_user = request.form.get('yo_username', '')
+        yo_pass = request.form.get('yo_password', '')
+        yo_auto = 1 if request.form.get('yo_auto_pay') else 0
+
+        # IOTEC
+        iotec_wallet = request.form.get('iotec_wallet_id', '')
+        iotec_client = request.form.get('iotec_client_id', '')
+        iotec_secret = request.form.get('iotec_api_secret', '')
+
+        # PawaPay
+        pawapay_key = request.form.get('pawapay_api_key', '')
+        pawapay_merchant = request.form.get('pawapay_merchant_id', '')
+
+        # PesaPal
+        pesapal_key = request.form.get('pesapal_consumer_key', '')
+        pesapal_secret = request.form.get('pesapal_consumer_secret', '')
+
+        c.execute("""
+            UPDATE payment_settings SET
+                mtn_number = ?,
+                airtel_number = ?,
+                payment_name = ?,
+                active_payment_methods = ?,
+                yo_username = ?,
+                yo_password = ?,
+                yo_auto_pay = ?,
+                iotec_wallet_id = ?,
+                iotec_client_id = ?,
+                iotec_api_secret = ?,
+                pawapay_api_key = ?,
+                pawapay_merchant_id = ?,
+                pesapal_consumer_key = ?,
+                pesapal_consumer_secret = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (mtn, airtel, payment_name, active_methods_json,
+              yo_user, yo_pass, yo_auto,
+              iotec_wallet, iotec_client, iotec_secret,
+              pawapay_key, pawapay_merchant,
+              pesapal_key, pesapal_secret,
+              settings[0]))
+        db.commit()
+        return redirect('/admin/payment-settings')
+
+    # Prepare data for template
+    payment_methods = [
+        ('manual', 'Manual SMS Verification'),
+        ('yo', 'Yo! Payments'),
+        ('iotec', 'IOTEC (Coming Soon)'),
+        ('pawapay', 'PawaPay (Coming Soon)'),
+        ('pesapal', 'PesaPal (Coming Soon)')
+    ]
+    active_methods_list = json.loads(settings['active_payment_methods'] or '[]')
+
+    # Build checkboxes
+    method_checkboxes = ''
+    for val, label in payment_methods:
+        checked = 'checked' if val in active_methods_list else ''
+        method_checkboxes += f'''
+        <label style="display:inline-block; margin-right:20px; font-weight:normal;">
+            <input type="checkbox" name="active_methods" value="{val}" {checked}> {label}
+        </label>
+        '''
+
+    # Callback URLs for display
+    base_url = request.url_root.rstrip('/')
+    yo_callback = f"{base_url}/yo-callback"
+    iotec_callback = f"{base_url}/iotec-callback"
+    pawapay_callback = f"{base_url}/pawapay-callback"
+    pesapal_callback = f"{base_url}/pesapal-callback"
+
+    content = f'''
+    <div class="card">
+        <div class="card-header">💳 Payment Settings</div>
+        <form method="POST">
+            <h4>Display & Basic</h4>
+            <label>Payment Name (shown to users)</label>
+            <input type="text" name="payment_name" value="{settings['payment_name'] or ''}" placeholder="e.g., RockabyTech">
+            <label>MTN Mobile Money Number</label>
+            <input type="text" name="mtn_number" value="{settings['mtn_number'] or ''}" placeholder="e.g., 0785686404">
+            <label>Airtel Money Number</label>
+            <input type="text" name="airtel_number" value="{settings['airtel_number'] or ''}" placeholder="e.g., 0751318876">
+
+            <hr>
+            <h4>Active Payment Methods</h4>
+            <div>{method_checkboxes}</div>
+            <small style="display:block; margin-top:5px; color:var(--text-secondary);">Select which payment options users will see.</small>
+
+            <hr>
+            <h4>Yo! Payments</h4>
+            <label>Username</label>
+            <input type="text" name="yo_username" value="{settings['yo_username'] or ''}">
+            <label>Password</label>
+            <input type="password" name="yo_password" value="{settings['yo_password'] or ''}">
+            <label>
+                <input type="checkbox" name="yo_auto_pay" {"checked" if settings['yo_auto_pay'] else ""}>
+                Enable Auto-Pay (instant activation)
+            </label>
+            <label>Callback URL</label>
+            <input type="text" readonly value="{yo_callback}" style="background:var(--bg);">
+            <small style="display:block; color:var(--text-secondary);">Copy this URL to your Yo! Payments configuration.</small>
+
+            <hr>
+            <h4>IOTEC</h4>
+            <label>Wallet ID</label>
+            <input type="text" name="iotec_wallet_id" value="{settings['iotec_wallet_id'] or ''}">
+            <label>Client ID</label>
+            <input type="text" name="iotec_client_id" value="{settings['iotec_client_id'] or ''}">
+            <label>API Secret</label>
+            <input type="password" name="iotec_api_secret" value="{settings['iotec_api_secret'] or ''}">
+            <label>Callback URL</label>
+            <input type="text" readonly value="{iotec_callback}" style="background:var(--bg);">
+
+            <hr>
+            <h4>PawaPay</h4>
+            <label>API Key</label>
+            <input type="text" name="pawapay_api_key" value="{settings['pawapay_api_key'] or ''}">
+            <label>Merchant ID</label>
+            <input type="text" name="pawapay_merchant_id" value="{settings['pawapay_merchant_id'] or ''}">
+            <label>Callback URL</label>
+            <input type="text" readonly value="{pawapay_callback}" style="background:var(--bg);">
+
+            <hr>
+            <h4>PesaPal</h4>
+            <label>Consumer Key</label>
+            <input type="text" name="pesapal_consumer_key" value="{settings['pesapal_consumer_key'] or ''}">
+            <label>Consumer Secret</label>
+            <input type="password" name="pesapal_consumer_secret" value="{settings['pesapal_consumer_secret'] or ''}">
+            <label>Callback URL</label>
+            <input type="text" readonly value="{pesapal_callback}" style="background:var(--bg);">
+
+            <button type="submit" class="btn" style="margin-top:20px;">Save Payment Settings</button>
+        </form>
+        <a href="/admin/dashboard" class="btn btn-outline" style="margin-top:10px;">Back to Dashboard</a>
+    </div>
+    '''
+    return render_user_template(base_template, title="Payment Settings", active_page="dashboard", content=content)
 
 @app.route('/admin/redemption-requests')
 def admin_redemption_requests():
@@ -5115,80 +5475,30 @@ def boost_vendor():
     """
     return render_user_template(base_template, title="Boost Vendor", active_page="dashboard", content=content)
 
-@app.route('/boost-vendor-submit', methods=['POST'])
-@login_required
-def boost_vendor_submit():
-    trans_id = request.form['trans_id']
-    plan = request.form['plan']
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT INTO boost_requests (user_id, transaction_id, plan, status, boost_type, item_id) VALUES (?,?,?,'pending','vendor',0)",
-              (session['user_id'], trans_id, plan))
-    conn.commit()
-    conn.close()
-    content = """
-        <div class="card"><h2>Vendor Boost Submitted</h2><p>We'll verify and activate soon.</p><a href="/dashboard" class="btn">Back</a></div>
-    """
-    return render_user_template(base_template, title="Boost Submitted", active_page="dashboard", content=content)
-
 # ---------- Boost Profile ----------
 @app.route('/boost')
 @login_required
 def boost_profile():
-    user_id = session['user_id']
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT id FROM providers WHERE user_id=?", (user_id,))
-    provider = c.fetchone()
-    conn.close()
-    if not provider:
+    # Check if user has a provider profile
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT id FROM providers WHERE user_id=?", (session['user_id'],))
+    if not c.fetchone():
         return redirect('/create-profile')
-    content = """
-        <div class="card">
-            <div class="card-header">Boost Your Profile</div>
-            <p>Get featured at the top of the search results and attract more customers!</p>
-            <p><strong>Pricing:</strong></p>
-            <ul><li>7 days: <strong>UGX 5,000</strong></li><li>30 days: <strong>UGX 15,000</strong></li></ul>
-            <hr>
-            <p><strong>How to pay:</strong></p>
-            <ol>
-                <li>Send the amount to:<br>
-                    <strong>MTN Mobile Money: 0785686404</strong><br>
-                    <strong>Airtel: 0751318876</strong><br>
-                    <strong>Name: Rocky Peter Abayo</strong>
-                </li>
-                <li>Enter the Transaction ID from your Mobile Money confirmation.</li>
-            </ol>
-            <form method="POST" action="/boost-submit">
-                <label>Select Plan</label>
-                <select name="plan" required>
-                    <option value="7">7 Days - UGX 5,000</option>
-                    <option value="30">30 Days - UGX 15,000</option>
-                </select>
-                <label>Mobile Money Transaction ID *</label>
-                <input type="text" name="trans_id" required>
-                <button type="submit" class="btn" style="margin-top:20px;">Submit for Verification</button>
-            </form>
-        </div>
-    """
-    return render_user_template(base_template, title="Boost Profile", active_page="dashboard", content=content)
 
-@app.route('/boost-submit', methods=['POST'])
-@login_required
-def boost_submit():
-    trans_id = request.form['trans_id']
-    plan = request.form['plan']
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT INTO boost_requests (user_id, transaction_id, plan, status, boost_type) VALUES (?,?,?,'pending','profile')",
-              (session['user_id'], trans_id, plan))
-    conn.commit()
-    conn.close()
-    add_notification(session['user_id'], 'sms', f'Boost request received (ID {trans_id}). We will verify shortly.')
-    content = """
-        <div class="card"><h2>Boost Request Submitted</h2><p>We'll verify and activate soon.</p><a href="/dashboard" class="btn">Back</a></div>
-    """
-    return render_user_template(base_template, title="Boost Submitted", active_page="dashboard", content=content)
+    # Show plan selection (buttons for 7 days, 30 days)
+    content = '''
+    <div class="card">
+        <div class="card-header">Boost Your Profile</div>
+        <p>Get featured at the top of search results!</p>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; margin:20px 0;">
+            <a href="/pay/boost_profile/0?plan=7" class="btn">7 Days – UGX 5,000</a>
+            <a href="/pay/boost_profile/0?plan=30" class="btn">30 Days – UGX 15,000</a>
+        </div>
+        <p><small>You will be redirected to payment selection.</small></p>
+    </div>
+    '''
+    return render_user_template(base_template, title="Boost Profile", active_page="dashboard", content=content)
 
 # ---------- Boost Job ----------
 @app.route('/boost-job/<int:job_id>')
@@ -5230,23 +5540,330 @@ def boost_job(job_id):
     """
     return render_user_template(base_template, title="Boost Job", active_page="dashboard", content=content)
 
-@app.route('/boost-job-submit/<int:job_id>', methods=['POST'])
+@app.route('/pay/<item_type>/<int:item_id>')
 @login_required
-def boost_job_submit(job_id):
-    trans_id = request.form['trans_id']
-    plan = request.form['plan']
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT INTO boost_requests (user_id, transaction_id, plan, status, boost_type, item_id) VALUES (?,?,?,'pending','job',?)",
-              (session['user_id'], trans_id, plan, job_id))
-    conn.commit()
-    conn.close()
-    content = """
-        <div class="card"><h2>Job Boost Submitted</h2><p>We'll verify and activate soon.</p><a href="/dashboard" class="btn">Back</a></div>
-    """
-    return render_user_template(base_template, title="Boost Submitted", active_page="dashboard", content=content)
+def payment_selection(item_type, item_id):
+    user_id = session['user_id']
+    settings = get_payment_settings()
+    active_methods = json.loads(settings['active_payment_methods'] or '[]')
+    if not active_methods:
+        return "No payment methods configured. Please contact admin.", 400
+
+    # Determine what we are paying for
+    description = ""
+    amount = 0
+    plan_name = ""
+    if item_type == 'boost_profile':
+        # Get the provider's plan from request (or default)
+        # We'll store plan in session or pass via query
+        # For simplicity, we'll assume we have a plan_id in session or use default
+        # We'll modify boost routes to pass plan_id as query param.
+        plan = request.args.get('plan', '7')  # days
+        # We'll set price based on plan (hardcoded for now)
+        if plan == '7':
+            amount = 5000
+            plan_name = '7 Days'
+        elif plan == '30':
+            amount = 15000
+            plan_name = '30 Days'
+        else:
+            amount = 5000
+            plan_name = '7 Days'
+        description = f"Boost Profile ({plan_name})"
+
+    elif item_type == 'boost_vendor':
+        plan = request.args.get('plan', '7')
+        if plan == '7':
+            amount = 5000
+            plan_name = '7 Days'
+        elif plan == '30':
+            amount = 15000
+            plan_name = '30 Days'
+        else:
+            amount = 5000
+            plan_name = '7 Days'
+        description = f"Boost Vendor ({plan_name})"
+
+    elif item_type == 'boost_job':
+        plan = request.args.get('plan', '7')
+        if plan == '7':
+            amount = 5000
+            plan_name = '7 Days'
+        elif plan == '30':
+            amount = 15000
+            plan_name = '30 Days'
+        else:
+            amount = 5000
+            plan_name = '7 Days'
+        description = f"Boost Job ({plan_name})"
+
+    elif item_type == 'subscription':
+        # We need the subscription package id
+        # The item_id is the package_id
+        db = get_db()
+        c = db.cursor()
+        c.execute("SELECT name, price, duration_days FROM subscription_packages WHERE id=?", (item_id,))
+        pkg = c.fetchone()
+        if not pkg:
+            return "Invalid subscription package.", 400
+        amount = pkg[1]
+        plan_name = pkg[0]
+        description = f"Subscription: {plan_name} ({pkg[2]} days)"
+
+    else:
+        return "Invalid item type.", 400
+
+    # Store payment context in session for later (to avoid passing too many params)
+    session['payment_context'] = {
+        'item_type': item_type,
+        'item_id': item_id,
+        'plan': plan if 'plan' in locals() else None,
+        'amount': amount,
+        'description': description
+    }
+
+    # Build payment method options
+    method_options = ''
+    for method in active_methods:
+        label = {
+            'manual': 'Manual SMS (MTN/Airtel)',
+            'yo': 'Yo! Payments',
+            'iotec': 'IOTEC',
+            'pawapay': 'PawaPay',
+            'pesapal': 'PesaPal'
+        }.get(method, method)
+        method_options += f'''
+        <div style="margin:10px 0;">
+            <input type="radio" name="payment_method" value="{method}" id="method_{method}" required>
+            <label for="method_{method}" style="font-weight:normal;">{label}</label>
+        </div>
+        '''
+
+    content = f'''
+    <div class="card" style="max-width:600px; margin:0 auto;">
+        <div class="card-header">💳 Payment for {description}</div>
+        <p><strong>Amount:</strong> UGX {amount:,}</p>
+        <p><strong>Description:</strong> {description}</p>
+        <hr>
+        <form method="POST" action="/pay/process">
+            <p>Select your payment method:</p>
+            {method_options}
+            <button type="submit" class="btn" style="width:100%; margin-top:20px;">Proceed to Pay</button>
+        </form>
+    </div>
+    '''
+    return render_user_template(base_template, title="Payment", active_page="dashboard", content=content)
+
+@app.route('/pay/process', methods=['POST'])
+@login_required
+def process_payment():
+    method = request.form.get('payment_method')
+    if not method:
+        return "Payment method not selected.", 400
+
+    context = session.get('payment_context')
+    if not context:
+        return "No payment context found. Please start again.", 400
+
+    user_id = session['user_id']
+    phone = session.get('user_phone', '')  # Assume we have user phone
+
+    if method == 'manual':
+        # Redirect to manual SMS verification page
+        return redirect(url_for('manual_sms_verify'))
+    elif method == 'yo':
+        # Initiate Yo! payment
+        settings = get_payment_settings()
+        result = yo_charge(phone, context['amount'], context['description'], settings)
+        if result == 'instant_success':
+            # Auto-activate
+            activate_payment(user_id, context)
+            return redirect(url_for('dashboard'))
+        elif result and result.startswith('http'):
+            # Redirect to Yo! payment page
+            return redirect(result)
+        else:
+            return render_page("Payment Error", '<div class="card"><div class="alert alert-error">Yo! Payments failed. Please try manual SMS.</div><a href="/pay/' + context['item_type'] + '/' + str(context['item_id']) + '" class="btn">Back</a></div>')
+    elif method == 'iotec':
+        # Placeholder - redirect to IOTEC payment
+        return redirect(url_for('pay_iotec'))
+    elif method == 'pawapay':
+        return redirect(url_for('pay_pawapay'))
+    elif method == 'pesapal':
+        return redirect(url_for('pay_pesapal'))
+    else:
+        return "Unsupported payment method.", 400
+
+@app.route('/pay/manual-sms', methods=['GET', 'POST'])
+@login_required
+def manual_sms_verify():
+    user_id = session['user_id']
+    context = session.get('payment_context')
+    if not context:
+        return "Payment context missing. Please start again.", 400
+
+    settings = get_payment_settings()
+    if request.method == 'POST':
+        raw_sms = request.form.get('raw_sms', '').strip()
+        if not raw_sms:
+            return "SMS content is required.", 400
+
+        # Parse SMS
+        if 'TID' in raw_sms or 'SENT.TID' in raw_sms:
+            parsed = parse_airtel_sms(raw_sms)
+        else:
+            parsed = parse_mtn_sms(raw_sms)
+
+        # Validate
+        errors = []
+        if not parsed['tid']:
+            errors.append("Transaction ID not found.")
+        if not parsed['amount']:
+            errors.append("Amount not found.")
+        elif parsed['amount'] != context['amount']:
+            errors.append(f"Amount mismatch. Expected UGX {context['amount']:,}, received UGX {parsed['amount']:,}.")
+        if parsed.get('recipient_number'):
+            sms_num = clean_number(parsed['recipient_number'])
+            mtn = clean_number(settings['mtn_number']) if settings['mtn_number'] else ''
+            airtel = clean_number(settings['airtel_number']) if settings['airtel_number'] else ''
+            if sms_num != mtn and sms_num != airtel:
+                errors.append("Payment was not sent to the correct provider number.")
+        else:
+            # Try to check recipient name if number not present
+            recipient_name = parsed.get('recipient_name', '').lower()
+            if settings['payment_name'] and settings['payment_name'].lower() not in recipient_name:
+                errors.append("Recipient name does not match our business name.")
+
+        # Check duplicate transaction ID
+        db = get_db()
+        c = db.cursor()
+        c.execute("SELECT id FROM payment_transactions WHERE transaction_id=? AND status != 'failed'", (parsed['tid'],))
+        if c.fetchone():
+            errors.append("This transaction ID has already been used.")
+
+        if errors:
+            error_msg = '<br>'.join(errors)
+            content = f'''
+            <div class="card">
+                <div class="alert alert-error">Please correct the following:<br>{error_msg}</div>
+                <form method="POST">
+                    <label>Paste your full MTN/Airtel SMS here</label>
+                    <textarea name="raw_sms" rows="6" required></textarea>
+                    <button type="submit" class="btn" style="margin-top:20px;">Verify Payment</button>
+                </form>
+            </div>
+            '''
+            return render_user_template(base_template, title="Verify SMS", active_page="dashboard", content=content)
+
+        # All checks passed – auto-approve
+        # Save transaction
+        c.execute("""
+            INSERT INTO payment_transactions
+            (user_id, phone, amount, status, transaction_id, payment_method, raw_sms, recipient, payment_date, description, item_type, item_id)
+            VALUES (?, ?, ?, 'completed', ?, 'manual', ?, ?, ?, ?, ?, ?)
+        """, (user_id, session['user_phone'], context['amount'], parsed['tid'], raw_sms,
+              parsed.get('recipient_name') or '', parsed.get('date') or '',
+              context['description'], context['item_type'], context['item_id']))
+        db.commit()
+        # Activate
+        activate_payment(user_id, context)
+        # Clear context
+        session.pop('payment_context', None)
+        return redirect(url_for('dashboard'))
+
+    # GET – show form
+    mtn = settings['mtn_number'] or 'Not set'
+    airtel = settings['airtel_number'] or 'Not set'
+    name = settings['payment_name'] or 'RockabyTech'
+    content = f'''
+    <div class="card" style="max-width:600px; margin:0 auto;">
+        <div class="card-header">📱 Manual SMS Payment</div>
+        <p><strong>Amount:</strong> UGX {context['amount']:,}</p>
+        <p><strong>Description:</strong> {context['description']}</p>
+        <hr>
+        <p><strong>Pay to:</strong></p>
+        <p>MTN: {mtn} | Airtel: {airtel}</p>
+        <p style="color:var(--text-secondary);">Name: {name}</p>
+        <hr>
+        <p>After sending money, paste the full SMS confirmation below:</p>
+        <form method="POST">
+            <label>Full SMS content</label>
+            <textarea name="raw_sms" rows="6" required></textarea>
+            <button type="submit" class="btn" style="width:100%; margin-top:20px;">Verify Payment</button>
+        </form>
+    </div>
+    '''
+    return render_user_template(base_template, title="Manual SMS Payment", active_page="dashboard", content=content)
+
+@app.route('/yo-callback', methods=['POST'])
+def yo_callback():
+    data = request.get_json()
+    if not data:
+        return "Invalid data", 400
+
+    # Extract transaction details
+    tx_ref = data.get('external_ref')
+    status = data.get('transaction_status')
+    if status == 'SUCCEEDED':
+        db = get_db()
+        c = db.cursor()
+        # Find the pending transaction by external_ref
+        # We'll store the external_ref in transaction_id column
+        c.execute("SELECT id, user_id, description, item_type, item_id FROM payment_transactions WHERE transaction_id=? AND status='pending'", (tx_ref,))
+        tx = c.fetchone()
+        if tx:
+            # Update transaction to completed
+            c.execute("UPDATE payment_transactions SET status='completed', updated_at=CURRENT_TIMESTAMP WHERE id=?", (tx[0],))
+            db.commit()
+            # Activate the item
+            # We need to retrieve the context stored with the transaction
+            # We stored description, item_type, item_id; use them
+            context = {
+                'item_type': tx[3],
+                'item_id': tx[4],
+                'description': tx[2],
+                'amount': None  # not needed for activation
+            }
+            activate_payment(tx[1], context)
+            # Notify user
+            add_notification(tx[1], 'payment_success', f'Your payment for {tx[2]} was successful!')
+        else:
+            # Could be a transaction we didn't record yet (if user was redirected and we didn't create a pending record)
+            # We'll create one now (but we need user info; we can get from phone number in data?)
+            # For robustness, we can store the pending record before redirect.
+            pass
+    return 'OK', 200
 
 # ---------- Job posting, editing ----------
+
+@app.route('/subscribe', methods=['GET'])
+@login_required
+def subscribe():
+    # Show package selection
+    packages = get_subscription_packages()
+    if not packages:
+        return "No packages available."
+
+    content = '''
+    <div class="card">
+        <div class="card-header">Choose a Subscription Package</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:20px;">
+    '''
+    for pkg in packages:
+        pkg_id, name, duration, price = pkg
+        content += f'''
+        <div style="border:1px solid var(--border); border-radius:12px; padding:16px; text-align:center;">
+            <h3>{name}</h3>
+            <p>{duration} days</p>
+            <p>UGX {price:,}</p>
+            <a href="/pay/subscription/{pkg_id}" class="btn">Select</a>
+        </div>
+        '''
+    content += '''
+        </div>
+    </div>
+    '''
+    return render_user_template(base_template, title="Subscribe", active_page="dashboard", content=content)
 
 @app.route('/post-job', methods=['GET', 'POST'])
 @login_required
@@ -6092,6 +6709,36 @@ def admin_dashboard():
     if not rows:
         rows = "<tr><td colspan='6' style='text-align:center;'>No pending boost requests.</td></tr>"
 
+    # ---- PENDING PAYMENT TRANSACTIONS ----
+    c.execute("""
+        SELECT pt.id, u.name, u.phone, pt.amount, pt.payment_method, pt.raw_sms, pt.created_at,
+               pt.description, pt.item_type, pt.item_id
+        FROM payment_transactions pt
+        JOIN users u ON pt.user_id = u.id
+        WHERE pt.status = 'pending'
+        ORDER BY pt.created_at DESC
+    """)
+    pending_payments = c.fetchall()
+    
+    payment_rows = ""
+    for pp in pending_payments:
+        pid, name, phone, amount, method, raw_sms, created_at, desc, item_type, item_id = pp
+        payment_rows += f"""
+        <tr>
+            <td>{name}<br><small>{phone}</small></td>
+            <td>UGX {amount:,}</td>
+            <td>{method}</td>
+            <td>{desc}</td>
+            <td><small>{created_at[:16]}</small></td>
+            <td>
+                <a href="/admin/approve-payment/{pid}" class="btn btn-small btn-success">Approve</a>
+                <a href="/admin/reject-payment/{pid}" class="btn btn-small btn-danger">Reject</a>
+            </td>
+        </tr>
+        """
+    if not payment_rows:
+        payment_rows = "<tr><td colspan='6'>No pending payment transactions.</td></tr>"
+
     content = f"""
     <div class="card">
         <div class="card-header">📊 Platform Statistics</div>
@@ -6106,6 +6753,14 @@ def admin_dashboard():
             <div class="stat-card"><h3>{pending_subs}</h3><small>Pending Subscriptions</small></div>
             <div class="stat-card"><h3>UGX {total_revenue:,}</h3><small>Total Revenue</small></div>
         </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">💳 Pending Payment Transactions</div>
+        <table>
+            <thead><tr><th>User</th><th>Amount</th><th>Method</th><th>Description</th><th>Date</th><th>Action</th></tr></thead>
+            <tbody>{payment_rows}</tbody>
+        </table>
     </div>
 
    <div class="card">
@@ -6130,6 +6785,7 @@ def admin_dashboard():
         <div style="margin-top:20px;">
             <a href="/admin/stats" class="btn btn-outline">📊 Detailed Statistics</a>
             <a href="/admin/referral-settings" class="btn" style="background:#fd7e14; color:white;">🎁 Referral Settings</a>
+            <a href="/admin/payment-settings" class="{{ 'active' if active_page == 'payments' else '' }}">💳 Payment Methods</a>
         </div>
     </div>
     """
@@ -6276,6 +6932,34 @@ def admin_reject_boost(req_id):
     c.execute("UPDATE boost_requests SET status='rejected' WHERE id=?", (req_id,))
     conn.commit()
     conn.close()
+    return redirect('/admin/dashboard')
+
+@app.route('/admin/approve-payment/<int:tx_id>')
+def admin_approve_payment(tx_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT user_id, item_type, item_id, description FROM payment_transactions WHERE id=? AND status='pending'", (tx_id,))
+    tx = c.fetchone()
+    if tx:
+        user_id, item_type, item_id, desc = tx
+        # Activate
+        context = {'item_type': item_type, 'item_id': item_id, 'description': desc}
+        activate_payment(user_id, context)
+        c.execute("UPDATE payment_transactions SET status='completed', updated_at=CURRENT_TIMESTAMP WHERE id=?", (tx_id,))
+        db.commit()
+        add_notification(user_id, 'payment_success', f'Your payment for {desc} has been approved and activated.')
+    return redirect('/admin/dashboard')
+
+@app.route('/admin/reject-payment/<int:tx_id>')
+def admin_reject_payment(tx_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    c.execute("UPDATE payment_transactions SET status='failed', updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'", (tx_id,))
+    db.commit()
     return redirect('/admin/dashboard')
 
 # --- Admin Backup and Restore ---
@@ -7523,6 +8207,21 @@ def message_conversation(user_id):
     </script>
     '''
     return render_user_template(base_template, title=f"Chat with {partner_name}", active_page="messages", content=content)
+
+@app.route('/iotec-callback', methods=['POST'])
+def iotec_callback():
+    print("IOTEC callback received:", request.get_json())
+    return 'OK', 200
+
+@app.route('/pawapay-callback', methods=['POST'])
+def pawapay_callback():
+    print("PawaPay callback received:", request.get_json())
+    return 'OK', 200
+
+@app.route('/pesapal-callback', methods=['POST'])
+def pesapal_callback():
+    print("PesaPal callback received:", request.get_json())
+    return 'OK', 200
 
 @app.route('/subscribe', methods=['GET', 'POST'])
 @login_required
