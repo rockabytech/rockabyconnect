@@ -364,6 +364,7 @@ def init_db():
     
     # ⭐ CREATE THE CURSOR HERE ⭐
     c = conn.cursor()
+    
     # ---- USERS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -486,6 +487,7 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
+    
     # ---- REFERRAL TABLES ----
     c.execute('''CREATE TABLE IF NOT EXISTS referral_codes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -596,15 +598,7 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
-    # Insert default row if empty
-    c.execute("SELECT COUNT(*) FROM payment_settings")
-    if c.fetchone()[0] == 0:
-        c.execute("""
-            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
-            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
-        """)
-
-    # ---- PAYMENT SETTINGS TABLE ----
+    # ---- PAYMENT SETTINGS TABLE (MUST BE CREATED BEFORE SELECT) ----
     c.execute('''CREATE TABLE IF NOT EXISTS payment_settings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         mtn_number TEXT,
@@ -624,7 +618,15 @@ def init_db():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
-     # ---- PAYMENT TRANSACTIONS TABLE ----
+    # ---- Insert default payment settings if table is empty ----
+    c.execute("SELECT COUNT(*) FROM payment_settings")
+    if c.fetchone()[0] == 0:
+        c.execute("""
+            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
+            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
+        """)
+
+    # ---- PAYMENT TRANSACTIONS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS payment_transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -644,9 +646,7 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
-
-    # ---- EXTEND BOOST_REQUESTS FOR PAYMENTS ----
-    # First ensure the table exists (it should, but guard against missing)
+    # ---- EXTEND BOOST_REQUESTS FOR PAYMENTS (with existence guard) ----
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boost_requests'")
     if c.fetchone():
         c.execute("PRAGMA table_info(boost_requests)")
