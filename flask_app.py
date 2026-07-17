@@ -542,10 +542,10 @@ def init_db():
             c.execute(f"ALTER TABLE {table} ADD COLUMN video TEXT")
 
             # ---- Add extra photo columns ----
-c.execute("PRAGMA table_info(vendors)")
-vendor_cols = [col[1] for col in c.fetchall()]
-if 'vendor_image4' not in vendor_cols:
-    c.execute("ALTER TABLE vendors ADD COLUMN vendor_image4 TEXT")
+        c.execute("PRAGMA table_info(vendors)")
+        vendor_cols = [col[1] for col in c.fetchall()]
+        if 'vendor_image4' not in vendor_cols:
+            c.execute("ALTER TABLE vendors ADD COLUMN vendor_image4 TEXT")
         
         c.execute("PRAGMA table_info(jobs)")
         job_cols = [col[1] for col in c.fetchall()]
