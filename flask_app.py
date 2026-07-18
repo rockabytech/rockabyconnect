@@ -5529,14 +5529,14 @@ def dashboard():
     if provider:
         # provider tuple: 14 columns (unchanged)
         pid, _, skills, district, village, bio, pic, video, status, featured, featured_expiry = provider
-        status_class = status.lower().replace(' ', '-')
+        status_class = status.lower().replace(' ', '-') if status else 'available'
         location = f"{district}{', ' + village if village else ''}"
         profile_section = f"""
             <div class="card">
                 <div class="card-header">My Freelancer Profile</div>
                 <p><strong>Skills:</strong> {skills}</p>
                 <p><strong>Location:</strong> {location}</p>
-                <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status}</span></p>
+                <p><strong>Status:</strong> <span class="badge badge-{status_class}">{status or 'Available'}</span></p>
                 <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
                     <a href="/edit-profile" class="btn btn-small">Edit Profile</a>
                     <a href="/boost" class="btn btn-small" style="background:var(--primary-dark);">Boost Profile</a>
@@ -5554,13 +5554,18 @@ def dashboard():
             </div>
         """
 
-    # ---- Vendor Profile Section (fixed unpack) ----
+    # ---- Vendor Profile Section (fixed unpack + status fallback) ----
     vendor_section = ""
     if vendor:
-        # vendor tuple has 16 columns: id, user_id, business_name, district, village, landmark, bio,
+        # vendor tuple has 16 columns:
+        # id, user_id, business_name, district, village, landmark, bio,
         # vendor_image, vendor_image2, vendor_image3, vendor_image4, vendor_image5,
         # video, status, featured, featured_expiry
         vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
+        
+        # Handle possible None status
+        if vstatus is None:
+            vstatus = 'Open'
         vstatus_class = vstatus.lower()
         location = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
         vendor_section = f"""
@@ -5590,7 +5595,7 @@ def dashboard():
     jobs_html = ""
     if jobs:
         for job in jobs:
-            jid, title, status = job  # works because SELECT id, title, status
+            jid, title, status = job
             badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
             jobs_html += f"""
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
@@ -5618,7 +5623,6 @@ def dashboard():
         vendor_section=vendor_section,
         jobs_html=jobs_html
     )
-
 # ---------- Freelancer Profile (create/edit) ----------
 @app.route('/create-profile', methods=['GET', 'POST'])
 @login_required
