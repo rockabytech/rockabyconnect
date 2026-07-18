@@ -850,6 +850,22 @@ def migrate_db():
         c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('7 Days', 7, 5000)")
         c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('30 Days', 30, 15000)")
 
+    # ---- SYSTEM SETTINGS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS system_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    
+    # Insert defaults
+    defaults = [
+        ('free_registration_enabled', '1'),
+        ('free_registration_package_id', '1'),  # default to ID of "Basic"
+    ]
+    for key, val in defaults:
+        c.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES (?,?)", (key, val))
+
     conn.commit()
     conn.close()
     print("[MIGRATION] Database migration completed.")
@@ -1598,6 +1614,20 @@ def get_unread_count(user_id):
     conn.close()
     return count
 
+def get_system_setting(key, default=None):
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT value FROM system_settings WHERE key=?", (key,))
+    row = c.fetchone()
+    db.close()
+    return row[0] if row else default
+
+def set_system_setting(key, value):
+    db = get_db()
+    c = db.cursor()
+    c.execute("UPDATE system_settings SET value=?, updated_at=CURRENT_TIMESTAMP WHERE key=?", (value, key))
+    db.commit()
+    db.close()
 
 # ============================================================
 # ADMIN REFERRAL SETTINGS
@@ -5268,36 +5298,37 @@ def signup():
                 c.execute("INSERT INTO users (phone, name, password_hash) VALUES (?, ?, ?)", (phone, name, hashed))
                 user_id = c.lastrowid
                 
-                # Assign free trial subscription (existing code)
-                c.execute("SELECT id, duration_days FROM subscription_packages WHERE name='Free Trial' AND is_active=1 LIMIT 1")
-                free_pkg = c.fetchone()
-                if free_pkg:
-                    package_id, duration_days = free_pkg
-                    start_date = date.today()
-                    end_date = start_date + timedelta(days=duration_days)
-                    c.execute("""
-                        INSERT INTO user_subscriptions (user_id, package_id, start_date, end_date, status, transaction_id)
-                        VALUES (?,?,?,?,'active',?)
-                    """, (user_id, package_id, start_date, end_date, f'free_trial_{datetime.now().timestamp()}'))
-                    print(f"[DEBUG] Free trial assigned to user {user_id} for {duration_days} days")
+                # ---- Assign free package if free registration is enabled ----
+                free_enabled = get_system_setting('free_registration_enabled', '1') == '1'
+                if free_enabled:
+                    free_pkg_id = get_system_setting('free_registration_package_id', '1')
+                    c.execute("SELECT id, duration_days FROM subscription_packages WHERE id=? AND is_active=1", (free_pkg_id,))
+                    free_pkg = c.fetchone()
+                    if free_pkg:
+                        package_id, duration_days = free_pkg
+                        start_date = date.today()
+                        end_date = start_date + timedelta(days=duration_days)
+                        c.execute("""
+                            INSERT INTO user_subscriptions (user_id, package_id, start_date, end_date, status, transaction_id)
+                            VALUES (?,?,?,?,'active',?)
+                        """, (user_id, package_id, start_date, end_date, f'free_{int(datetime.now().timestamp())}'))
+                        print(f"[SIGNUP] User {user_id} got free package {package_id} for {duration_days} days")
                 else:
-                    print("[WARNING] No Free Trial package found. Please create one in admin panel.")
+                    print(f"[SIGNUP] Free registration disabled – user {user_id} has no subscription.")
+
+                # ---- Process referral (if any) ----
+                process_referral(user_id, phone)
                 
-                conn.commit()
-            
-            # Process referral (if any)
-            process_referral(user_id, phone)
-            
-            # Add welcome notification
-            add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready with a 7-day free trial.', link='/dashboard')
-            
-            # ---- Auto-login ----
-            session['user_id'] = user_id
-            session['user_name'] = name
-            session['user_phone'] = phone
-            
-            return redirect(url_for('list_jobs'))   # <-- redirect to jobs page
-            
+                # ---- Add welcome notification ----
+                add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready.', link='/dashboard')
+                
+                # ---- Auto-login ----
+                session['user_id'] = user_id
+                session['user_name'] = name
+                session['user_phone'] = phone
+                
+                return redirect(url_for('list_jobs'))
+                
         except sqlite3.IntegrityError:
             return "Phone number already registered. <a href='/login'>Login</a>"
         except sqlite3.OperationalError as e:
@@ -6896,7 +6927,6 @@ def admin_dashboard():
     if not session.get('admin'):
         return redirect('/admin/login')
     
-    # ---- Open connection ----
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
@@ -6938,7 +6968,6 @@ def admin_dashboard():
             except:
                 pass
 
-    # ---- Pending subscription requests ----
     c.execute("SELECT COUNT(*) FROM boost_requests WHERE boost_type='subscription' AND status='pending'")
     pending_subs = c.fetchone()[0]
 
@@ -6950,7 +6979,7 @@ def admin_dashboard():
     """)
     pending = c.fetchall()
 
-    # ---- Pending payment transactions (new) ----
+    # ---- Pending payment transactions ----
     c.execute("""
         SELECT pt.id, u.name, u.phone, pt.amount, pt.payment_method, pt.raw_sms, pt.created_at,
                pt.description, pt.item_type, pt.item_id
@@ -6961,10 +6990,21 @@ def admin_dashboard():
     """)
     pending_payments = c.fetchall()
 
-    # ---- Close connection after all queries ----
+    # ---- Free registration settings ----
+    free_enabled = get_system_setting('free_registration_enabled', '1') == '1'
+    free_package_id = get_system_setting('free_registration_package_id', '1')
+
+    # Get all active packages for dropdown
+    c.execute("SELECT id, name, price FROM subscription_packages WHERE is_active=1 ORDER BY price")
+    packages = c.fetchall()
+    package_options = ''.join(
+        f'<option value="{p[0]}" {"selected" if str(p[0]) == free_package_id else ""}>{p[1]} (UGX {p[2]:,})</option>'
+        for p in packages
+    )
+
     conn.close()
 
-    # ---- Build HTML for boost requests ----
+    # ---- Build HTML ----
     rows = ""
     for req in pending:
         rid, phone, name, trans, plan, btype, item_id, rdate = req
@@ -6983,7 +7023,6 @@ def admin_dashboard():
     if not rows:
         rows = "<tr><td colspan='6' style='text-align:center;'>No pending boost requests.</td></tr>"
 
-    # ---- Build HTML for payment transactions ----
     payment_rows = ""
     for pp in pending_payments:
         pid, name, phone, amount, method, raw_sms, created_at, desc, item_type, item_id = pp
@@ -7003,7 +7042,11 @@ def admin_dashboard():
     if not payment_rows:
         payment_rows = "<tr><td colspan='6'>No pending payment transactions.</td></tr>"
 
-    # ---- Build final content ----
+    toggle_label = "🔒 Disable Free Registration" if free_enabled else "🔓 Enable Free Registration"
+    toggle_action = "disable" if free_enabled else "enable"
+    action_effect = "expire all existing free subscriptions" if free_enabled else "allow new users to get free package (existing users unchanged)"
+
+    # ---- Build full content ----
     content = f"""
     <div class="card">
         <div class="card-header">📊 Platform Statistics</div>
@@ -7019,7 +7062,7 @@ def admin_dashboard():
             <div class="stat-card"><h3>UGX {total_revenue:,}</h3><small>Total Revenue</small></div>
         </div>
     </div>
-
+    
     <div class="card">
         <div class="card-header">💳 Pending Payment Transactions</div>
         <table>
@@ -7027,25 +7070,45 @@ def admin_dashboard():
             <tbody>{payment_rows}</tbody>
         </table>
     </div>
-
-   <div class="card">
-    <div class="card-header">⚙️ Admin Tools</div>
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <a href="/admin/points-settings" class="btn" style="background:#fd7e14; color:white;">⭐ Points Settings</a>
-        <a href="/admin/subscription-requests" class="btn" style="background:#17a2b8; color:white;">📦 Subscription Requests</a>
-        <a href="/admin/subscriptions" class="btn" style="background:#28a745; color:white;">📦 Manage Packages</a>
-        <a href="/admin/backups" class="btn" style="background:#6c757d; color:white;">💾 Backups</a>
-        <a href="/admin/broadcast" class="btn" style="background:#dc3545; color:white;">📢 Broadcast</a>
-        <a href="/admin/payment-settings" class="btn" style="background:#ffc107; color:#000;">💳 Payment Methods</a>
+    
+    <!-- FREE REGISTRATION SETTINGS -->
+    <div class="card">
+        <div class="card-header">⚙️ Free Registration Settings</div>
+        <form method="POST" action="/admin/update-free-settings">
+            <label>
+                <input type="checkbox" name="free_enabled" value="1" {'checked' if free_enabled else ''}>
+                Enable Free Registration
+            </label>
+            <label style="margin-left:20px;">Free Package:</label>
+            <select name="free_package_id">
+                {package_options}
+            </select>
+            <button type="submit" class="btn btn-small" style="margin-left:10px; background:#fd7e14; color:white;">Update</button>
+        </form>
+        <small style="display:block; margin-top:5px; color:var(--text-secondary);">
+            If you disable free registration, all active free subscriptions will be expired immediately.
+        </small>
     </div>
-</div>
-
+    
+    <!-- ADMIN TOOLS -->
+    <div class="card">
+        <div class="card-header">⚙️ Admin Tools</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a href="/admin/points-settings" class="btn" style="background:#fd7e14; color:white;">⭐ Points Settings</a>
+            <a href="/admin/subscription-requests" class="btn" style="background:#17a2b8; color:white;">📦 Subscription Requests</a>
+            <a href="/admin/subscriptions" class="btn" style="background:#28a745; color:white;">📦 Manage Packages</a>
+            <a href="/admin/backups" class="btn" style="background:#6c757d; color:white;">💾 Backups</a>
+            <a href="/admin/broadcast" class="btn" style="background:#dc3545; color:white;">📢 Broadcast</a>
+            <a href="/admin/payment-settings" class="btn" style="background:#ffc107; color:#000;">💳 Payment Methods</a>
+            <a href="/admin/boost-packages" class="btn" style="background:#17a2b8; color:white;">🚀 Boost Packages</a>
+        </div>
+    </div>
+    
+    <!-- PENDING BOOST REQUESTS -->
     <div class="card">
         <div class="card-header">⏳ Pending Boost Requests</div>
         <table>
-            <thead>
-                <tr><th>User</th><th>Transaction</th><th>Plan</th><th>Type</th><th>Date</th><th>Action</th></tr>
-            </thead>
+            <thead><tr><th>User</th><th>Transaction</th><th>Plan</th><th>Type</th><th>Date</th><th>Action</th></tr></thead>
             <tbody>{rows}</tbody>
         </table>
         <div style="margin-top:20px;">
@@ -7055,6 +7118,35 @@ def admin_dashboard():
     </div>
     """
     return render_template_string(admin_base_template.replace("{title}", "Dashboard").replace("{active_page}", "dashboard").replace("{content}", content))
+
+@app.route('/admin/update-free-settings', methods=['POST'])
+def update_free_settings():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    # Read form data
+    free_enabled = '1' if request.form.get('free_enabled') else '0'
+    free_package_id = request.form.get('free_package_id', '1')
+    
+    # Save settings
+    set_system_setting('free_registration_enabled', free_enabled)
+    set_system_setting('free_registration_package_id', free_package_id)
+    
+    # ---- If disabling, expire all active subscriptions with the chosen free package ----
+    if free_enabled == '0':
+        db = get_db()
+        c = db.cursor()
+        # Expire all active subscriptions with that package
+        c.execute("""
+            UPDATE user_subscriptions
+            SET status='expired', end_date=date('now')
+            WHERE package_id = ? AND status='active'
+        """, (free_package_id,))
+        db.commit()
+        db.close()
+        print(f"[ADMIN] Expired free subscriptions for package {free_package_id}")
+    
+    return redirect('/admin/dashboard')
 
 @app.route('/admin/stats')
 def admin_stats():
