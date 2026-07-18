@@ -399,7 +399,7 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
-    # ---- VENDORS TABLE ----
+    # ---- VENDORS TABLE (with 5 image slots) ----
     c.execute('''CREATE TABLE IF NOT EXISTS vendors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER UNIQUE NOT NULL,
@@ -411,29 +411,15 @@ def init_db():
         vendor_image TEXT,
         vendor_image2 TEXT,
         vendor_image3 TEXT,
-        video TEXT,
+        vendor_image4 TEXT,
+        vendor_image5 TEXT,
         status TEXT DEFAULT 'Open',
         featured INTEGER DEFAULT 0,
         featured_expiry DATE,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
-    # ---- Add extra photo columns to vendors and jobs ----
-# For vendors
-    c.execute("PRAGMA table_info(vendors)")
-    existing_cols = [col[1] for col in c.fetchall()]
-    for col in ['vendor_image4', 'vendor_image5']:
-        if col not in existing_cols:
-            c.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
-    
-    # For jobs
-    c.execute("PRAGMA table_info(jobs)")
-    existing_cols = [col[1] for col in c.fetchall()]
-    for col in ['job_image2', 'job_image3']:
-        if col not in existing_cols:
-            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
-
-    # ---- JOBS TABLE (WITH URGENT COLUMN) ----
+    # ---- JOBS TABLE (with 3 image slots and urgent) ----
     c.execute('''CREATE TABLE IF NOT EXISTS jobs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         employer_id INTEGER NOT NULL,
@@ -446,7 +432,8 @@ def init_db():
         status TEXT DEFAULT 'Open',
         posted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         job_image TEXT,
-        video TEXT,
+        job_image2 TEXT,
+        job_image3 TEXT,
         featured INTEGER DEFAULT 0,
         featured_expiry DATE,
         urgent INTEGER DEFAULT 0,
@@ -596,7 +583,7 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
-    # ---- VIDEO COLUMN FIX ----
+    # ---- VIDEO COLUMN FIX (for existing installations) ----
     for table in ['providers', 'vendors', 'jobs']:
         c.execute(f"PRAGMA table_info({table})")
         existing = [row[1] for row in c.fetchall()]
@@ -618,23 +605,7 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
-        # ---- BOOST PACKAGES TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS boost_packages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        duration_days INTEGER NOT NULL,
-        price INTEGER NOT NULL,
-        is_active INTEGER DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-
-    # Insert default boost packages if empty
-    c.execute("SELECT COUNT(*) FROM boost_packages")
-    if c.fetchone()[0] == 0:
-        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('7 Days', 7, 5000)")
-        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('30 Days', 30, 15000)")
-
-    # ---- PAYMENT SETTINGS TABLE (MUST BE CREATED BEFORE SELECT) ----
+    # ---- PAYMENT SETTINGS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS payment_settings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         mtn_number TEXT,
@@ -654,7 +625,7 @@ def init_db():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
-    # ---- Insert default payment settings if table is empty ----
+    # ---- Insert default payment settings if empty ----
     c.execute("SELECT COUNT(*) FROM payment_settings")
     if c.fetchone()[0] == 0:
         c.execute("""
@@ -675,14 +646,14 @@ def init_db():
         recipient TEXT,
         payment_date TEXT,
         description TEXT,
-        item_type TEXT,           -- 'boost_profile', 'boost_vendor', 'boost_job', 'subscription'
-        item_id INTEGER,          -- ID of the item to be boosted or subscription package
+        item_type TEXT,
+        item_id INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
-    # ---- EXTEND BOOST_REQUESTS FOR PAYMENTS (with existence guard) ----
+    # ---- EXTEND BOOST_REQUESTS (safe, only if table exists) ----
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boost_requests'")
     if c.fetchone():
         c.execute("PRAGMA table_info(boost_requests)")
@@ -692,13 +663,6 @@ def init_db():
                 c.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
     else:
         print("[DB] boost_requests table does not exist; skipping ALTER.")
-
-    # ---- Add 'urgent' column if missing (for existing databases) ----
-    c.execute("PRAGMA table_info(jobs)")
-    columns = [col[1] for col in c.fetchall()]
-    if 'urgent' not in columns:
-        c.execute("ALTER TABLE jobs ADD COLUMN urgent INTEGER DEFAULT 0")
-        print("[DB] Added 'urgent' column to jobs table")
 
     # ---- USER SUBSCRIPTIONS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS user_subscriptions (
@@ -777,6 +741,37 @@ def init_db():
             (name, duration_days, price, points_required, is_active) 
             VALUES ('3 Months', 90, 7000, 300, 1)""")
 
+    # ---- BOOST PACKAGES TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS boost_packages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        duration_days INTEGER NOT NULL,
+        price INTEGER NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    c.execute("SELECT COUNT(*) FROM boost_packages")
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('7 Days', 7, 5000)")
+        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('30 Days', 30, 15000)")
+
+    # ---- SYSTEM SETTINGS TABLE ----
+    c.execute('''CREATE TABLE IF NOT EXISTS system_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    
+    defaults_system = [
+        ('free_registration_enabled', '1'),
+        ('free_registration_package_id', '1'),
+    ]
+    for key, val in defaults_system:
+        c.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES (?,?)", (key, val))
+
+    # ---- COMMIT & CLOSE ----
     conn.commit()
     conn.close()
 
@@ -880,6 +875,38 @@ def migrate_db():
     ]
     for key, val in defaults:
         c.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES (?,?)", (key, val))
+
+    conn.commit()
+    conn.close()
+    print("[MIGRATION] Database migration completed.")
+
+def migrate_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 30000;")
+    c = conn.cursor()
+
+    # ---- Add extra columns to vendors if missing ----
+    c.execute("PRAGMA table_info(vendors)")
+    existing = [col[1] for col in c.fetchall()]
+    for col in ['vendor_image4', 'vendor_image5']:
+        if col not in existing:
+            c.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
+
+    # ---- Add extra columns to jobs if missing ----
+    c.execute("PRAGMA table_info(jobs)")
+    existing = [col[1] for col in c.fetchall()]
+    for col in ['job_image2', 'job_image3']:
+        if col not in existing:
+            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
+
+    # ---- Add other tables if missing ----
+    c.execute('''CREATE TABLE IF NOT EXISTS payment_settings ...''')
+    c.execute('''CREATE TABLE IF NOT EXISTS payment_transactions ...''')
+    c.execute('''CREATE TABLE IF NOT EXISTS boost_packages ...''')
+    c.execute('''CREATE TABLE IF NOT EXISTS system_settings ...''')
+
+    # ---- Insert defaults if needed ----
+    # (same as init_db but with safe INSERT OR IGNORE)
 
     conn.commit()
     conn.close()
