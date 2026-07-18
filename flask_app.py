@@ -5498,6 +5498,9 @@ def dashboard():
 
     c.execute("SELECT * FROM vendors WHERE user_id=?", (user_id,))
     vendor = c.fetchone()
+    if vendor:
+    # Unpack all 16 columns (added vendor_image4 and vendor_image5)
+    vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
 
     c.execute("SELECT id, title, status FROM jobs WHERE employer_id=? ORDER BY id DESC", (user_id,))
     jobs = c.fetchall()
