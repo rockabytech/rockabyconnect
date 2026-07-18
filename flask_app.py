@@ -5285,12 +5285,17 @@ def offer_skill():
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
+    # Check for pre-filled phone from login redirect
+    prefill_phone = request.args.get('phone', '')
+    reason = request.args.get('reason', '')
+    
     if request.method == 'POST':
         phone = request.form['phone'].strip()
         name = request.form['name'].strip()
         password = request.form['password']
         if not phone or not name or not password:
             return "All fields required. <a href='/signup'>Back</a>"
+        
         hashed = generate_password_hash(password)
         try:
             with get_db_connection() as conn:
@@ -5312,45 +5317,100 @@ def signup():
                             INSERT INTO user_subscriptions (user_id, package_id, start_date, end_date, status, transaction_id)
                             VALUES (?,?,?,?,'active',?)
                         """, (user_id, package_id, start_date, end_date, f'free_{int(datetime.now().timestamp())}'))
-                        print(f"[SIGNUP] User {user_id} got free package {package_id} for {duration_days} days")
-                else:
-                    print(f"[SIGNUP] Free registration disabled – user {user_id} has no subscription.")
-
-                # ---- Process referral (if any) ----
-                process_referral(user_id, phone)
                 
-                # ---- Add welcome notification ----
-                add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready.', link='/dashboard')
-                
-                # ---- Auto-login ----
-                session['user_id'] = user_id
-                session['user_name'] = name
-                session['user_phone'] = phone
-                
-                return redirect(url_for('list_jobs'))
-                
+                conn.commit()
+            
+            # Process referral (if any)
+            process_referral(user_id, phone)
+            
+            # Add welcome notification
+            add_notification(user_id, 'email', f'Welcome {name}! Your RockabyConnect account is ready.', link='/dashboard')
+            
+            # ---- Auto-login ----
+            session['user_id'] = user_id
+            session['user_name'] = name
+            session['user_phone'] = phone
+            
+            return redirect(url_for('list_jobs'))
+            
         except sqlite3.IntegrityError:
             return "Phone number already registered. <a href='/login'>Login</a>"
         except sqlite3.OperationalError as e:
             return f"Database error: {str(e)}. Please try again.", 500
-    return render_user_template(signup_page, title="Sign Up", active_page="signup")
+    
+    # GET – show signup form with pre-filled phone if provided
+    signup_content = signup_page.replace("{content}", f'''
+    <div class="hero" style="padding:30px 20px;">
+        <h1 style="font-size:1.8rem;">Create Your Free Account</h1>
+        <p>Join Uganda's premier freelance marketplace</p>
+        {f'<div class="alert alert-info" style="background:rgba(26,115,232,0.15); color:#1557b0; padding:12px; border-radius:8px; margin:15px 0;">📱 This phone number is not registered. Please create an account below.</div>' if reason == 'not_registered' else ''}
+    </div>
+    <div class="card" style="max-width:500px; margin:0 auto;">
+        <div class="card-header">📝 Sign Up</div>
+        <form method="POST">
+            <label style="display:block; margin-top:12px; font-weight:600;">Full Name *</label>
+            <input type="text" name="name" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Phone Number *</label>
+            <input type="tel" name="phone" value="{prefill_phone}" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:block; margin-top:12px; font-weight:600;">Password *</label>
+            <input type="password" name="password" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <button type="submit" class="btn" style="margin-top:20px; width:100%;">Sign Up</button>
+        </form>
+        <p style="margin-top:15px; text-align:center;">Already have an account? <a href="/login" style="color:var(--primary);">Login</a></p>
+    </div>
+    ''')
+    
+    return render_user_template(signup_content, title="Sign Up", active_page="signup")
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         phone = request.form['phone'].strip()
         password = request.form['password']
+        
         with get_db_connection() as conn:
             c = conn.cursor()
             c.execute("SELECT id, name, password_hash FROM users WHERE phone=?", (phone,))
             user = c.fetchone()
-        if user and check_password_hash(user[2], password):
-            session['user_id'] = user[0]
-            session['user_name'] = user[1]
-            session['user_phone'] = phone
-            return redirect(url_for('list_jobs'))
+        
+        if user:
+            # User exists – check password
+            if check_password_hash(user[2], password):
+                session['user_id'] = user[0]
+                session['user_name'] = user[1]
+                session['user_phone'] = phone
+                return redirect(url_for('list_jobs'))
+            else:
+                # Wrong password – stay on login page with error
+                return render_user_template(
+                    login_page.replace(
+                        "{content}",
+                        f'''
+                        <div class="card" style="max-width:500px; margin:0 auto;">
+                            <div class="card-header">🔐 Login</div>
+                            <div class="alert alert-error" style="background:rgba(220,53,69,0.15); color:#721c24; padding:12px; border-radius:8px; margin-bottom:15px;">
+                                ❌ Incorrect password. Please try again.
+                            </div>
+                            <form method="POST">
+                                <label style="display:block; margin-top:12px; font-weight:600;">Phone Number</label>
+                                <input type="tel" name="phone" value="{phone}" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+                                <label style="display:block; margin-top:12px; font-weight:600;">Password</label>
+                                <input type="password" name="password" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+                                <button type="submit" class="btn" style="margin-top:20px; width:100%;">Login</button>
+                            </form>
+                            <p style="margin-top:15px; text-align:center;">No account? <a href="/signup?phone={phone}" style="color:var(--primary);">Sign Up</a></p>
+                            <p style="margin-top:15px; text-align:center;"><a href="/forgot-password" style="color:var(--primary);">Forgot Password?</a></p>
+                        </div>
+                        '''
+                    ),
+                    title="Login",
+                    active_page="login"
+                )
         else:
-            return "Invalid credentials. <a href='/login'>Try again</a>"
+            # Phone number not registered – redirect to signup with phone pre-filled
+            return redirect(url_for('signup', phone=phone, reason='not_registered'))
+    
+    # GET request – show login page
     return render_user_template(login_page, title="Login", active_page="login")
 
 @app.route('/logout')
