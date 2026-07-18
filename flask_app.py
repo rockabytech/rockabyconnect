@@ -5585,27 +5585,29 @@ def dashboard():
             </div>
         """
 
-    # ---- Jobs Section ----
+        # ---- Jobs Section ----
+    c.execute("SELECT id, title, status FROM jobs WHERE employer_id=? ORDER BY id DESC", (user_id,))
+    jobs = c.fetchall()
+    
     jobs_html = ""
-    if jobs:
-        for job in jobs:
-    jid = job[0]        # id
-    title = job[1]      # title
-    status = job[6]     # status (index may vary – check your SELECT)
-    badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
-    jobs_html += f"""
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
-        <span>{title} <span class="badge badge-{badge_class}">{status}</span></span>
-        <div style="display:flex; gap:5px; flex-wrap:wrap;">
-            <a href="/edit-job/{jid}" class="btn btn-small btn-outline">Edit</a>
-            <a href="/boost-job/{jid}" class="btn btn-small" style="background:var(--primary-dark);">Boost</a>
-            <form method="POST" action="/delete-job/{jid}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this job? This cannot be undone.');">
-                <button type="submit" class="btn btn-small btn-danger">Delete</button>
-            </form>
-        </div>
-    </div>
-    """
-    else:
+    for job in jobs:
+        jid = job[0]
+        title = job[1]
+        status = job[2]
+        badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
+        jobs_html += f"""
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+                <span>{title} <span class="badge badge-{badge_class}">{status}</span></span>
+                <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                    <a href="/edit-job/{jid}" class="btn btn-small btn-outline">Edit</a>
+                    <a href="/boost-job/{jid}" class="btn btn-small" style="background:var(--primary-dark);">Boost</a>
+                    <form method="POST" action="/delete-job/{jid}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this job? This cannot be undone.');">
+                        <button type="submit" class="btn btn-small btn-danger">Delete</button>
+                    </form>
+                </div>
+            </div>
+        """
+    if not jobs:
         jobs_html = "<p>No jobs posted yet.</p>"
 
     # ---- Return with placeholders ----
