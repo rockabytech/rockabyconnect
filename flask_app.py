@@ -5487,25 +5487,23 @@ def dashboard():
     # ---- GET USER POINTS ----
     points = get_user_points(user_id)
     print(f"[DEBUG] User {user_id} has {points} points")
-    # -------------------------
     
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout = 5000;")
     c = conn.cursor()
 
+    # ---- Provider Profile ----
     c.execute("SELECT * FROM providers WHERE user_id=?", (user_id,))
     provider = c.fetchone()
 
+    # ---- Vendor Profile (with 5 images) ----
     c.execute("SELECT * FROM vendors WHERE user_id=?", (user_id,))
     vendor = c.fetchone()
-    if vendor:
-    # Unpack all 16 columns (added vendor_image4 and vendor_image5)
-        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
 
+    # ---- Jobs ----
     c.execute("SELECT id, title, status FROM jobs WHERE employer_id=? ORDER BY id DESC", (user_id,))
     jobs = c.fetchall()
-    for job in jobs:
-        jid, title, status = job  # now works fine
+    conn.close()
 
     # ---- POINTS CARD ----
     points_card = f"""
@@ -5525,11 +5523,11 @@ def dashboard():
         </div>
     </div>
     """
-    # ---------------------------------
 
     # ---- Freelancer Profile Section ----
     profile_section = ""
     if provider:
+        # provider tuple: 14 columns (unchanged)
         pid, _, skills, district, village, bio, pic, video, status, featured, featured_expiry = provider
         status_class = status.lower().replace(' ', '-')
         location = f"{district}{', ' + village if village else ''}"
@@ -5556,10 +5554,13 @@ def dashboard():
             </div>
         """
 
-    # ---- Vendor Profile Section ----
+    # ---- Vendor Profile Section (fixed unpack) ----
     vendor_section = ""
     if vendor:
-        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vvideo, vstatus, vfeatured, vexpiry = vendor
+        # vendor tuple has 16 columns: id, user_id, business_name, district, village, landmark, bio,
+        # vendor_image, vendor_image2, vendor_image3, vendor_image4, vendor_image5,
+        # video, status, featured, featured_expiry
+        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
         vstatus_class = vstatus.lower()
         location = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
         vendor_section = f"""
@@ -5585,32 +5586,28 @@ def dashboard():
             </div>
         """
 
-        # ---- Jobs Section ----
-    c.execute("SELECT id, title, status FROM jobs WHERE employer_id=? ORDER BY id DESC", (user_id,))
-    jobs = c.fetchall()
-    
+    # ---- Jobs Section ----
     jobs_html = ""
-    for job in jobs:
-        jid = job[0]
-        title = job[1]
-        status = job[2]
-        badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
-        jobs_html += f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
-                <span>{title} <span class="badge badge-{badge_class}">{status}</span></span>
-                <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                    <a href="/edit-job/{jid}" class="btn btn-small btn-outline">Edit</a>
-                    <a href="/boost-job/{jid}" class="btn btn-small" style="background:var(--primary-dark);">Boost</a>
-                    <form method="POST" action="/delete-job/{jid}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this job? This cannot be undone.');">
-                        <button type="submit" class="btn btn-small btn-danger">Delete</button>
-                    </form>
+    if jobs:
+        for job in jobs:
+            jid, title, status = job  # works because SELECT id, title, status
+            badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
+            jobs_html += f"""
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+                    <span>{title} <span class="badge badge-{badge_class}">{status}</span></span>
+                    <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                        <a href="/edit-job/{jid}" class="btn btn-small btn-outline">Edit</a>
+                        <a href="/boost-job/{jid}" class="btn btn-small" style="background:var(--primary-dark);">Boost</a>
+                        <form method="POST" action="/delete-job/{jid}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this job? This cannot be undone.');">
+                            <button type="submit" class="btn btn-small btn-danger">Delete</button>
+                        </form>
+                    </div>
                 </div>
-            </div>
-        """
-    if not jobs:
+            """
+    else:
         jobs_html = "<p>No jobs posted yet.</p>"
 
-    # ---- Return with placeholders ----
+    # ---- RENDER DASHBOARD ----
     return render_user_template(
         dashboard_template,
         title="Dashboard",
