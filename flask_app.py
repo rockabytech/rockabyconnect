@@ -5500,11 +5500,12 @@ def dashboard():
     vendor = c.fetchone()
     if vendor:
     # Unpack all 16 columns (added vendor_image4 and vendor_image5)
-    vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
+        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
 
     c.execute("SELECT id, title, status FROM jobs WHERE employer_id=? ORDER BY id DESC", (user_id,))
     jobs = c.fetchall()
-    conn.close()
+    for job in jobs:
+        jid, title, status = job  # now works fine
 
     # ---- POINTS CARD ----
     points_card = f"""
@@ -5588,20 +5589,22 @@ def dashboard():
     jobs_html = ""
     if jobs:
         for job in jobs:
-            jid, title, status = job
-            badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
-            jobs_html += f"""
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
-                    <span>{title} <span class="badge badge-{badge_class}">{status}</span></span>
-                    <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                        <a href="/edit-job/{jid}" class="btn btn-small btn-outline">Edit</a>
-                        <a href="/boost-job/{jid}" class="btn btn-small" style="background:var(--primary-dark);">Boost</a>
-                        <form method="POST" action="/delete-job/{jid}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this job? This cannot be undone.');">
-                            <button type="submit" class="btn btn-small btn-danger">Delete</button>
-                        </form>
-                    </div>
-                </div>
-            """
+    jid = job[0]        # id
+    title = job[1]      # title
+    status = job[6]     # status (index may vary – check your SELECT)
+    badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
+    jobs_html += f"""
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+        <span>{title} <span class="badge badge-{badge_class}">{status}</span></span>
+        <div style="display:flex; gap:5px; flex-wrap:wrap;">
+            <a href="/edit-job/{jid}" class="btn btn-small btn-outline">Edit</a>
+            <a href="/boost-job/{jid}" class="btn btn-small" style="background:var(--primary-dark);">Boost</a>
+            <form method="POST" action="/delete-job/{jid}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this job? This cannot be undone.');">
+                <button type="submit" class="btn btn-small btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+    """
     else:
         jobs_html = "<p>No jobs posted yet.</p>"
 
