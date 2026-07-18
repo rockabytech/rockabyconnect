@@ -787,6 +787,22 @@ def migrate_db():
     conn.execute("PRAGMA busy_timeout = 30000;")
     c = conn.cursor()
 
+    # ---- Add extra columns to vendors if missing ----
+    c.execute("PRAGMA table_info(vendors)")
+    existing = [col[1] for col in c.fetchall()]
+    for col in ['vendor_image4', 'vendor_image5']:
+        if col not in existing:
+            c.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
+            print(f"[MIGRATION] Added column {col} to vendors")
+
+    # ---- Add extra columns to jobs if missing ----
+    c.execute("PRAGMA table_info(jobs)")
+    existing = [col[1] for col in c.fetchall()]
+    for col in ['job_image2', 'job_image3']:
+        if col not in existing:
+            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
+            print(f"[MIGRATION] Added column {col} to jobs")
+
     # ---- PAYMENT SETTINGS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS payment_settings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -827,24 +843,7 @@ def migrate_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
-    # ---- EXTEND BOOST_REQUESTS ----
-    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boost_requests'")
-    if c.fetchone():
-        c.execute("PRAGMA table_info(boost_requests)")
-        existing_cols = [col[1] for col in c.fetchall()]
-        for col in ['payment_method', 'raw_sms', 'amount', 'recipient', 'payment_date']:
-            if col not in existing_cols:
-                c.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
-
-    # ---- Insert default payment settings if empty ----
-    c.execute("SELECT COUNT(*) FROM payment_settings")
-    if c.fetchone()[0] == 0:
-        c.execute("""
-            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
-            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
-        """)
-
-        # ---- BOOST PACKAGES TABLE ----
+    # ---- BOOST PACKAGES TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS boost_packages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -854,12 +853,6 @@ def migrate_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
-    # Insert default boost packages if empty
-    c.execute("SELECT COUNT(*) FROM boost_packages")
-    if c.fetchone()[0] == 0:
-        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('7 Days', 7, 5000)")
-        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('30 Days', 30, 15000)")
-
     # ---- SYSTEM SETTINGS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS system_settings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -867,14 +860,43 @@ def migrate_db():
         value TEXT,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
-    
-    # Insert defaults
+
+    # ---- EXTEND BOOST_REQUESTS (safe) ----
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boost_requests'")
+    if c.fetchone():
+        c.execute("PRAGMA table_info(boost_requests)")
+        existing_cols = [col[1] for col in c.fetchall()]
+        for col in ['payment_method', 'raw_sms', 'amount', 'recipient', 'payment_date']:
+            if col not in existing_cols:
+                c.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
+                print(f"[MIGRATION] Added column {col} to boost_requests")
+    else:
+        print("[MIGRATION] boost_requests table does not exist; skipping ALTER.")
+
+    # ---- Insert default payment settings if empty ----
+    c.execute("SELECT COUNT(*) FROM payment_settings")
+    if c.fetchone()[0] == 0:
+        c.execute("""
+            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
+            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
+        """)
+        print("[MIGRATION] Inserted default payment settings.")
+
+    # ---- Insert default boost packages if empty ----
+    c.execute("SELECT COUNT(*) FROM boost_packages")
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('7 Days', 7, 5000)")
+        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('30 Days', 30, 15000)")
+        print("[MIGRATION] Inserted default boost packages.")
+
+    # ---- Insert default system settings if empty ----
     defaults = [
         ('free_registration_enabled', '1'),
-        ('free_registration_package_id', '1'),  # default to ID of "Basic"
+        ('free_registration_package_id', '1'),
     ]
     for key, val in defaults:
         c.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES (?,?)", (key, val))
+    print("[MIGRATION] Inserted default system settings.")
 
     conn.commit()
     conn.close()
