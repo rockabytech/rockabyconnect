@@ -902,38 +902,6 @@ def migrate_db():
     conn.close()
     print("[MIGRATION] Database migration completed.")
 
-def migrate_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
-    c = conn.cursor()
-
-    # ---- Add extra columns to vendors if missing ----
-    c.execute("PRAGMA table_info(vendors)")
-    existing = [col[1] for col in c.fetchall()]
-    for col in ['vendor_image4', 'vendor_image5']:
-        if col not in existing:
-            c.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
-
-    # ---- Add extra columns to jobs if missing ----
-    c.execute("PRAGMA table_info(jobs)")
-    existing = [col[1] for col in c.fetchall()]
-    for col in ['job_image2', 'job_image3']:
-        if col not in existing:
-            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
-
-    # ---- Add other tables if missing ----
-    c.execute('''CREATE TABLE IF NOT EXISTS payment_settings ...''')
-    c.execute('''CREATE TABLE IF NOT EXISTS payment_transactions ...''')
-    c.execute('''CREATE TABLE IF NOT EXISTS boost_packages ...''')
-    c.execute('''CREATE TABLE IF NOT EXISTS system_settings ...''')
-
-    # ---- Insert defaults if needed ----
-    # (same as init_db but with safe INSERT OR IGNORE)
-
-    conn.commit()
-    conn.close()
-    print("[MIGRATION] Database migration completed.")
-
 def parse_mtn_sms(sms):
     tid = re.search(r'ID:\s*(\d+)', sms)
     amount = re.search(r'UGX\s*([\d,]+)', sms)
