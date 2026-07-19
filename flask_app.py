@@ -1460,6 +1460,30 @@ def broadcast_to_all_users(title, message, link='/'):
     
     return count
 
+def clean_expired_features():
+    """Remove featured status from expired items."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    today = date.today().isoformat()
+    
+    # Providers
+    c.execute("UPDATE providers SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
+    provider_count = c.rowcount
+    
+    # Vendors
+    c.execute("UPDATE vendors SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
+    vendor_count = c.rowcount
+    
+    # Jobs
+    c.execute("UPDATE jobs SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
+    job_count = c.rowcount
+    
+    conn.commit()
+    conn.close()
+    
+    if provider_count + vendor_count + job_count > 0:
+        print(f"[CLEANUP] Removed expired features: {provider_count} providers, {vendor_count} vendors, {job_count} jobs")
+
 # ============================================================
 # THEME HELPERS
 # ============================================================
@@ -1876,6 +1900,86 @@ def admin_referral_settings_page():  # ← Renamed to avoid conflict
     </div>
     '''
     return render_template_string(admin_base_template.replace("{title}", "Referral Settings").replace("{active_page}", "stats").replace("{content}", content))
+
+@app.route('/admin/toggle-free-registration', methods=['POST'])
+def toggle_free_registration():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT value FROM system_settings WHERE key='free_registration_enabled'")
+    row = c.fetchone()
+    current = row[0] if row else '1'
+    new_value = '0' if current == '1' else '1'
+    
+    # ---- Update the setting ----
+    c.execute("UPDATE system_settings SET value=?, updated_at=CURRENT_TIMESTAMP WHERE key='free_registration_enabled'", (new_value,))
+    
+    # ---- If disabling: expire all active free subscriptions AND remove featured status ----
+    if new_value == '0':
+        # Get the package ID(s) for free packages (price = 0)
+        c.execute("SELECT id FROM subscription_packages WHERE price = 0")
+        free_package_ids = [row[0] for row in c.fetchall()]
+        
+        if free_package_ids:
+            placeholders = ','.join('?' for _ in free_package_ids)
+            
+            # 1. Expire subscriptions
+            c.execute(f"""
+                UPDATE user_subscriptions
+                SET status='expired', end_date=date('now')
+                WHERE package_id IN ({placeholders})
+                  AND status='active'
+            """, free_package_ids)
+            expired_count = c.rowcount
+            print(f"[ADMIN] Expired {expired_count} free subscriptions.")
+            
+            # 2. Get all users whose free subscriptions expired
+            c.execute(f"""
+                SELECT DISTINCT user_id 
+                FROM user_subscriptions 
+                WHERE package_id IN ({placeholders}) 
+                  AND status='expired'
+            """, free_package_ids)
+            expired_users = [row[0] for row in c.fetchall()]
+            
+            if expired_users:
+                user_placeholders = ','.join('?' for _ in expired_users)
+                
+                # 3. Remove featured status from providers
+                c.execute(f"""
+                    UPDATE providers 
+                    SET featured=0, featured_expiry=NULL 
+                    WHERE user_id IN ({user_placeholders})
+                """, expired_users)
+                providers_unfeatured = c.rowcount
+                
+                # 4. Remove featured status from vendors
+                c.execute(f"""
+                    UPDATE vendors 
+                    SET featured=0, featured_expiry=NULL 
+                    WHERE user_id IN ({user_placeholders})
+                """, expired_users)
+                vendors_unfeatured = c.rowcount
+                
+                # 5. Remove featured status from jobs (where employer is in expired users)
+                c.execute(f"""
+                    UPDATE jobs 
+                    SET featured=0, featured_expiry=NULL 
+                    WHERE employer_id IN ({user_placeholders})
+                """, expired_users)
+                jobs_unfeatured = c.rowcount
+                
+                print(f"[ADMIN] Unfeatured: {providers_unfeatured} providers, {vendors_unfeatured} vendors, {jobs_unfeatured} jobs.")
+        
+        db.commit()
+        db.close()
+        return redirect('/admin/dashboard')
+    
+    db.commit()
+    db.close()
+    return redirect('/admin/dashboard')
 
 @app.route('/admin/payment-settings', methods=['GET', 'POST'])
 def admin_payment_settings():
@@ -9236,14 +9340,18 @@ ensure_db()
 # ---- RUN MIGRATION TO ADD PAYMENT TABLES/COLUMNS ----
 migrate_db()
 
+# ---- VERIFY UPLOADS INTEGRITY ----
+verify_uploads_integrity()
+
+# ---- CREATE PLACEHOLDER IMAGE IF MISSING ----
+create_placeholder()
+
+# ---- CLEAN EXPIRED FEATURED ITEMS ----
+clean_expired_features()
+
 # ---- START BACKUP SCHEDULER ----
 print("[STARTUP] Starting backup scheduler (every 30 minutes)...")
 schedule_github_backup()
-
-# After restore
-restore_uploads_from_github()
-verify_uploads_integrity()
-create_placeholder()
 
 # ============================================================
 # PASSWORD RESET ROUTES
