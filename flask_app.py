@@ -7388,17 +7388,18 @@ def admin_dashboard():
     </div>
     
     <!-- ADMIN TOOLS -->
-    <div class="card">
+        <div class="card">
         <div class="card-header">⚙️ Admin Tools</div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <a href="/admin/points-settings" class="btn" style="background:#fd7e14; color:white;">⭐ Points Settings</a>
             <a href="/admin/subscription-requests" class="btn" style="background:#17a2b8; color:white;">📦 Subscription Requests</a>
             <a href="/admin/subscriptions" class="btn" style="background:#28a745; color:white;">📦 Manage Packages</a>
             <a href="/admin/backups" class="btn" style="background:#6c757d; color:white;">💾 Backups</a>
-            <a href="/admin/manual-backup" class="btn" style="background:#28a745; color:white;">💾 Manual Backup</a>
             <a href="/admin/broadcast" class="btn" style="background:#dc3545; color:white;">📢 Broadcast</a>
             <a href="/admin/payment-settings" class="btn" style="background:#ffc107; color:#000;">💳 Payment Methods</a>
             <a href="/admin/boost-packages" class="btn" style="background:#17a2b8; color:white;">🚀 Boost Packages</a>
+            <a href="/admin/manual-backup" class="btn" style="background:#28a745; color:white;">💾 Manual Backup</a>
+            <a href="/admin/restore" class="btn" style="background:#ffc107; color:#000;">📤 Restore</a>
         </div>
     </div>
     
