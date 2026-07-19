@@ -1,6 +1,9 @@
 # ============================================================
 # IMPORTS
 # ============================================================
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 import os
 import sqlite3
 import re
@@ -153,20 +156,83 @@ def restore_from_github():
         print(f"[BACKUP] ❌ Database restore failed: {e}")
         return False
 
+def verify_uploads_backup():
+    """Verify that the uploaded backup contains files."""
+    if not GITHUB_TOKEN:
+        return False
+    
+    try:
+        g = Github(GITHUB_TOKEN)
+        repo = g.get_repo(BACKUP_REPO)
+        contents = repo.get_contents(UPLOADS_BACKUP_FILE)
+        
+        # Check file size (should be > 0 KB)
+        if contents.size > 100:  # more than 100 bytes means there are files
+            print(f"[BACKUP] ✅ Uploads backup verified: {contents.size} bytes")
+            return True
+        else:
+            print(f"[BACKUP] ⚠️ Uploads backup is too small: {contents.size} bytes")
+            return False
+    except Exception as e:
+        print(f"[BACKUP] ❌ Could not verify uploads backup: {e}")
+        return False
+
+def verify_uploads_integrity():
+    """Check if uploads folder has files and log warning if empty."""
+    if not os.path.exists(UPLOADS_PATH):
+        print("[STARTUP] ⚠️ Uploads folder does not exist!")
+        return False
+    
+    file_count = len([f for f in os.listdir(UPLOADS_PATH) if os.path.isfile(os.path.join(UPLOADS_PATH, f))])
+    if file_count == 0:
+        print("[STARTUP] ⚠️ Uploads folder is empty!")
+        return False
+    
+    print(f"[STARTUP] ✅ Uploads folder has {file_count} files")
+    return True
+
 def backup_uploads_to_github():
-    """Zip and upload the uploads folder to GitHub."""
+    """Zip and upload the uploads folder to GitHub with verification."""
     if not GITHUB_TOKEN:
         print("[BACKUP] No GitHub token, skipping uploads backup")
         return
     
     if not os.path.exists(UPLOADS_PATH):
-        print("[BACKUP] Uploads folder not found, skipping backup")
+        print(f"[BACKUP] Uploads folder not found at {UPLOADS_PATH}, skipping backup")
+        return
+    
+    # Count files before backup
+    file_count = 0
+    total_size = 0
+    for root, dirs, files in os.walk(UPLOADS_PATH):
+        for file in files:
+            file_count += 1
+            total_size += os.path.getsize(os.path.join(root, file))
+    
+    if file_count == 0:
+        print("[BACKUP] No files to backup in uploads folder.")
+        # Still create an empty placeholder to track that backup ran
+        try:
+            g = Github(GITHUB_TOKEN)
+            repo = g.get_repo(BACKUP_REPO)
+            empty_zip = io.BytesIO()
+            with zipfile.ZipFile(empty_zip, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                pass  # create empty zip
+            empty_zip.seek(0)
+            zip_data = empty_zip.read()
+            try:
+                contents = repo.get_contents(UPLOADS_BACKUP_FILE)
+                repo.update_file(contents.path, f"Empty uploads backup at {datetime.now().isoformat()}", zip_data, contents.sha)
+            except:
+                repo.create_file(UPLOADS_BACKUP_FILE, f"Empty uploads backup at {datetime.now().isoformat()}", zip_data)
+            print("[BACKUP] Empty uploads backup created.")
+        except Exception as e:
+            print(f"[BACKUP] Failed to create empty backup: {e}")
         return
     
     try:
         zip_buffer = io.BytesIO()
-        file_count = 0
-        total_size = 0
+        files_in_zip = []
         
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for root, dirs, files in os.walk(UPLOADS_PATH):
@@ -174,12 +240,16 @@ def backup_uploads_to_github():
                     file_path = os.path.join(root, file)
                     arcname = os.path.relpath(file_path, UPLOADS_PATH)
                     zip_file.write(file_path, arcname)
-                    file_count += 1
-                    total_size += os.path.getsize(file_path)
+                    files_in_zip.append(arcname)
         
+        # Verify ZIP was created successfully
+        zip_buffer.seek(0)
+        test_zip = zipfile.ZipFile(io.BytesIO(zip_buffer.read()))
+        test_zip.testzip()  # Raises exception if corrupt
         zip_buffer.seek(0)
         zip_data = zip_buffer.read()
         
+        # Upload to GitHub
         g = Github(GITHUB_TOKEN)
         repo = g.get_repo(BACKUP_REPO)
         
@@ -200,11 +270,16 @@ def backup_uploads_to_github():
         
         print(f"[BACKUP] ✅ Uploads backed up: {file_count} files, {total_size//1024} KB")
         
+        # Verify upload was successful by downloading and checking
+        verify_uploads_backup()
+        
     except Exception as e:
         print(f"[BACKUP] ❌ Uploads backup failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 def restore_uploads_from_github():
-    """Download and extract uploads from GitHub."""
+    """Download, extract, and verify uploads from GitHub."""
     if not GITHUB_TOKEN:
         print("[BACKUP] No GitHub token, skipping uploads restore")
         return False
@@ -217,29 +292,61 @@ def restore_uploads_from_github():
             contents = repo.get_contents(UPLOADS_BACKUP_FILE)
             zip_data = contents.decoded_content
             
+            # Verify the ZIP file is valid
+            try:
+                test_zip = zipfile.ZipFile(io.BytesIO(zip_data))
+                test_zip.testzip()
+            except Exception as e:
+                print(f"[BACKUP] ❌ Uploads backup ZIP is corrupt: {e}")
+                return False
+            
+            # Create the uploads folder if it doesn't exist
             os.makedirs(UPLOADS_PATH, exist_ok=True)
             
+            # Count files before extraction
+            file_count_before = len([f for f in os.listdir(UPLOADS_PATH) if os.path.isfile(os.path.join(UPLOADS_PATH, f))])
+            
+            # Extract with overwrite
             with zipfile.ZipFile(io.BytesIO(zip_data), 'r') as zip_file:
                 zip_file.extractall(UPLOADS_PATH)
             
-            file_count = len(zip_file.namelist())
-            print(f"[BACKUP] ✅ Uploads restored: {file_count} files")
+            # Count files after extraction
+            file_count_after = len([f for f in os.listdir(UPLOADS_PATH) if os.path.isfile(os.path.join(UPLOADS_PATH, f))])
+            
+            print(f"[BACKUP] ✅ Uploads restored: {file_count_after} files (was {file_count_before})")
             return True
             
-        except:
-            print("[BACKUP] No existing uploads backup found, starting fresh")
+        except Exception as e:
+            print(f"[BACKUP] ℹ️ No existing uploads backup found: {e}")
             return False
             
     except Exception as e:
         print(f"[BACKUP] ❌ Uploads restore failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def schedule_github_backup():
-    """Run GitHub backup every 30 minutes (database + uploads)."""
+    """Run GitHub backup every 30 minutes (database + uploads) with retry."""
     print("[BACKUP] 🕐 Running scheduled backup...")
+    
+    # Backup database
     backup_to_github()
-    backup_uploads_to_github()
-    threading.Timer(1800, schedule_github_backup).start()  # 1800 seconds = 30 minutes
+    
+    # Backup uploads with retry
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            backup_uploads_to_github()
+            break
+        except Exception as e:
+            print(f"[BACKUP] ⚠️ Uploads backup attempt {attempt+1} failed: {e}")
+            if attempt == max_retries - 1:
+                print("[BACKUP] ❌ All uploads backup attempts failed.")
+            else:
+                time.sleep(5)  # Wait 5 seconds before retry
+    
+    threading.Timer(1800, schedule_github_backup).start()
 
 # ============================================================
 # APP CONFIGURATION (DYNAMIC FOR RENDER)
@@ -936,6 +1043,20 @@ def parse_airtel_sms(sms):
         'date': date_str.group(1) if date_str else None
     }
 
+def get_image_url(filename, fallback='/static/placeholder.png'):
+    """Return the image URL if it exists, otherwise fallback."""
+    if not filename:
+        return fallback
+    
+    # Check if file exists in uploads folder
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+        return f"/static/uploads/{filename}"
+    else:
+        # Log missing file for debugging
+        print(f"[WARNING] Missing image: {filename}")
+        return fallback
+
 def get_payment_settings():
     """Fetch the global payment settings as a dict."""
     db = get_db()
@@ -1044,6 +1165,15 @@ def create_password_reset(user_id):
         )
         conn.commit()
     return token
+
+# You can create a simple placeholder using PIL
+from PIL import Image, ImageDraw
+
+def create_placeholder():
+    img = Image.new('RGB', (200, 200), color='#e0e0e0')
+    d = ImageDraw.Draw(img)
+    d.text((50, 80), "No Image", fill='#666')
+    img.save('static/placeholder.png')
 
 def validate_reset_token(token):
     with get_db_connection() as conn:
@@ -2198,6 +2328,17 @@ def admin_delete_boost_package(pkg_id):
     db.commit()
     db.close()
     return redirect('/admin/boost-packages')
+
+@app.route('/admin/manual-backup')
+def manual_backup():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    print("[BACKUP] Manual backup triggered")
+    backup_to_github()
+    backup_uploads_to_github()
+    
+    return "Backup completed. <a href='/admin/dashboard'>Back to Dashboard</a>"
 
 # ============================================================
 # BASE TEMPLATE (UNCHANGED)
@@ -6664,7 +6805,7 @@ def provider_detail(provider_id):
     pid, user_id, name, skills, district, village, bio, pic, video, status, featured, expiry, phone = provider
     status_class = status.lower().replace(' ', '-')
     village_display = f", {village}" if village else ""
-    img_url = f"/static/uploads/{pic}" if pic else "/static/placeholder.png"
+    img_url = get_image_url(pic)
     active_featured = is_featured_now(featured, expiry)
     feat = '<span class="badge badge-available">FEATURED</span>' if active_featured else ''
     
@@ -9079,6 +9220,10 @@ migrate_db()
 # ---- START BACKUP SCHEDULER ----
 print("[STARTUP] Starting backup scheduler (every 30 minutes)...")
 schedule_github_backup()
+
+# After restore
+restore_uploads_from_github()
+verify_uploads_integrity()
 
 # ============================================================
 # PASSWORD RESET ROUTES
