@@ -1428,11 +1428,19 @@ def get_user_subscription(user_id):
     conn.close()
     return result
 
-def get_subscription_packages():
-    """Get all active packages."""
+def get_subscription_packages(include_free=False):
+    """
+    Get active subscription packages.
+    - include_free: if True, includes packages with price = 0 (e.g., Free Trial, Basic)
+    - Default False: shows only paid packages (price > 0)
+    """
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT id, name, duration_days, price FROM subscription_packages WHERE is_active=1 ORDER BY price")
+    if include_free:
+        query = "SELECT id, name, duration_days, price FROM subscription_packages WHERE is_active=1 ORDER BY price"
+    else:
+        query = "SELECT id, name, duration_days, price FROM subscription_packages WHERE is_active=1 AND price > 0 ORDER BY price"
+    c.execute(query)
     packages = c.fetchall()
     conn.close()
     return packages
