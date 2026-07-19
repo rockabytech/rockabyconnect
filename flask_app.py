@@ -1170,10 +1170,18 @@ def create_password_reset(user_id):
 from PIL import Image, ImageDraw
 
 def create_placeholder():
-    img = Image.new('RGB', (200, 200), color='#e0e0e0')
-    d = ImageDraw.Draw(img)
-    d.text((50, 80), "No Image", fill='#666')
-    img.save('static/placeholder.png')
+    """Create a placeholder image if it doesn't exist."""
+    placeholder_path = os.path.join(BASE_DIR, 'static', 'placeholder.png')
+    if not os.path.exists(placeholder_path):
+        try:
+            from PIL import Image, ImageDraw
+            img = Image.new('RGB', (200, 200), color='#e0e0e0')
+            d = ImageDraw.Draw(img)
+            d.text((50, 80), "No Image", fill='#666')
+            img.save(placeholder_path)
+            print("[PLACEHOLDER] Created placeholder image")
+        except Exception as e:
+            print(f"[PLACEHOLDER] Could not create placeholder: {e}")
 
 def validate_reset_token(token):
     with get_db_connection() as conn:
@@ -9225,6 +9233,7 @@ schedule_github_backup()
 # After restore
 restore_uploads_from_github()
 verify_uploads_integrity()
+create_placeholder()
 
 # ============================================================
 # PASSWORD RESET ROUTES
