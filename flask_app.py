@@ -5082,17 +5082,18 @@ admin_base_template = """
     <nav class="admin-nav">
         <div class="brand">⚙️ ROCKABY<span>ADMIN</span></div>
         <div class="nav-links">
-            <a href="/admin/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">📊 Dashboard</a>
-            <a href="/admin/points-settings" class="{{ 'active' if active_page == 'points' else '' }}">⭐ Points</a>
-            <a href="/admin/subscription-requests" class="{{ 'active' if active_page == 'subscriptions' else '' }}">📦 Requests</a>
-            <a href="/admin/subscriptions" class="{{ 'active' if active_page == 'packages' else '' }}">📦 Packages</a>
-            <a href="/admin/backups" class="{{ 'active' if active_page == 'backups' else '' }}">💾 Backups</a>
-            <a href="/admin/stats" class="{{ 'active' if active_page == 'stats' else '' }}">📊 Stats</a>
-            <a href="/admin/referral-settings" class="{{ 'active' if active_page == 'referrals' else '' }}">🎁 Referrals</a>
-            <!-- 👇 INSERT YOUR NEW LINK HERE -->
-            <a href="/admin/boost-packages" class="{{ 'active' if active_page == 'boost_packages' else '' }}">🚀 Boost Packages</a>
-            <a href="/admin/logout" class="logout-link">🚪 Logout</a>
-        </div>
+        <a href="/admin/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">📊 Dashboard</a>
+        <a href="/admin/points-settings" class="{{ 'active' if active_page == 'points' else '' }}">⭐ Points</a>
+        <a href="/admin/subscription-requests" class="{{ 'active' if active_page == 'subscriptions' else '' }}">📦 Requests</a>
+        <a href="/admin/subscriptions" class="{{ 'active' if active_page == 'packages' else '' }}">📦 Packages</a>
+        <a href="/admin/backups" class="{{ 'active' if active_page == 'backups' else '' }}">💾 Backups</a>
+        <a href="/admin/stats" class="{{ 'active' if active_page == 'stats' else '' }}">📊 Stats</a>
+        <a href="/admin/referral-settings" class="{{ 'active' if active_page == 'referrals' else '' }}">🎁 Referrals</a>
+        <a href="/admin/boost-packages" class="{{ 'active' if active_page == 'boost_packages' else '' }}">🚀 Boost Packages</a>
+        <a href="/admin/payment-settings" class="{{ 'active' if active_page == 'payments' else '' }}">💳 Payment Methods</a>
+        <a href="/admin/manual-backup" class="{{ 'active' if active_page == 'manual_backup' else '' }}">💾 Manual Backup</a>
+        <a href="/admin/logout" class="logout-link">🚪 Logout</a>
+    </div>
     </nav>
     <div class="container">
         {content}
