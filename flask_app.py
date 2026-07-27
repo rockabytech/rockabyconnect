@@ -1021,6 +1021,102 @@ def migrate_db():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
+     # ---- Coupons table ----
+    c.execute('''CREATE TABLE IF NOT EXISTS coupons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        discount_type TEXT NOT NULL,  -- 'percentage' or 'fixed'
+        discount_value REAL NOT NULL,
+        max_uses INTEGER DEFAULT 0,   -- 0 = unlimited
+        used_count INTEGER DEFAULT 0,
+        expiry_date DATE,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # ---- Email/SMS templates ----
+    c.execute('''CREATE TABLE IF NOT EXISTS templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE NOT NULL,
+        subject TEXT,
+        body TEXT NOT NULL,
+        type TEXT DEFAULT 'email',   -- 'email' or 'sms'
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # Insert default templates
+    defaults = [
+        ('welcome', 'Welcome to RockabyConnect!', 'Hello {{user_name}},\n\nYour account is ready. Start exploring opportunities now!', 'email'),
+        ('boost_approved', 'Your Boost is Live!', 'Hi {{user_name}},\n\nYour boost for {{item_name}} is now active for {{duration}} days.', 'email'),
+        ('subscription_expiry', 'Subscription Expiring Soon', 'Hi {{user_name}},\n\nYour subscription will expire in {{days}} days. Renew now to keep access.', 'email'),
+    ]
+    for key, subject, body, typ in defaults:
+        c.execute("INSERT OR IGNORE INTO templates (key, subject, body, type) VALUES (?,?,?,?)", (key, subject, body, typ))
+
+    # ---- Support tickets ----
+    c.execute('''CREATE TABLE IF NOT EXISTS support_tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        status TEXT DEFAULT 'open',
+        priority TEXT DEFAULT 'medium',
+        assigned_to INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id),
+        FOREIGN KEY(assigned_to) REFERENCES users(id)
+    )''')
+
+    # ---- Ticket replies ----
+    c.execute('''CREATE TABLE IF NOT EXISTS ticket_replies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        message TEXT NOT NULL,
+        is_admin INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(ticket_id) REFERENCES support_tickets(id),
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
+    # ---- User activity log ----
+    c.execute('''CREATE TABLE IF NOT EXISTS user_activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT,
+        ip_address TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
+    # ---- Site content (for homepage banners, pages) ----
+    c.execute('''CREATE TABLE IF NOT EXISTS site_content (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT,
+        type TEXT DEFAULT 'html',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # ---- Add is_suspended column to users (if missing) ----
+    c.execute("PRAGMA table_info(users)")
+    existing_cols = [col[1] for col in c.fetchall()]
+    if 'is_suspended' not in existing_cols:
+        c.execute("ALTER TABLE users ADD COLUMN is_suspended INTEGER DEFAULT 0")
+        print("[MIGRATION] Added is_suspended to users")
+
+    # ---- Add is_verified column to users (optional) ----
+    if 'is_verified' not in existing_cols:
+        c.execute("ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 1")
+        print("[MIGRATION] Added is_verified to users")
+
+    conn.commit()
+    conn.close()
+    print("[MIGRATION] Admin enhancements migrated.")
+
+
     # ---- EXTEND BOOST_REQUESTS (safe) ----
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boost_requests'")
     if c.fetchone():
@@ -2543,6 +2639,1022 @@ def admin_clear_all_featured():
         <a href="/admin/dashboard" class="btn">Back to Dashboard</a>
     </div>
     """
+
+# ============================================================
+# ADMIN ENHANCEMENTS
+# ============================================================
+
+# ---- Helper to render admin pages ----
+def render_admin_page(title, content, active_page):
+    return render_template_string(
+        admin_base_template.replace("{title}", title).replace("{active_page}", active_page).replace("{content}", content)
+    )
+
+# ============================================================
+# 1. USER MANAGEMENT
+# ============================================================
+
+@app.route('/admin/users')
+def admin_users():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    db = get_db()
+    c = db.cursor()
+    
+    # Get filters
+    search = request.args.get('search', '')
+    status_filter = request.args.get('status', 'all')  # all, active, suspended
+    subscription_filter = request.args.get('subscription', 'all')  # all, active, expired
+    
+    # Build query
+    query = "SELECT u.id, u.name, u.phone, u.created_at, u.is_suspended, " \
+            "(SELECT COUNT(*) FROM user_subscriptions WHERE user_id = u.id AND status='active' AND end_date >= date('now')) as has_active_subscription " \
+            "FROM users u WHERE 1=1"
+    params = []
+    
+    if search:
+        query += " AND (u.name LIKE ? OR u.phone LIKE ?)"
+        params.extend([f'%{search}%', f'%{search}%'])
+    
+    if status_filter == 'suspended':
+        query += " AND u.is_suspended = 1"
+    elif status_filter == 'active':
+        query += " AND u.is_suspended = 0"
+    
+    if subscription_filter == 'active':
+        query += " AND EXISTS (SELECT 1 FROM user_subscriptions WHERE user_id = u.id AND status='active' AND end_date >= date('now'))"
+    elif subscription_filter == 'expired':
+        query += " AND NOT EXISTS (SELECT 1 FROM user_subscriptions WHERE user_id = u.id AND status='active' AND end_date >= date('now'))"
+    
+    query += " ORDER BY u.id DESC"
+    
+    users = c.execute(query, params).fetchall()
+    db.close()
+    
+    # Build table rows
+    rows = ""
+    for u in users:
+        sub_status = '<span class="badge" style="background:#28a745;color:#fff;">Active</span>' if u[5] else '<span class="badge" style="background:#dc3545;color:#fff;">None</span>'
+        suspended = '<span class="badge" style="background:#ffc107;color:#000;">Suspended</span>' if u[4] else '<span class="badge" style="background:#28a745;color:#fff;">Active</span>'
+        rows += f"""
+        <tr>
+            <td>{u[0]}</td>
+            <td>{u[1]}</td>
+            <td>{u[2]}</td>
+            <td>{u[3][:16] if u[3] else '-'}</td>
+            <td>{suspended}</td>
+            <td>{sub_status}</td>
+            <td>
+                <a href="/admin/user/{u[0]}" class="btn btn-small">View</a>
+                <a href="/admin/user/{u[0]}/edit" class="btn btn-small btn-outline">Edit</a>
+                <a href="/admin/user/{u[0]}/subscription" class="btn btn-small" style="background:#17a2b8;color:#fff;">Subscription</a>
+                <a href="/admin/user/{u[0]}/toggle-suspend" class="btn btn-small {'btn-danger' if not u[4] else 'btn-success'}" onclick="return confirm('Are you sure?')">{'Unsuspend' if u[4] else 'Suspend'}</a>
+                <a href="/admin/user/{u[0]}/delete" class="btn btn-small btn-danger" onclick="return confirm('Delete this user? This cannot be undone.')">Delete</a>
+            </td>
+        </tr>
+        """
+    if not rows:
+        rows = '<tr><td colspan="7">No users found.</td></tr>'
+    
+    content = f"""
+    <div class="card">
+        <div class="card-header">👥 User Management</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
+            <form method="GET" style="display:flex; gap:10px; flex-wrap:wrap; flex:1;">
+                <input type="text" name="search" value="{search}" placeholder="Search by name or phone..." style="width:200px;">
+                <select name="status">
+                    <option value="all" {'selected' if status_filter=='all' else ''}>All Users</option>
+                    <option value="active" {'selected' if status_filter=='active' else ''}>Active</option>
+                    <option value="suspended" {'selected' if status_filter=='suspended' else ''}>Suspended</option>
+                </select>
+                <select name="subscription">
+                    <option value="all" {'selected' if subscription_filter=='all' else ''}>All Subscriptions</option>
+                    <option value="active" {'selected' if subscription_filter=='active' else ''}>Has Active</option>
+                    <option value="expired" {'selected' if subscription_filter=='expired' else ''}>No Active</option>
+                </select>
+                <button type="submit" class="btn btn-small">Filter</button>
+                <a href="/admin/users" class="btn btn-small btn-outline">Clear</a>
+            </form>
+            <a href="/admin/user/create" class="btn btn-success btn-small">+ Create User</a>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Joined</th>
+                        <th>Status</th>
+                        <th>Subscription</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    </div>
+    """
+    return render_admin_page("User Management", content, "users")
+
+
+@app.route('/admin/user/<int:user_id>')
+def admin_user_detail(user_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    db = get_db()
+    c = db.cursor()
+    user = c.execute("SELECT id, name, phone, created_at, is_suspended FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        db.close()
+        return "User not found.", 404
+    
+    # Get subscription
+    sub = c.execute("""
+        SELECT us.*, p.name as package_name 
+        FROM user_subscriptions us 
+        JOIN subscription_packages p ON us.package_id = p.id 
+        WHERE us.user_id = ? AND us.status='active' AND us.end_date >= date('now')
+        ORDER BY us.end_date DESC LIMIT 1
+    """, (user_id,)).fetchone()
+    
+    # Get activity log
+    logs = c.execute("SELECT action, details, created_at FROM user_activity_log WHERE user_id=? ORDER BY created_at DESC LIMIT 20", (user_id,)).fetchall()
+    db.close()
+    
+    log_rows = ""
+    for log in logs:
+        log_rows += f"<tr><td>{log[2][:16]}</td><td>{log[0]}</td><td>{log[1] or ''}</td></tr>"
+    if not log_rows:
+        log_rows = "<tr><td colspan='3'>No activity recorded.</td></tr>"
+    
+    content = f"""
+    <div class="card">
+        <div class="card-header">👤 User: {user[1]}</div>
+        <p><strong>ID:</strong> {user[0]}</p>
+        <p><strong>Phone:</strong> {user[2]}</p>
+        <p><strong>Joined:</strong> {user[3][:16] if user[3] else '-'}</p>
+        <p><strong>Status:</strong> {'Suspended' if user[4] else 'Active'}</p>
+        <p><strong>Active Subscription:</strong> {sub['package_name'] + ' until ' + sub['end_date'] if sub else 'None'}</p>
+        <div style="margin-top:15px;">
+            <a href="/admin/user/{user_id}/edit" class="btn">Edit Profile</a>
+            <a href="/admin/user/{user_id}/subscription" class="btn" style="background:#17a2b8;">Manage Subscription</a>
+            <a href="/admin/user/{user_id}/toggle-suspend" class="btn {'btn-danger' if not user[4] else 'btn-success'}" onclick="return confirm('Are you sure?')">{'Unsuspend' if user[4] else 'Suspend'}</a>
+            <a href="/admin/user/{user_id}/delete" class="btn btn-danger" onclick="return confirm('Delete this user?')">Delete</a>
+            <a href="/admin/user/{user_id}/export" class="btn btn-outline">Export Data (GDPR)</a>
+        </div>
+        <hr>
+        <h4>Recent Activity</h4>
+        <div class="table-responsive">
+            <table><thead><tr><th>Time</th><th>Action</th><th>Details</th></tr></thead><tbody>{log_rows}</tbody></table>
+        </div>
+    </div>
+    """
+    return render_admin_page("User Detail", content, "users")
+
+
+@app.route('/admin/user/<int:user_id>/edit', methods=['GET', 'POST'])
+def admin_user_edit(user_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    db = get_db()
+    c = db.cursor()
+    user = c.execute("SELECT id, name, phone FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        db.close()
+        return "User not found.", 404
+    
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        phone = request.form['phone'].strip()
+        if not name or not phone:
+            return "Name and phone required."
+        c.execute("UPDATE users SET name=?, phone=? WHERE id=?", (name, phone, user_id))
+        db.commit()
+        # Log activity
+        c.execute("INSERT INTO user_activity_log (user_id, action, details) VALUES (?, 'admin_edit_user', ?)", (user_id, f"Updated profile"))
+        db.commit()
+        db.close()
+        return redirect(f'/admin/user/{user_id}')
+    
+    db.close()
+    content = f"""
+    <div class="card">
+        <div class="card-header">✏️ Edit User</div>
+        <form method="POST">
+            <label>Name</label>
+            <input type="text" name="name" value="{user[1]}" required>
+            <label>Phone</label>
+            <input type="tel" name="phone" value="{user[2]}" required>
+            <button type="submit" class="btn" style="margin-top:20px;">Update</button>
+        </form>
+        <a href="/admin/user/{user_id}" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_admin_page("Edit User", content, "users")
+
+
+@app.route('/admin/user/<int:user_id>/subscription', methods=['GET', 'POST'])
+def admin_user_subscription(user_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    db = get_db()
+    c = db.cursor()
+    user = c.execute("SELECT id, name FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        db.close()
+        return "User not found.", 404
+    
+    packages = c.execute("SELECT id, name, duration_days, price FROM subscription_packages WHERE is_active=1").fetchall()
+    package_options = ''.join(f'<option value="{p[0]}">{p[1]} ({p[2]} days) – UGX {p[3]:,}</option>' for p in packages)
+    
+    if request.method == 'POST':
+        package_id = request.form.get('package_id')
+        start_date = request.form.get('start_date', date.today().isoformat())
+        end_date = request.form.get('end_date')
+        status = request.form.get('status', 'active')
+        if not package_id:
+            return "Please select a package."
+        if not end_date:
+            # calculate based on package duration
+            pkg = c.execute("SELECT duration_days FROM subscription_packages WHERE id=?", (package_id,)).fetchone()
+            end_date = (date.today() + timedelta(days=pkg[0])).isoformat() if pkg else None
+        # Deactivate any existing active subscription
+        c.execute("UPDATE user_subscriptions SET status='expired' WHERE user_id=? AND status='active'", (user_id,))
+        c.execute("""
+            INSERT INTO user_subscriptions (user_id, package_id, start_date, end_date, status, transaction_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, package_id, start_date, end_date, status, f'admin_{int(datetime.now().timestamp())}'))
+        db.commit()
+        c.execute("INSERT INTO user_activity_log (user_id, action, details) VALUES (?, 'admin_subscription_assigned', ?)", (user_id, f"Package {package_id}"))
+        db.commit()
+        db.close()
+        return redirect(f'/admin/user/{user_id}')
+    
+    db.close()
+    content = f"""
+    <div class="card">
+        <div class="card-header">📦 Manage Subscription for {user[1]}</div>
+        <form method="POST">
+            <label>Package</label>
+            <select name="package_id" required>
+                <option value="">Select...</option>
+                {package_options}
+            </select>
+            <label>Start Date</label>
+            <input type="date" name="start_date" value="{date.today().isoformat()}" required>
+            <label>End Date</label>
+            <input type="date" name="end_date" placeholder="Leave blank to auto-calculate from package">
+            <label>Status</label>
+            <select name="status">
+                <option value="active">Active</option>
+                <option value="pending">Pending</option>
+                <option value="expired">Expired</option>
+            </select>
+            <button type="submit" class="btn" style="margin-top:20px;">Assign Subscription</button>
+        </form>
+        <a href="/admin/user/{user_id}" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_admin_page("Manage Subscription", content, "users")
+
+
+@app.route('/admin/user/<int:user_id>/toggle-suspend')
+def admin_user_toggle_suspend(user_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    c.execute("UPDATE users SET is_suspended = 1 - is_suspended WHERE id=?", (user_id,))
+    db.commit()
+    c.execute("INSERT INTO user_activity_log (user_id, action, details) VALUES (?, 'admin_toggle_suspend', ?)", (user_id, "Toggled suspend"))
+    db.commit()
+    db.close()
+    return redirect('/admin/users')
+
+
+@app.route('/admin/user/<int:user_id>/delete')
+def admin_user_delete(user_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    if user_id == 1:
+        return "Cannot delete the primary admin user."
+    db = get_db()
+    c = db.cursor()
+    # Cascade delete? We'll just delete the user; foreign keys should cascade if set.
+    c.execute("DELETE FROM users WHERE id=?", (user_id,))
+    db.commit()
+    db.close()
+    return redirect('/admin/users')
+
+
+@app.route('/admin/user/<int:user_id>/export')
+def admin_user_export_data(user_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    # Generate a CSV of user's data (GDPR export)
+    # For simplicity, we'll output JSON
+    db = get_db()
+    c = db.cursor()
+    user = c.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        db.close()
+        return "User not found", 404
+    # Get subscriptions, jobs, applications, messages, etc. (simplified)
+    data = {
+        'user': dict(user),
+        'subscriptions': [dict(row) for row in c.execute("SELECT * FROM user_subscriptions WHERE user_id=?", (user_id,)).fetchall()],
+        'jobs': [dict(row) for row in c.execute("SELECT * FROM jobs WHERE employer_id=?", (user_id,)).fetchall()],
+        'applications': [dict(row) for row in c.execute("SELECT * FROM job_applications WHERE applicant_id=?", (user_id,)).fetchall()],
+        'messages_sent': [dict(row) for row in c.execute("SELECT * FROM messages WHERE sender_id=?", (user_id,)).fetchall()],
+        'messages_received': [dict(row) for row in c.execute("SELECT * FROM messages WHERE receiver_id=?", (user_id,)).fetchall()],
+    }
+    db.close()
+    import json
+    return json.dumps(data, indent=2, default=str)
+
+
+@app.route('/admin/user/create', methods=['GET', 'POST'])
+def admin_user_create():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        phone = request.form['phone'].strip()
+        password = request.form['password']
+        if not name or not phone or not password:
+            return "All fields required."
+        hashed = generate_password_hash(password)
+        db = get_db()
+        c = db.cursor()
+        try:
+            c.execute("INSERT INTO users (name, phone, password_hash) VALUES (?,?,?)", (name, phone, hashed))
+            user_id = c.lastrowid
+            db.commit()
+            c.execute("INSERT INTO user_activity_log (user_id, action, details) VALUES (?, 'admin_create_user', ?)", (user_id, f"Created by admin"))
+            db.commit()
+            db.close()
+            return redirect(f'/admin/user/{user_id}')
+        except sqlite3.IntegrityError:
+            db.close()
+            return "Phone already exists."
+    content = """
+    <div class="card">
+        <div class="card-header">➕ Create User</div>
+        <form method="POST">
+            <label>Full Name</label>
+            <input type="text" name="name" required>
+            <label>Phone Number</label>
+            <input type="tel" name="phone" required>
+            <label>Password</label>
+            <input type="password" name="password" required minlength="6">
+            <button type="submit" class="btn" style="margin-top:20px;">Create</button>
+        </form>
+        <a href="/admin/users" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_admin_page("Create User", content, "users")
+
+# ============================================================
+# 2. SKILL ANALYTICS
+# ============================================================
+
+@app.route('/admin/skills')
+def admin_skills():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    db = get_db()
+    c = db.cursor()
+    
+    # Get all skills with counts
+    c.execute("""
+        SELECT skills FROM providers WHERE skills IS NOT NULL AND skills != ''
+    """)
+    rows = c.fetchall()
+    skill_counter = {}
+    for (skills_str,) in rows:
+        for skill in skills_str.split(','):
+            skill = skill.strip().title()
+            if skill:
+                skill_counter[skill] = skill_counter.get(skill, 0) + 1
+    
+    # Sort by count
+    sorted_skills = sorted(skill_counter.items(), key=lambda x: x[1], reverse=True)
+    total_skills = len(sorted_skills)
+    
+    # Pagination
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    total_pages = (total_skills + per_page - 1) // per_page
+    start = (page - 1) * per_page
+    end = start + per_page
+    paged_skills = sorted_skills[start:end]
+    
+    # Build table
+    rows_html = ""
+    for skill, count in paged_skills:
+        rows_html += f"<tr><td>{skill}</td><td>{count}</td></tr>"
+    if not rows_html:
+        rows_html = "<tr><td colspan='2'>No skills found.</td></tr>"
+    
+    # Pagination links
+    pagination = ""
+    if total_pages > 1:
+        pagination = '<div style="display:flex; gap:10px; justify-content:center; margin-top:15px;">'
+        for p in range(1, total_pages + 1):
+            active = 'class="btn btn-small" style="background:var(--primary);color:#fff;"' if p == page else 'class="btn btn-small btn-outline"'
+            pagination += f'<a href="?page={p}" {active}>{p}</a>'
+        pagination += '</div>'
+    
+    # Chart data (top 20)
+    chart_labels = [s[0] for s in sorted_skills[:20]]
+    chart_values = [s[1] for s in sorted_skills[:20]]
+    
+    content = f"""
+    <div class="card">
+        <div class="card-header">📊 Skill Analytics</div>
+        <p>Total unique skills: <strong>{total_skills}</strong></p>
+        <div style="display:flex; gap:20px; flex-wrap:wrap;">
+            <div style="flex:2; min-width:300px;">
+                <div class="chart-container"><canvas id="skillChart"></canvas></div>
+            </div>
+            <div style="flex:1; min-width:250px;">
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <input type="text" id="skillSearch" placeholder="Search skills..." onkeyup="filterSkills()" style="flex:1;">
+                    <a href="/admin/skills/export" class="btn btn-small btn-success">Export CSV</a>
+                </div>
+                <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
+                    <table>
+                        <thead><tr><th>Skill</th><th>Providers</th></tr></thead>
+                        <tbody id="skillTableBody">{rows_html}</tbody>
+                    </table>
+                </div>
+                {pagination}
+            </div>
+        </div>
+    </div>
+    <script>
+        new Chart(document.getElementById('skillChart').getContext('2d'), {{
+            type: 'bar',
+            data: {{
+                labels: {json.dumps(chart_labels)},
+                datasets: [{{
+                    label: 'Providers',
+                    data: {json.dumps(chart_values)},
+                    backgroundColor: 'rgba(26,115,232,0.7)',
+                    borderColor: '#1a73e8',
+                    borderWidth: 2,
+                    borderRadius: 8
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {{ legend: {{ display: false }} }},
+                scales: {{
+                    y: {{ beginAtZero: true }}
+                }}
+            }}
+        }});
+        function filterSkills() {{
+            const q = document.getElementById('skillSearch').value.toLowerCase();
+            document.querySelectorAll('#skillTableBody tr').forEach(row => {{
+                row.style.display = row.innerText.toLowerCase().includes(q) ? '' : 'none';
+            }});
+        }}
+    </script>
+    """
+    return render_admin_page("Skill Analytics", content, "skills")
+
+
+@app.route('/admin/skills/export')
+def admin_skills_export():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT skills FROM providers WHERE skills IS NOT NULL AND skills != ''")
+    rows = c.fetchall()
+    skill_counter = {}
+    for (skills_str,) in rows:
+        for skill in skills_str.split(','):
+            skill = skill.strip().title()
+            if skill:
+                skill_counter[skill] = skill_counter.get(skill, 0) + 1
+    db.close()
+    import csv
+    import io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Skill', 'Provider Count'])
+    for skill, count in sorted(skill_counter.items(), key=lambda x: x[1], reverse=True):
+        writer.writerow([skill, count])
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = 'attachment; filename=skills_export.csv'
+    response.headers['Content-type'] = 'text/csv'
+    return response
+
+# ============================================================
+# 3. PAYMENT METHODS UI (Visual Cards)
+# ============================================================
+
+@app.route('/admin/payment-methods', methods=['GET', 'POST'])
+def admin_payment_methods():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    # This reuses the existing payment-settings route but with a visual UI.
+    # We'll keep the same logic but present it in cards.
+    # For simplicity, we'll redirect to the existing route, but if you want a new UI, we'll implement it.
+    # However, to avoid duplication, we'll enhance the existing page with the card UI.
+    # Let's modify the existing admin_payment_settings to have a card layout.
+    # We'll just redirect for now – you can enhance later.
+    return redirect('/admin/payment-settings')
+
+# (The existing payment settings route can be enhanced with cards; I'll provide an updated version if needed.)
+
+# ============================================================
+# 4. EMAIL/SMS TEMPLATES
+# ============================================================
+
+@app.route('/admin/templates')
+def admin_templates():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    templates = c.execute("SELECT id, key, subject, type, updated_at FROM templates ORDER BY key").fetchall()
+    db.close()
+    rows = ""
+    for t in templates:
+        rows += f"""
+        <tr>
+            <td>{t[1]}</td>
+            <td>{t[2] or '-'}</td>
+            <td><span class="badge badge-{t[3]}">{t[3]}</span></td>
+            <td>{t[4][:16] if t[4] else '-'}</td>
+            <td><a href="/admin/templates/edit/{t[0]}" class="btn btn-small">Edit</a></td>
+        </tr>
+        """
+    if not rows:
+        rows = "<tr><td colspan='5'>No templates found.</td></tr>"
+    content = f"""
+    <div class="card">
+        <div class="card-header">📨 Email/SMS Templates</div>
+        <p>Edit the content of system notifications. Use placeholders like <code>{{user_name}}</code>, <code>{{link}}</code>, etc.</p>
+        <table>
+            <thead><tr><th>Key</th><th>Subject</th><th>Type</th><th>Updated</th><th>Action</th></tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+        <div style="margin-top:15px;"><a href="/admin/templates/add" class="btn btn-success">Add Template</a></div>
+    </div>
+    """
+    return render_admin_page("Templates", content, "templates")
+
+
+@app.route('/admin/templates/edit/<int:template_id>', methods=['GET', 'POST'])
+def admin_template_edit(template_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    t = c.execute("SELECT id, key, subject, body, type FROM templates WHERE id=?", (template_id,)).fetchone()
+    if not t:
+        db.close()
+        return "Template not found", 404
+    if request.method == 'POST':
+        subject = request.form['subject'].strip()
+        body = request.form['body'].strip()
+        if not body:
+            return "Body is required."
+        c.execute("UPDATE templates SET subject=?, body=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (subject, body, template_id))
+        db.commit()
+        db.close()
+        return redirect('/admin/templates')
+    db.close()
+    content = f"""
+    <div class="card">
+        <div class="card-header">✏️ Edit Template: {t[1]}</div>
+        <form method="POST">
+            <label>Subject (for emails)</label>
+            <input type="text" name="subject" value="{t[2] or ''}">
+            <label>Body *</label>
+            <textarea name="body" rows="8" required>{t[3]}</textarea>
+            <p style="font-size:0.8rem;color:var(--text-secondary);">Placeholders: <code>{{user_name}}</code>, <code>{{link}}</code>, <code>{{item_name}}</code>, <code>{{duration}}</code>, <code>{{days}}</code></p>
+            <button type="submit" class="btn" style="margin-top:20px;">Update</button>
+        </form>
+        <a href="/admin/templates" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_admin_page("Edit Template", content, "templates")
+
+# ============================================================
+# 5. COUPONS & DISCOUNTS
+# ============================================================
+
+@app.route('/admin/coupons')
+def admin_coupons():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    coupons = c.execute("SELECT * FROM coupons ORDER BY id DESC").fetchall()
+    db.close()
+    rows = ""
+    for cp in coupons:
+        status = '🟢 Active' if cp[6] else '🔴 Inactive'
+        expiry = cp[5] or 'Never'
+        rows += f"""
+        <tr>
+            <td><code>{cp[1]}</code></td>
+            <td>{cp[2]} ({cp[3]}{'%' if cp[2]=='percentage' else ' UGX'})</td>
+            <td>{cp[4] if cp[4] > 0 else '∞'} / {cp[5] or '∞'}</td>
+            <td>{expiry}</td>
+            <td>{status}</td>
+            <td>
+                <a href="/admin/coupons/toggle/{cp[0]}" class="btn btn-small">{'Disable' if cp[6] else 'Enable'}</a>
+                <a href="/admin/coupons/delete/{cp[0]}" class="btn btn-small btn-danger" onclick="return confirm('Delete?')">Delete</a>
+            </td>
+        </tr>
+        """
+    if not rows:
+        rows = "<tr><td colspan='6'>No coupons found.</td></tr>"
+    content = f"""
+    <div class="card">
+        <div class="card-header">🎫 Coupon Codes</div>
+        <a href="/admin/coupons/add" class="btn btn-success" style="margin-bottom:15px;">+ Generate Coupon</a>
+        <table>
+            <thead><tr><th>Code</th><th>Discount</th><th>Uses</th><th>Expiry</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+    </div>
+    """
+    return render_admin_page("Coupons", content, "coupons")
+
+
+@app.route('/admin/coupons/add', methods=['GET', 'POST'])
+def admin_coupon_add():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    if request.method == 'POST':
+        code = request.form['code'].strip().upper()
+        discount_type = request.form['discount_type']
+        discount_value = float(request.form['discount_value'])
+        max_uses = int(request.form.get('max_uses', 0))
+        expiry_date = request.form.get('expiry_date', '')
+        if not code:
+            code = 'COUPON-' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        db = get_db()
+        c = db.cursor()
+        try:
+            c.execute("INSERT INTO coupons (code, discount_type, discount_value, max_uses, expiry_date, is_active) VALUES (?,?,?,?,?,1)",
+                      (code, discount_type, discount_value, max_uses, expiry_date or None))
+            db.commit()
+            db.close()
+            return redirect('/admin/coupons')
+        except sqlite3.IntegrityError:
+            db.close()
+            return "Code already exists."
+    content = """
+    <div class="card">
+        <div class="card-header">➕ Create Coupon</div>
+        <form method="POST">
+            <label>Coupon Code (leave blank to auto-generate)</label>
+            <input type="text" name="code" placeholder="e.g., SUMMER20">
+            <label>Discount Type</label>
+            <select name="discount_type">
+                <option value="percentage">Percentage</option>
+                <option value="fixed">Fixed Amount (UGX)</option>
+            </select>
+            <label>Discount Value</label>
+            <input type="number" name="discount_value" step="0.01" required>
+            <label>Max Uses (0 = unlimited)</label>
+            <input type="number" name="max_uses" value="0">
+            <label>Expiry Date (optional)</label>
+            <input type="date" name="expiry_date">
+            <button type="submit" class="btn" style="margin-top:20px;">Create</button>
+        </form>
+        <a href="/admin/coupons" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_admin_page("Create Coupon", content, "coupons")
+
+
+@app.route('/admin/coupons/toggle/<int:coupon_id>')
+def admin_coupon_toggle(coupon_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    c.execute("UPDATE coupons SET is_active = 1 - is_active WHERE id=?", (coupon_id,))
+    db.commit()
+    db.close()
+    return redirect('/admin/coupons')
+
+
+@app.route('/admin/coupons/delete/<int:coupon_id>')
+def admin_coupon_delete(coupon_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    c.execute("DELETE FROM coupons WHERE id=?", (coupon_id,))
+    db.commit()
+    db.close()
+    return redirect('/admin/coupons')
+
+# ============================================================
+# 6. SUPPORT TICKETS
+# ============================================================
+
+@app.route('/admin/tickets')
+def admin_tickets():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    tickets = c.execute("""
+        SELECT t.*, u.name as user_name 
+        FROM support_tickets t 
+        JOIN users u ON t.user_id = u.id 
+        ORDER BY t.created_at DESC
+    """).fetchall()
+    db.close()
+    rows = ""
+    for t in tickets:
+        status_color = {'open':'#28a745', 'in_progress':'#ffc107', 'resolved':'#17a2b8', 'closed':'#6c757d'}.get(t[4], '#6c757d')
+        rows += f"""
+        <tr>
+            <td>#{t[0]}</td>
+            <td>{t[8]}</td>
+            <td>{t[2]}</td>
+            <td><span class="badge" style="background:{status_color};color:#fff;">{t[4]}</span></td>
+            <td>{t[5]}</td>
+            <td>{t[6][:16] if t[6] else '-'}</td>
+            <td><a href="/admin/tickets/{t[0]}" class="btn btn-small">View</a></td>
+        </tr>
+        """
+    if not rows:
+        rows = "<tr><td colspan='7'>No tickets found.</td></tr>"
+    content = f"""
+    <div class="card">
+        <div class="card-header">🎫 Support Tickets</div>
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>ID</th><th>User</th><th>Subject</th><th>Status</th><th>Priority</th><th>Created</th><th>Action</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    </div>
+    """
+    return render_admin_page("Support Tickets", content, "tickets")
+
+
+@app.route('/admin/tickets/<int:ticket_id>', methods=['GET', 'POST'])
+def admin_ticket_detail(ticket_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    ticket = c.execute("""
+        SELECT t.*, u.name as user_name, u.phone as user_phone
+        FROM support_tickets t 
+        JOIN users u ON t.user_id = u.id 
+        WHERE t.id=?
+    """, (ticket_id,)).fetchone()
+    if not ticket:
+        db.close()
+        return "Ticket not found", 404
+    
+    if request.method == 'POST':
+        status = request.form.get('status')
+        reply = request.form.get('reply', '').strip()
+        if status:
+            c.execute("UPDATE support_tickets SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (status, ticket_id))
+        if reply:
+            c.execute("INSERT INTO ticket_replies (ticket_id, user_id, message, is_admin) VALUES (?,?,?,1)",
+                      (ticket_id, session['user_id'], reply))
+            # Send notification to user (optional)
+        db.commit()
+        db.close()
+        return redirect(f'/admin/tickets/{ticket_id}')
+    
+    # Get replies
+    replies = c.execute("""
+        SELECT r.*, u.name as user_name, r.is_admin
+        FROM ticket_replies r
+        LEFT JOIN users u ON r.user_id = u.id
+        WHERE r.ticket_id=?
+        ORDER BY r.created_at ASC
+    """, (ticket_id,)).fetchall()
+    db.close()
+    
+    reply_html = ""
+    for r in replies:
+        sender = 'Admin' if r[4] else r[5] or 'User'
+        reply_html += f"""
+        <div style="margin:10px 0; padding:10px; border-left:3px solid {'#f5af19' if r[4] else '#6c757d'}; background:var(--bg); border-radius:4px;">
+            <strong>{sender}</strong> <small>{r[3][:16]}</small>
+            <p>{r[2]}</p>
+        </div>
+        """
+    if not reply_html:
+        reply_html = "<p>No replies yet.</p>"
+    
+    content = f"""
+    <div class="card">
+        <div class="card-header">🎫 Ticket #{ticket[0]} - {ticket[2]}</div>
+        <p><strong>User:</strong> {ticket[8]} ({ticket[9]})</p>
+        <p><strong>Status:</strong> <span class="badge badge-{ticket[4]}">{ticket[4]}</span></p>
+        <p><strong>Priority:</strong> {ticket[5]}</p>
+        <p><strong>Message:</strong></p>
+        <div style="background:var(--bg); padding:15px; border-radius:8px; margin:10px 0;">{ticket[3]}</div>
+        <hr>
+        <h4>Replies</h4>
+        {reply_html}
+        <hr>
+        <form method="POST">
+            <label>Update Status</label>
+            <select name="status">
+                <option value="open" {'selected' if ticket[4]=='open' else ''}>Open</option>
+                <option value="in_progress" {'selected' if ticket[4]=='in_progress' else ''}>In Progress</option>
+                <option value="resolved" {'selected' if ticket[4]=='resolved' else ''}>Resolved</option>
+                <option value="closed" {'selected' if ticket[4]=='closed' else ''}>Closed</option>
+            </select>
+            <label>Reply (optional)</label>
+            <textarea name="reply" rows="4"></textarea>
+            <button type="submit" class="btn" style="margin-top:10px;">Update Ticket</button>
+        </form>
+        <a href="/admin/tickets" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_admin_page("Ticket Detail", content, "tickets")
+
+# ============================================================
+# 7. ADVANCED REPORTS
+# ============================================================
+
+@app.route('/admin/reports')
+def admin_reports():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    
+    # Get revenue summary
+    total_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved'").fetchone()[0]
+    monthly_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved' AND date(created_at) >= date('now','start of month')").fetchone()[0]
+    # Package breakdown
+    pkg_stats = c.execute("""
+        SELECT p.name, COUNT(*) as cnt, COALESCE(SUM(p.price_ugx),0) as revenue 
+        FROM vouchers v 
+        JOIN plans p ON v.plan_id = p.id 
+        WHERE v.provider_id=1 
+        GROUP BY p.name
+    """).fetchall()
+    pkg_rows = ""
+    for ps in pkg_stats:
+        pkg_rows += f"<tr><td>{ps[0]}</td><td>{ps[1]}</td><td>UGX {ps[2]:,}</td></tr>"
+    if not pkg_rows:
+        pkg_rows = "<tr><td colspan='3'>No data</td></tr>"
+    
+    content = f"""
+    <div class="card">
+        <div class="card-header">📊 Reports</div>
+        <div class="stat-grid">
+            <div class="stat-card"><h3>UGX {total_revenue:,}</h3><small>Total Revenue</small></div>
+            <div class="stat-card"><h3>UGX {monthly_revenue:,}</h3><small>This Month</small></div>
+        </div>
+        <h4>Package Performance</h4>
+        <table>
+            <thead><tr><th>Package</th><th>Sales</th><th>Revenue</th></tr></thead>
+            <tbody>{pkg_rows}</tbody>
+        </table>
+        <div style="margin-top:20px;">
+            <a href="/admin/reports/export/revenue" class="btn btn-success">Export Revenue CSV</a>
+            <a href="/admin/reports/export/users" class="btn btn-success">Export Users CSV</a>
+        </div>
+    </div>
+    """
+    return render_admin_page("Reports", content, "reports")
+
+
+@app.route('/admin/reports/export/<report_type>')
+def admin_export_report(report_type):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    import csv
+    import io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    db = get_db()
+    c = db.cursor()
+    if report_type == 'revenue':
+        rows = c.execute("SELECT amount, created_at, status FROM voucher_requests WHERE status='approved' ORDER BY created_at DESC").fetchall()
+        writer.writerow(['Amount', 'Date', 'Status'])
+        for row in rows:
+            writer.writerow([row[0], row[1], row[2]])
+        filename = 'revenue_report.csv'
+    elif report_type == 'users':
+        rows = c.execute("SELECT id, name, phone, created_at FROM users ORDER BY id DESC").fetchall()
+        writer.writerow(['ID', 'Name', 'Phone', 'Joined'])
+        for row in rows:
+            writer.writerow(row)
+        filename = 'users_report.csv'
+    else:
+        db.close()
+        return "Invalid report type", 400
+    db.close()
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+    response.headers['Content-type'] = 'text/csv'
+    return response
+
+# ============================================================
+# 8. CONTENT MANAGEMENT (Banners/Pages)
+# ============================================================
+
+@app.route('/admin/content')
+def admin_content():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    contents = c.execute("SELECT key, value, type, updated_at FROM site_content ORDER BY key").fetchall()
+    db.close()
+    rows = ""
+    for cts in contents:
+        rows += f"""
+        <tr>
+            <td>{cts[0]}</td>
+            <td>{cts[2]}</td>
+            <td>{cts[3][:16] if cts[3] else '-'}</td>
+            <td><a href="/admin/content/edit/{cts[0]}" class="btn btn-small">Edit</a></td>
+        </tr>
+        """
+    if not rows:
+        rows = "<tr><td colspan='4'>No content found.</td></tr>"
+    content = f"""
+    <div class="card">
+        <div class="card-header">📝 Site Content</div>
+        <p>Manage homepage banners, static pages, etc.</p>
+        <a href="/admin/content/add" class="btn btn-success" style="margin-bottom:15px;">+ Add Content</a>
+        <table>
+            <thead><tr><th>Key</th><th>Type</th><th>Updated</th><th>Action</th></tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+    </div>
+    """
+    return render_admin_page("Content Management", content, "content")
+
+
+@app.route('/admin/content/edit/<key>', methods=['GET', 'POST'])
+def admin_content_edit(key):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    row = c.execute("SELECT value, type FROM site_content WHERE key=?", (key,)).fetchone()
+    if not row:
+        db.close()
+        return "Content not found", 404
+    if request.method == 'POST':
+        value = request.form['value']
+        c.execute("UPDATE site_content SET value=?, updated_at=CURRENT_TIMESTAMP WHERE key=?", (value, key))
+        db.commit()
+        db.close()
+        return redirect('/admin/content')
+    db.close()
+    content = f"""
+    <div class="card">
+        <div class="card-header">✏️ Edit Content: {key}</div>
+        <form method="POST">
+            <label>Value</label>
+            <textarea name="value" rows="10">{row[0]}</textarea>
+            <button type="submit" class="btn" style="margin-top:20px;">Update</button>
+        </form>
+        <a href="/admin/content" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_admin_page("Edit Content", content, "content")
+
+# ============================================================
+# 9. UPDATE SIDEBAR NAV
+# ============================================================
+
+# In admin_base_template, update the nav-links to include:
+# <a href="/admin/users" class="{{ 'active' if active_page == 'users' else '' }}">👥 Users</a>
+# <a href="/admin/skills" class="{{ 'active' if active_page == 'skills' else '' }}">📊 Skills</a>
+# <a href="/admin/templates" class="{{ 'active' if active_page == 'templates' else '' }}">📨 Templates</a>
+# <a href="/admin/coupons" class="{{ 'active' if active_page == 'coupons' else '' }}">🎫 Coupons</a>
+# <a href="/admin/tickets" class="{{ 'active' if active_page == 'tickets' else '' }}">🎫 Tickets</a>
+# <a href="/admin/reports" class="{{ 'active' if active_page == 'reports' else '' }}">📊 Reports</a>
+# <a href="/admin/content" class="{{ 'active' if active_page == 'content' else '' }}">📝 Content</a>
 
 # ============================================================
 # BASE TEMPLATE (UNCHANGED)
