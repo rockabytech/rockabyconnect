@@ -9061,6 +9061,10 @@ def job_detail(job_id):
 @app.route('/messages')
 @login_required
 def messages_inbox():
+    # ---- Require subscription ----
+    if not is_subscription_active(session['user_id']):
+        return redirect(url_for('subscribe'))
+
     user_id = session['user_id']
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -9134,13 +9138,16 @@ def messages_inbox():
     '''
     return render_user_template(base_template, title="Messages", active_page="messages", content=content)
 
-
 @app.route('/messages/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def message_conversation(user_id):
     current_user = session['user_id']
     if current_user == user_id:
         return "You cannot message yourself.", 400
+
+    # ---- Require subscription ----
+    if not is_subscription_active(current_user):
+        return redirect(url_for('subscribe'))
 
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -9160,11 +9167,7 @@ def message_conversation(user_id):
                 VALUES (?,?,?)
             """, (current_user, user_id, message))
             conn.commit()
-            
-            # ⬇️ CRITICAL: This sends the push notification ⬇️
             add_notification(user_id, 'message', f'New message from {session["user_name"]}', link='/messages')
-            # ⬆️ CRITICAL: This sends the push notification ⬆️
-            
         return redirect(url_for('message_conversation', user_id=user_id))
 
     # Fetch conversation
@@ -9179,7 +9182,7 @@ def message_conversation(user_id):
 
     partner_name = get_user_name(user_id)
 
-    # Build chat HTML (messages will be rendered inside a container)
+    # Build chat HTML
     content = f'''
     <div class="card">
         <div class="card-header">💬 {partner_name} <a href="/messages" class="btn btn-small btn-outline">← Back</a></div>
@@ -9222,19 +9225,14 @@ def message_conversation(user_id):
                                 </div>
                             `;
                             chatContainer.appendChild(div);
-                            // Update last message time
                             if (msg.time > lastMessageTime) lastMessageTime = msg.time;
                         }});
-                        // Scroll to bottom
                         chatContainer.scrollTop = chatContainer.scrollHeight;
                     }}
                 }});
         }}
 
-        // Initial poll, then every 3 seconds
         setInterval(loadNewMessages, 3000);
-
-        // Auto-scroll to bottom on load
         chatContainer.scrollTop = chatContainer.scrollHeight;
     </script>
     '''
