@@ -547,6 +547,33 @@ def init_db():
         FOREIGN KEY(employer_id) REFERENCES users(id)
     )''')
 
+    # ---- JOBS TABLE (with new fields) ----
+    c.execute('''CREATE TABLE IF NOT EXISTS jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employer_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        company TEXT,
+        description TEXT,
+        location TEXT,
+        village TEXT,
+        contact TEXT,
+        status TEXT DEFAULT 'Open',
+        posted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        job_image TEXT,
+        job_image2 TEXT,
+        job_image3 TEXT,
+        featured INTEGER DEFAULT 0,
+        featured_expiry DATE,
+        urgent INTEGER DEFAULT 0,
+        job_type TEXT,
+        application_deadline DATE,
+        number_of_openings INTEGER DEFAULT 1,
+        salary_range TEXT,
+        work_arrangement TEXT,
+        experience_required TEXT,
+        FOREIGN KEY(employer_id) REFERENCES users(id)
+    )''')
+
     # ---- BOOST REQUESTS TABLE ----
     c.execute('''CREATE TABLE IF NOT EXISTS boost_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -906,6 +933,15 @@ def migrate_db():
     c.execute("PRAGMA table_info(jobs)")
     existing = [col[1] for col in c.fetchall()]
     for col in ['job_image2', 'job_image3']:
+        if col not in existing:
+            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
+            print(f"[MIGRATION] Added column {col} to jobs")
+
+    # ---- Add new columns to jobs if missing ----
+    c.execute("PRAGMA table_info(jobs)")
+    existing = [col[1] for col in c.fetchall()]
+    new_columns = ['job_type', 'application_deadline', 'number_of_openings', 'salary_range', 'work_arrangement', 'experience_required']
+    for col in new_columns:
         if col not in existing:
             c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
             print(f"[MIGRATION] Added column {col} to jobs")
@@ -3438,6 +3474,23 @@ base_template = """
         .badge-open { background: #17a2b8; color: white; }
         .badge-taken { background: #6f42c1; color: white; }
         .badge-closed { background: #dc3545; color: white; }
+        .badge-available { background: #28a745; color: white; }
+        .badge-occupied { background: #ffc107; color: #333; }
+        .badge-leave { background: #6c757d; color: white; }
+        .badge-open { background: #17a2b8; color: white; }
+        .badge-taken { background: #6f42c1; color: white; }
+        .badge-closed { background: #dc3545; color: white; }
+        
+        /* ---- Job Type Badges ---- */
+        .badge-one-off-task { background: #6c757d; color: white; }
+        .badge-short-term-contract { background: #17a2b8; color: white; }
+        .badge-long-term-contract { background: #28a745; color: white; }
+        .badge-part-time { background: #ffc107; color: #000; }
+        .badge-full-time { background: #dc3545; color: white; }
+        .badge-freelance { background: #6610f2; color: white; }
+        .badge-temporary { background: #fd7e14; color: white; }
+        .badge-internship { background: #20c997; color: white; }
+        .badge-other { background: #6c757d; color: white; }
 
         .stat-grid {
             display: grid;
@@ -4747,29 +4800,68 @@ job_form_template = base_template.replace("{title}", "{job_form_title}").replace
         <h1 style="font-size:1.6rem;">{form_header}</h1>
         <p>Find the right talent for your job</p>
     </div>
-    <div class="card" style="max-width:700px; margin:0 auto;">
+    <div class="card" style="max-width:800px; margin:0 auto;">
         <div class="card-header">💼 Job Details</div>
-        <form method="POST" enctype="multipart/form-data">
+        <form method="POST" enctype="multipart/form-data" id="jobForm">
+            <!-- Title -->
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Job Title *</label>
             <input type="text" name="title" value="{title_val}" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
             
+            <!-- Job Type -->
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Job Type *</label>
+            <select name="job_type" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+                {job_type_options}
+            </select>
+            
+            <!-- Work Arrangement -->
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Work Arrangement</label>
+            <select name="work_arrangement" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+                {work_arrangement_options}
+            </select>
+            
+            <!-- Number of Openings -->
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Number of Openings</label>
+            <input type="number" name="number_of_openings" value="{number_of_openings_val}" min="1" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <!-- Salary Range -->
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Salary Range (optional)</label>
+            <input type="text" name="salary_range" value="{salary_range_val}" placeholder="e.g., UGX 500,000 - 1,000,000" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <!-- Application Deadline -->
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Application Deadline</label>
+            <input type="date" name="application_deadline" value="{application_deadline_val}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <!-- Experience Required -->
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Experience Required (optional)</label>
+            <input type="text" name="experience_required" value="{experience_required_val}" placeholder="e.g., 2+ years" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <!-- Urgent -->
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">
-            <input type="checkbox" name="urgent" value="1" {urgent_checked}> ⚡ Mark as Urgent
+                <input type="checkbox" name="urgent" value="1" {urgent_checked}> ⚡ Mark as Urgent
             </label>
             <p style="font-size:0.75rem; color:var(--text-secondary);">Urgent jobs will glow on the listings page to attract more attention.</p>
             
+            <!-- Description -->
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Description *</label>
             <textarea name="description" rows="4" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem; min-height:100px;">{description_val}</textarea>
             
+            <!-- Location -->
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">District/City *</label>
             <input type="text" name="location" value="{location_val}" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
             
+            <!-- Village -->
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Village/Area</label>
             <input type="text" name="village" value="{village_val}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
             
+            <!-- Contact -->
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Contact (phone or email)</label>
             <input type="text" name="contact" value="{contact_val}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
             
+            <!-- Company -->
+            <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Company (optional)</label>
+            <input type="text" name="company" value="{company_val}" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.95rem;">
+            
+            <!-- Images -->
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Main Job Image</label>
             <input type="file" name="job_image" accept="image/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
             
@@ -4779,6 +4871,7 @@ job_form_template = base_template.replace("{title}", "{job_form_title}").replace
             <label style="display:block; margin-top:14px; font-weight:600; font-size:0.9rem;">Additional Image 2</label>
             <input type="file" name="job_image3" accept="image/*" style="width:100%; padding:8px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
             
+            <!-- Submit -->
             <button type="submit" class="btn" style="margin-top:20px; width:100%;">{submit_button}</button>
         </form>
     </div>
@@ -4958,6 +5051,8 @@ job_detail_template = base_template.replace("{title}", "Job Detail").replace("{a
         </div>
 
         <p><strong>Description:</strong> {description}</p>
+
+        {extra_job_details}   <!-- new -->
 
         <p><strong>Employer:</strong> {employer_name} <a href="/messages/{employer_id}" class="btn btn-small btn-whatsapp">💬 Message</a></p>
 
@@ -6579,6 +6674,7 @@ def subscribe():
 @login_required
 def post_job():
     if request.method == 'POST':
+        # ---- Get form data ----
         title = request.form['title']
         company = request.form.get('company', '')
         description = request.form['description']
@@ -6587,7 +6683,15 @@ def post_job():
         contact = request.form.get('contact', '')
         urgent = 1 if request.form.get('urgent') else 0
         
-        # ---- Handle 3 images ----
+        # ---- New fields ----
+        job_type = request.form.get('job_type', '')
+        application_deadline = request.form.get('application_deadline', '')
+        number_of_openings = request.form.get('number_of_openings', 1)
+        salary_range = request.form.get('salary_range', '')
+        work_arrangement = request.form.get('work_arrangement', '')
+        experience_required = request.form.get('experience_required', '')
+
+        # ---- Handle images ----
         file1 = request.files.get('job_image')
         file2 = request.files.get('job_image2')
         file3 = request.files.get('job_image3')
@@ -6601,24 +6705,25 @@ def post_job():
             filename2 = save_resized_image(file2, max_width=800, max_height=600)
         if file3 and allowed_file(file3.filename):
             filename3 = save_resized_image(file3, max_width=800, max_height=600)
-        
-        # ---- NO VIDEO ----
-        # video field removed
 
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("""
             INSERT INTO jobs (
                 employer_id, title, company, description, location, village, contact,
-                status, job_image, job_image2, job_image3, urgent
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-        """, (session['user_id'], title, company, description, location, village, contact,
-              'Open', filename1, filename2, filename3, urgent))
+                status, job_image, job_image2, job_image3, urgent,
+                job_type, application_deadline, number_of_openings, salary_range, work_arrangement, experience_required
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            session['user_id'], title, company, description, location, village, contact,
+            'Open', filename1, filename2, filename3, urgent,
+            job_type, application_deadline, number_of_openings, salary_range, work_arrangement, experience_required
+        ))
         
         job_id = c.lastrowid
         conn.commit()
 
-        # ---- NOTIFY MATCHING FREELANCERS ----
+        # ---- Notify matching freelancers ----
         matching_users = get_matching_providers_for_job(job_id, title, description, session['user_id'])
         job_link = f'/job/{job_id}'
         for user_id in matching_users:
@@ -6629,17 +6734,33 @@ def post_job():
                 link=job_link
             )
         print(f"[NOTIFY] Sent {len(matching_users)} job alerts for job #{job_id}")
-        # ------------------------------------
 
         conn.close()
         return redirect('/dashboard')
 
     # ---- GET: show form ----
+    # Build dropdown options
+    job_type_options = ''.join(f'<option value="{t}">{t}</option>' for t in JOB_TYPES)
+    # Add empty option for work arrangement
+    work_arrangement_options = '<option value="">Select...</option>' + ''.join(f'<option value="{w}">{w}</option>' for w in WORK_ARRANGEMENTS)
+    
+    # Pre-fill values with empty for create
     form = job_form_template.replace("{job_form_title}", "Post a Job").replace("{form_header}", "Post a New Job")
-    form = form.replace("{title_val}", "").replace("{company_val}", "").replace("{description_val}", "")
-    form = form.replace("{location_val}", "").replace("{village_val}", "").replace("{contact_val}", "")
+    form = form.replace("{title_val}", "")
+    form = form.replace("{company_val}", "")
+    form = form.replace("{description_val}", "")
+    form = form.replace("{location_val}", "")
+    form = form.replace("{village_val}", "")
+    form = form.replace("{contact_val}", "")
+    form = form.replace("{job_type_options}", job_type_options)
+    form = form.replace("{work_arrangement_options}", work_arrangement_options)
+    form = form.replace("{number_of_openings_val}", "1")
+    form = form.replace("{salary_range_val}", "")
+    form = form.replace("{application_deadline_val}", "")
+    form = form.replace("{experience_required_val}", "")
     form = form.replace("{submit_button}", "Post Job")
     form = form.replace("{urgent_checked}", "")
+    
     return render_user_template(form, title="Post a Job", active_page="jobs")
 
 @app.route('/edit-job/<int:job_id>', methods=['GET', 'POST'])
@@ -6647,10 +6768,12 @@ def post_job():
 def edit_job(job_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    # Fetch existing job data (including 3 images)
+    
+    # Fetch existing job data (including new columns)
     c.execute("""
         SELECT title, company, description, location, village, contact, status,
-               employer_id, job_image, job_image2, job_image3, urgent
+               employer_id, job_image, job_image2, job_image3, urgent,
+               job_type, application_deadline, number_of_openings, salary_range, work_arrangement, experience_required
         FROM jobs WHERE id=?
     """, (job_id,))
     job = c.fetchone()
@@ -6672,54 +6795,71 @@ def edit_job(job_id):
         contact = request.form.get('contact', '')
         status = request.form.get('status', 'Open')
         urgent = 1 if request.form.get('urgent') else 0
+        
+        # ---- New fields ----
+        job_type = request.form.get('job_type', '')
+        application_deadline = request.form.get('application_deadline', '')
+        number_of_openings = request.form.get('number_of_openings', 1)
+        salary_range = request.form.get('salary_range', '')
+        work_arrangement = request.form.get('work_arrangement', '')
+        experience_required = request.form.get('experience_required', '')
 
         # ---- Keep existing images if not replaced ----
         current_images = [job[8], job[9], job[10]]  # job_image, job_image2, job_image3
-
-        # ---- Check each uploaded file ----
         for idx, field in enumerate(['job_image', 'job_image2', 'job_image3']):
             file = request.files.get(field)
             if file and allowed_file(file.filename):
                 current_images[idx] = save_resized_image(file, max_width=800, max_height=600)
 
-        # ---- NO VIDEO ----
-        # video field removed
-
         c.execute("""
             UPDATE jobs SET
-                title = ?,
-                company = ?,
-                description = ?,
-                location = ?,
-                village = ?,
-                contact = ?,
-                status = ?,
-                job_image = ?,
-                job_image2 = ?,
-                job_image3 = ?,
-                urgent = ?
+                title = ?, company = ?, description = ?, location = ?, village = ?, contact = ?,
+                status = ?, job_image = ?, job_image2 = ?, job_image3 = ?, urgent = ?,
+                job_type = ?, application_deadline = ?, number_of_openings = ?, salary_range = ?,
+                work_arrangement = ?, experience_required = ?
             WHERE id = ?
-        """, (title, company, description, location, village, contact, status,
-              current_images[0], current_images[1], current_images[2], urgent, job_id))
+        """, (
+            title, company, description, location, village, contact,
+            status, current_images[0], current_images[1], current_images[2], urgent,
+            job_type, application_deadline, number_of_openings, salary_range, work_arrangement, experience_required,
+            job_id
+        ))
         conn.commit()
         conn.close()
         return redirect('/dashboard')
 
     # ---- GET: populate form ----
+    # Unpack new fields
+    title, company, description, location, village, contact, status, employer_id, img1, img2, img3, urgent, \
+    job_type, app_deadline, openings, salary, arrangement, experience = job
+    
+    # Build dropdown options with selected values
+    job_type_options = ''.join(f'<option value="{t}" {"selected" if t == job_type else ""}>{t}</option>' for t in JOB_TYPES)
+    work_arrangement_options = '<option value="">Select...</option>' + ''.join(f'<option value="{w}" {"selected" if w == arrangement else ""}>{w}</option>' for w in WORK_ARRANGEMENTS)
+    
     form = job_form_template.replace("{job_form_title}", "Edit Job").replace("{form_header}", "Edit Job Posting")
-    form = form.replace("{title_val}", job[0]).replace("{company_val}", job[1] or '')
-    form = form.replace("{description_val}", job[2] or '').replace("{location_val}", job[3] or '')
-    form = form.replace("{village_val}", job[4] or '').replace("{contact_val}", job[5] or '')
+    form = form.replace("{title_val}", title)
+    form = form.replace("{company_val}", company or '')
+    form = form.replace("{description_val}", description or '')
+    form = form.replace("{location_val}", location or '')
+    form = form.replace("{village_val}", village or '')
+    form = form.replace("{contact_val}", contact or '')
+    form = form.replace("{job_type_options}", job_type_options)
+    form = form.replace("{work_arrangement_options}", work_arrangement_options)
+    form = form.replace("{number_of_openings_val}", str(openings or 1))
+    form = form.replace("{salary_range_val}", salary or '')
+    form = form.replace("{application_deadline_val}", app_deadline or '')
+    form = form.replace("{experience_required_val}", experience or '')
     form = form.replace("{submit_button}", "Update Job")
-    form = form.replace("{urgent_checked}", 'checked' if job[11] else '')
+    form = form.replace("{urgent_checked}", 'checked' if urgent else '')
     
     # ---- Status dropdown ----
     status_dropdown = f"""
         <label>Status</label>
-        <select name="status">
-            <option value="Open" {"selected" if job[6]=='Open' else ""}>Open</option>
-            <option value="Taken" {"selected" if job[6]=='Taken' else ""}>Taken</option>
-            <option value="Closed" {"selected" if job[6]=='Closed' else ""}>Closed</option>
+        <select name="status" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <option value="Open" {"selected" if status=='Open' else ""}>Open</option>
+            <option value="Taken" {"selected" if status=='Taken' else ""}>Taken</option>
+            <option value="Closed" {"selected" if status=='Closed' else ""}>Closed</option>
         </select>
     """
     form = form.replace('</form>', f'{status_dropdown}\n</form>')
@@ -6806,12 +6946,14 @@ def list_jobs():
     c.execute("UPDATE jobs SET featured=0 WHERE featured=1 AND featured_expiry IS NOT NULL AND featured_expiry < ?", (today,))
     conn.commit()
     
-    # ⭐ UPDATED: Include urgent column and sort by urgent first
+    # Select all columns including new ones
     c.execute("""
-        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact, j.status, j.posted_date, j.job_image, j.featured, j.featured_expiry, j.employer_id, j.urgent
+        SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact,
+               j.status, j.posted_date, j.job_image, j.featured, j.featured_expiry, j.employer_id, j.urgent,
+               j.job_type, j.salary_range, j.work_arrangement
         FROM jobs j
-        ORDER BY j.urgent DESC, 
-                 CASE WHEN j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= date('now')) THEN 0 ELSE 1 END, 
+        ORDER BY j.urgent DESC,
+                 CASE WHEN j.featured = 1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= date('now')) THEN 0 ELSE 1 END,
                  j.id DESC
     """)
     jobs = c.fetchall()
@@ -6819,14 +6961,15 @@ def list_jobs():
 
     jobs_html = ""
     for j in jobs:
-        # ⭐ UPDATED: Unpack urgent (14 items now)
-        job_id, title, company, desc, loc, village, contact, status, posted_date, image, featured, expiry, employer_id, urgent = j
-        badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
+        # Unpack all columns
+        job_id, title, company, desc, loc, village, contact, status, posted_date, image, featured, expiry, employer_id, urgent, \
+        job_type, salary_range, work_arrangement = j
         
-        # ⭐ NEW: Urgent classes and badge
+        badge_class = 'open' if status == 'Open' else ('taken' if status == 'Taken' else 'closed')
         urgent_class = "job-urgent" if urgent else ""
         urgent_badge = '<span class="urgent-badge">⚡ URGENT</span>' if urgent else ''
         
+        # Contact display (only for subscribers)
         if logged_in and has_subscription:
             contact_display = f'<p>Contact: {contact}'
             if is_phone_number(contact):
@@ -6836,7 +6979,21 @@ def list_jobs():
             contact_display = '<p style="color:var(--text-secondary);">Contact: <a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to view contact</a></p>'
         else:
             contact_display = '<p style="color:var(--text-secondary);">Contact: <a href="/login">Sign in to view</a></p>'
-        # ---- Message button (to employer) with subscription check ----
+        
+        active_featured = is_featured_now(featured, expiry)
+        feat_badge = '<span class="badge badge-available" style="background:var(--primary);">FEATURED</span>' if active_featured else ''
+        location_display = f"{loc}{', ' + village if village else ''}"
+        img_tag = f'<img src="/static/uploads/{image}" class="profile-pic" style="border-radius:8px;" alt="{title}">' if image else ''
+        
+        title_display = f'<span class="pill-title"><i class="fas fa-briefcase"></i> {title}</span>'
+        
+        # Job type and other details
+        job_type_badge = f'<span class="badge badge-{job_type.lower().replace(" ", "-") if job_type else "other"}">{job_type or "Other"}</span>'
+        work_arrangement_display = f'· {work_arrangement}' if work_arrangement else ''
+        salary_display = f'· {salary_range}' if salary_range else ''
+        
+        applicants_link = ""
+        apply_link = ""
         message_button = ""
         if logged_in:
             if session.get('user_id') == employer_id:
@@ -6846,20 +7003,19 @@ def list_jobs():
                     apply_link = f'<a href="/apply/{job_id}" class="btn btn-small" style="background:#28a745;">📝 Apply</a>'
                 else:
                     apply_link = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Apply</a>'
-            # Message employer (only if not self and has subscription)
             if session['user_id'] != employer_id:
                 if has_subscription:
                     message_button = f'<a href="/messages/{employer_id}" class="btn btn-small" style="background:#25D366;">💬 Message</a>'
                 else:
                     message_button = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Message</a>'
 
-        # ⭐ UPDATED: Added urgent_class and urgent_badge
         jobs_html += f"""
         <div class="job-card {urgent_class}">
             {img_tag}
             <div class="job-info">
                 <h3>{title_display} {urgent_badge} <span class="badge badge-{badge_class}">{status}</span> {feat_badge}</h3>
                 <p class="meta">{company or 'N/A'} · {location_display} · {posted_date[:10] if posted_date else ''}</p>
+                <p class="meta">{job_type_badge} {work_arrangement_display} {salary_display}</p>
                 <p>{desc}</p>
                 {contact_display}
                 <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
@@ -6873,6 +7029,7 @@ def list_jobs():
 
     if not jobs_html:
         jobs_html = "<p>No jobs yet.</p>"
+        
     return render_user_template(job_list_page, title="Jobs", active_page="jobs", jobs_html=jobs_html)
 
 @app.route('/vendors')
@@ -8755,7 +8912,9 @@ def job_detail(job_id):
     c.execute("""
         SELECT j.id, j.title, j.company, j.description, j.location, j.village, j.contact,
                j.status, j.posted_date, j.job_image, j.job_image2, j.job_image3,
-               u.name as employer_name, u.phone as employer_phone, j.employer_id
+               u.name as employer_name, u.phone as employer_phone, j.employer_id,
+               j.job_type, j.application_deadline, j.number_of_openings, j.salary_range,
+               j.work_arrangement, j.experience_required
         FROM jobs j
         JOIN users u ON j.employer_id = u.id
         WHERE j.id = ?
@@ -8765,18 +8924,25 @@ def job_detail(job_id):
     if not job:
         return "Job not found.", 404
     
-    job_id, title, company, desc, loc, village, contact, status, posted_date, job_img, job_img2, job_img3, employer_name, employer_phone, employer_id = job
+    # Unpack all fields
+    job_id, title, company, desc, loc, village, contact, status, posted_date, job_img, job_img2, job_img3, \
+    employer_name, employer_phone, employer_id, \
+    job_type, app_deadline, openings, salary_range, work_arrangement, experience = job
+    
     status_class = status.lower()
     location_display = f"{loc}{', ' + village if village else ''}"
     img_url = f"/static/uploads/{job_img}" if job_img else "/static/placeholder.png"
     posted_date_display = posted_date[:10] if posted_date else ''
     
-    if logged_in:
+    # ---- Contact display (only for subscribers) ----
+    if logged_in and has_subscription:
         contact_display = f'<p><strong>Contact:</strong> {contact or employer_phone} <a href="tel:{employer_phone}" class="btn btn-small">📞 Call</a></p>'
+    elif logged_in:
+        contact_display = '<p><strong>Contact:</strong> <a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to view contact</a></p>'
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
 
-    # ---- Apply button (subscription check) ----
+    # ---- Apply button ----
     apply_button = ""
     if logged_in:
         if session['user_id'] == employer_id:
@@ -8799,10 +8965,7 @@ def job_detail(job_id):
         else:
             message_button = '<a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to Message</a>'
 
-    # ---- Video removed ----
-    video_display = ""  # always empty now
-
-    # ---- Extra images (2 additional) ----
+    # ---- Extra images ----
     extra_images = ""
     extra_imgs = [job_img2, job_img3]
     if any(extra_imgs):
@@ -8812,14 +8975,14 @@ def job_detail(job_id):
                 extra_images += f'<a href="#" onclick="openLightbox(\'/static/uploads/{extra}\'); return false;"><img src="/static/uploads/{extra}" alt="Additional photo" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:pointer;"></a>'
         extra_images += '</div>'
 
-    # ---- Pill title ----
+    # ---- Title pill ----
     title_pill = f'<span class="pill-title"><i class="fas fa-briefcase"></i> {title}</span>'
 
+    # ---- Build detail page ----
     detail_html = job_detail_template
     detail_html = detail_html.replace("{job_title}", title)
     detail_html = detail_html.replace("{img_url}", img_url)
     detail_html = detail_html.replace("{extra_images}", extra_images)
-    detail_html = detail_html.replace("{video_display}", video_display)
     detail_html = detail_html.replace("{title_pill}", title_pill)
     detail_html = detail_html.replace("{company}", company or 'N/A')
     detail_html = detail_html.replace("{location_display}", location_display)
@@ -8833,6 +8996,43 @@ def job_detail(job_id):
     detail_html = detail_html.replace("{contact_display}", contact_display)
     detail_html = detail_html.replace("{apply_button}", apply_button)
     detail_html = detail_html.replace("{message_button}", message_button)
+    
+    # ---- Add job type and new fields to the template ----
+    # We'll inject them into the detail-info section (modify the template or add here)
+    # For simplicity, we'll pass them as extra variables to render_user_template
+    # But since we have a fixed template, we'll add them to the content string.
+    # I'll assume you have placeholders in your job_detail_template.
+    # If not, we can render them directly.
+    
+    # For now, we'll create a new content block that includes these.
+    # I'll add them as an extra section after the description.
+    extra_info = f"""
+    <div class="detail-section" style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border);">
+        <div class="detail-section-title"><i class="fas fa-info-circle"></i> Job Details</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:12px;">
+            <div><strong>Type:</strong> <span class="badge badge-{job_type.lower().replace(' ', '-') if job_type else 'other'}">{job_type or 'Not specified'}</span></div>
+            <div><strong>Work Arrangement:</strong> {work_arrangement or 'Not specified'}</div>
+            <div><strong>Openings:</strong> {openings or 1}</div>
+            <div><strong>Salary:</strong> {salary_range or 'Negotiable'}</div>
+            <div><strong>Deadline:</strong> {app_deadline or 'Not set'}</div>
+            <div><strong>Experience:</strong> {experience or 'Not specified'}</div>
+        </div>
+    </div>
+    """
+    # Insert the extra_info after the description
+    # We'll use replace on the description placeholder.
+    # Actually we'll just append it after the description in the template.
+    # Since we have a fixed template, we'll modify the content.
+    # I'll assume you have {extra_job_details} placeholder in job_detail_template.
+    # If not, we'll use a different approach.
+    
+    # For now, we'll just return the rendered template with the extra info injected.
+    # We'll use a placeholder if you add it. Otherwise, we can render the content manually.
+    # I'll provide a modified version of job_detail_template with {extra_job_details} placeholder.
+    
+    # Let's include it in the content string.
+    # Since you have a template variable, we'll replace it.
+    detail_html = detail_html.replace("{extra_job_details}", extra_info)
     
     return render_user_template(detail_html, title=f"Job: {title}", active_page="jobs")
 
