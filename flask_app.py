@@ -1612,39 +1612,42 @@ def get_referral_stats(user_id):
         'total_rewards': total_rewards
     }
 
-def process_referral(user_id, phone):
+def process_referral(provider_id, amount):
     if 'referral_code' not in session:
         return False
     ref_code = session['referral_code']
-    with get_db_connection() as conn:
-        c = conn.cursor()
-        c.execute("SELECT user_id FROM referral_codes WHERE code = ?", (ref_code,))
-        referrer = c.fetchone()
-        if not referrer:
-            return False
-        referrer_id = referrer[0]
-        if referrer_id == user_id:
-            return False
-        # Check existing
-        c.execute("SELECT id FROM referrals WHERE referrer_id = ? AND referred_user_id = ?", (referrer_id, user_id))
-        if c.fetchone():
-            return False
-        # Get settings
-        c.execute("SELECT reward_percentage, reward_type, max_referrals FROM referral_settings WHERE is_active=1 LIMIT 1")
-        settings = c.fetchone()
-        if not settings:
-            settings = (10, 'discount', 10)
-        reward_percentage, reward_type, max_referrals = settings
-        count = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND status IN ('completed', 'rewarded')", (referrer_id,)).fetchone()[0]
-        if count >= max_referrals:
-            return False
-        # Insert referral (pending)
-        c.execute("""
-            INSERT INTO referrals (referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type)
-            VALUES (?, ?, ?, 'pending', 0, ?)
-        """, (referrer_id, user_id, phone, reward_type))
-        ref_id = c.lastrowid
-        conn.commit()
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT user_id FROM referral_codes WHERE code = ?", (ref_code,))
+    referrer = c.fetchone()
+    if not referrer:
+        db.close()
+        return False
+    referrer_id = referrer[0]
+    if referrer_id == provider_id:
+        db.close()
+        return False
+    # Check existing
+    c.execute("SELECT id FROM referrals WHERE referrer_id = ? AND referred_provider_id = ?", (referrer_id, provider_id))
+    if c.fetchone():
+        db.close()
+        return False
+    # Get settings (without max_referrals)
+    c.execute("SELECT reward_percentage, reward_type FROM referral_settings WHERE is_active=1 LIMIT 1")
+    settings = c.fetchone()
+    if not settings:
+        reward_percentage, reward_type = 10, 'discount'
+    else:
+        reward_percentage, reward_type = settings
+    # Insert pending referral
+    c.execute("""
+        INSERT INTO referrals (referrer_id, referred_provider_id, status, reward_amount, reward_type)
+        VALUES (?, ?, 'pending', 0, ?)
+    """, (referrer_id, provider_id, reward_type))
+    db.commit()
+    db.close()
+    session.pop('referral_code', None)
+    return True
         
         # ---- AWARD POINTS TO REFERRER ----
         referral_points = int(get_points_setting('referral_points') or 0)
@@ -1855,7 +1858,7 @@ def admin_referral_settings_page():  # ← Renamed to avoid conflict
     if request.method == 'POST':
         c.execute("""
             UPDATE referral_settings SET
-                reward_percentage=?, reward_fixed_amount=?, reward_type=?, max_referrals=?, is_active=?
+                reward_percentage=?, reward_fixed_amount=?, reward_type=?, is_active=?
             WHERE id=?
         """, (
             int(request.form.get('reward_percentage', 10)),
@@ -1886,8 +1889,6 @@ def admin_referral_settings_page():  # ← Renamed to avoid conflict
             <input type="number" name="reward_percentage" value="{reward_percentage}" min="0" max="100">
             <label>Fixed Reward Amount (UGX) – leave 0 if using percentage</label>
             <input type="number" name="reward_fixed_amount" value="{reward_fixed_amount}" step="100" min="0">
-            <label>Max Referrals per user</label>
-            <input type="number" name="max_referrals" value="{max_referrals}" min="1" max="100">
             <label>
                 <input type="checkbox" name="is_active" {"checked" if is_active else ""}>
                 Active (allow referrals)
@@ -6962,12 +6963,14 @@ def provider_detail(provider_id):
     img_url = get_image_url(pic)
     active_featured = is_featured_now(featured, expiry)
     feat = '<span class="badge badge-available">FEATURED</span>' if active_featured else ''
-    
-    if logged_in:
+
+    if logged_in and has_subscription:
         contact_display = f'<p><strong>Contact:</strong> {phone} <a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">WhatsApp</a></p>'
+    elif logged_in:
+        contact_display = '<p><strong>Contact:</strong> <a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to view contact</a></p>'
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
-
+        
     # ---- Message button (subscription check) ----
     message_button = ""
     if logged_in and session['user_id'] != user_id:
@@ -7080,11 +7083,14 @@ def vendor_detail(vendor_id):
     village_display = f", {village}" if village else ""
     landmark_display = f", {landmark}" if landmark else ""
     
-    if logged_in:
+    
+    if logged_in and has_subscription:
         contact_display = f'<p><strong>Contact:</strong> {phone} <a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">WhatsApp</a></p>'
+    elif logged_in:
+        contact_display = '<p><strong>Contact:</strong> <a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to view contact</a></p>'
     else:
         contact_display = '<p><strong>Contact:</strong> <a href="/login">Sign in to view</a></p>'
-
+        
     # ---- Message button (subscription check) ----
     message_button = ""
     if logged_in and session['user_id'] != user_id:
