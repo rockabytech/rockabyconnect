@@ -933,230 +933,216 @@ init_db()
 # HELPERS
 # ============================================================
 def migrate_db():
-    """Add new tables and columns for the payment system to an existing database."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
-    c = conn.cursor()
+    """Add new tables and columns to an existing database."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("PRAGMA busy_timeout = 30000;")
+        c = conn.cursor()
 
-    # ---- Add extra columns to vendors if missing ----
-    c.execute("PRAGMA table_info(vendors)")
-    existing = [col[1] for col in c.fetchall()]
-    for col in ['vendor_image4', 'vendor_image5']:
-        if col not in existing:
-            c.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
-            print(f"[MIGRATION] Added column {col} to vendors")
+        # ---- Add extra columns to vendors if missing ----
+        c.execute("PRAGMA table_info(vendors)")
+        existing = [col[1] for col in c.fetchall()]
+        for col in ['vendor_image4', 'vendor_image5']:
+            if col not in existing:
+                c.execute(f"ALTER TABLE vendors ADD COLUMN {col} TEXT")
+                print(f"[MIGRATION] Added column {col} to vendors")
 
-    # ---- Add extra columns to jobs if missing ----
-    c.execute("PRAGMA table_info(jobs)")
-    existing = [col[1] for col in c.fetchall()]
-    for col in ['job_image2', 'job_image3']:
-        if col not in existing:
-            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
-            print(f"[MIGRATION] Added column {col} to jobs")
+        # ---- Add extra columns to jobs if missing ----
+        c.execute("PRAGMA table_info(jobs)")
+        existing = [col[1] for col in c.fetchall()]
+        for col in ['job_image2', 'job_image3']:
+            if col not in existing:
+                c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
+                print(f"[MIGRATION] Added column {col} to jobs")
 
-    # ---- Add new columns to jobs if missing ----
-    c.execute("PRAGMA table_info(jobs)")
-    existing = [col[1] for col in c.fetchall()]
-    new_columns = ['job_type', 'application_deadline', 'number_of_openings', 'salary_range', 'work_arrangement', 'experience_required']
-    for col in new_columns:
-        if col not in existing:
-            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
-            print(f"[MIGRATION] Added column {col} to jobs")
+        # ---- Add new columns to jobs if missing ----
+        new_job_cols = ['job_type', 'application_deadline', 'number_of_openings', 
+                        'salary_range', 'work_arrangement', 'experience_required']
+        for col in new_job_cols:
+            if col not in existing:
+                c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
+                print(f"[MIGRATION] Added column {col} to jobs")
 
-    # ---- PAYMENT SETTINGS TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS payment_settings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        mtn_number TEXT,
-        airtel_number TEXT,
-        payment_name TEXT DEFAULT 'RockabyTech',
-        active_payment_methods TEXT DEFAULT '["manual"]',
-        yo_username TEXT,
-        yo_password TEXT,
-        yo_auto_pay INTEGER DEFAULT 0,
-        iotec_wallet_id TEXT,
-        iotec_client_id TEXT,
-        iotec_api_secret TEXT,
-        pawapay_api_key TEXT,
-        pawapay_merchant_id TEXT,
-        pesapal_consumer_key TEXT,
-        pesapal_consumer_secret TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
+        # ---- PAYMENT SETTINGS TABLE ----
+        c.execute('''CREATE TABLE IF NOT EXISTS payment_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mtn_number TEXT,
+            airtel_number TEXT,
+            payment_name TEXT DEFAULT 'RockabyTech',
+            active_payment_methods TEXT DEFAULT '["manual"]',
+            yo_username TEXT,
+            yo_password TEXT,
+            yo_auto_pay INTEGER DEFAULT 0,
+            iotec_wallet_id TEXT,
+            iotec_client_id TEXT,
+            iotec_api_secret TEXT,
+            pawapay_api_key TEXT,
+            pawapay_merchant_id TEXT,
+            pesapal_consumer_key TEXT,
+            pesapal_consumer_secret TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
 
-    # ---- PAYMENT TRANSACTIONS TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS payment_transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        phone TEXT,
-        amount INTEGER,
-        status TEXT DEFAULT 'pending',
-        transaction_id TEXT,
-        payment_method TEXT,
-        raw_sms TEXT,
-        recipient TEXT,
-        payment_date TEXT,
-        description TEXT,
-        item_type TEXT,
-        item_id INTEGER,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )''')
+        # ---- PAYMENT TRANSACTIONS TABLE ----
+        c.execute('''CREATE TABLE IF NOT EXISTS payment_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            phone TEXT,
+            amount INTEGER,
+            status TEXT DEFAULT 'pending',
+            transaction_id TEXT,
+            payment_method TEXT,
+            raw_sms TEXT,
+            recipient TEXT,
+            payment_date TEXT,
+            description TEXT,
+            item_type TEXT,
+            item_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
 
-    # ---- BOOST PACKAGES TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS boost_packages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        duration_days INTEGER NOT NULL,
-        price INTEGER NOT NULL,
-        is_active INTEGER DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
+        # ---- BOOST PACKAGES TABLE ----
+        c.execute('''CREATE TABLE IF NOT EXISTS boost_packages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            duration_days INTEGER NOT NULL,
+            price INTEGER NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
 
-    # ---- SYSTEM SETTINGS TABLE ----
-    c.execute('''CREATE TABLE IF NOT EXISTS system_settings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        key TEXT UNIQUE NOT NULL,
-        value TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
+        # ---- SYSTEM SETTINGS TABLE ----
+        c.execute('''CREATE TABLE IF NOT EXISTS system_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
 
-     # ---- Coupons table ----
-    c.execute('''CREATE TABLE IF NOT EXISTS coupons (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT UNIQUE NOT NULL,
-        discount_type TEXT NOT NULL,  -- 'percentage' or 'fixed'
-        discount_value REAL NOT NULL,
-        max_uses INTEGER DEFAULT 0,   -- 0 = unlimited
-        used_count INTEGER DEFAULT 0,
-        expiry_date DATE,
-        is_active INTEGER DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
+        # ---- EXTEND BOOST_REQUESTS (safe) ----
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boost_requests'")
+        if c.fetchone():
+            c.execute("PRAGMA table_info(boost_requests)")
+            existing_cols = [col[1] for col in c.fetchall()]
+            for col in ['payment_method', 'raw_sms', 'amount', 'recipient', 'payment_date']:
+                if col not in existing_cols:
+                    c.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
+                    print(f"[MIGRATION] Added column {col} to boost_requests")
+        else:
+            print("[MIGRATION] boost_requests table does not exist; skipping ALTER.")
 
-    # ---- Email/SMS templates ----
-    c.execute('''CREATE TABLE IF NOT EXISTS templates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        key TEXT UNIQUE NOT NULL,
-        subject TEXT,
-        body TEXT NOT NULL,
-        type TEXT DEFAULT 'email',   -- 'email' or 'sms'
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
+        # ---- Insert default payment settings if empty ----
+        c.execute("SELECT COUNT(*) FROM payment_settings")
+        if c.fetchone()[0] == 0:
+            c.execute("""
+                INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
+                VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
+            """)
+            print("[MIGRATION] Inserted default payment settings.")
 
-    # Insert default templates
-    defaults = [
-        ('welcome', 'Welcome to RockabyConnect!', 'Hello {{user_name}},\n\nYour account is ready. Start exploring opportunities now!', 'email'),
-        ('boost_approved', 'Your Boost is Live!', 'Hi {{user_name}},\n\nYour boost for {{item_name}} is now active for {{duration}} days.', 'email'),
-        ('subscription_expiry', 'Subscription Expiring Soon', 'Hi {{user_name}},\n\nYour subscription will expire in {{days}} days. Renew now to keep access.', 'email'),
-    ]
-    for key, subject, body, typ in defaults:
-        c.execute("INSERT OR IGNORE INTO templates (key, subject, body, type) VALUES (?,?,?,?)", (key, subject, body, typ))
+        # ---- Insert default boost packages if empty ----
+        c.execute("SELECT COUNT(*) FROM boost_packages")
+        if c.fetchone()[0] == 0:
+            c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('7 Days', 7, 5000)")
+            c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('30 Days', 30, 15000)")
+            print("[MIGRATION] Inserted default boost packages.")
 
-    # ---- Support tickets ----
-    c.execute('''CREATE TABLE IF NOT EXISTS support_tickets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        subject TEXT NOT NULL,
-        message TEXT NOT NULL,
-        status TEXT DEFAULT 'open',
-        priority TEXT DEFAULT 'medium',
-        assigned_to INTEGER,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id),
-        FOREIGN KEY(assigned_to) REFERENCES users(id)
-    )''')
+        # ---- Insert default system settings if empty ----
+        defaults = [('free_registration_enabled', '1'), ('free_registration_package_id', '1')]
+        for key, val in defaults:
+            c.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES (?,?)", (key, val))
+        print("[MIGRATION] Inserted default system settings.")
 
-    # ---- Ticket replies ----
-    c.execute('''CREATE TABLE IF NOT EXISTS ticket_replies (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ticket_id INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
-        message TEXT NOT NULL,
-        is_admin INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(ticket_id) REFERENCES support_tickets(id),
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )''')
+        # ---- COUPONS TABLE ----
+        c.execute('''CREATE TABLE IF NOT EXISTS coupons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            discount_type TEXT NOT NULL,
+            discount_value REAL NOT NULL,
+            max_uses INTEGER DEFAULT 0,
+            used_count INTEGER DEFAULT 0,
+            expiry_date DATE,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
 
-    # ---- User activity log ----
-    c.execute('''CREATE TABLE IF NOT EXISTS user_activity_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        action TEXT NOT NULL,
-        details TEXT,
-        ip_address TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )''')
+        # ---- EMAIL/SMS TEMPLATES ----
+        c.execute('''CREATE TABLE IF NOT EXISTS templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            subject TEXT,
+            body TEXT NOT NULL,
+            type TEXT DEFAULT 'email',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        # Insert default templates
+        default_templates = [
+            ('welcome', 'Welcome to RockabyConnect!', 'Hello {{user_name}},\n\nYour account is ready. Start exploring opportunities now!', 'email'),
+            ('boost_approved', 'Your Boost is Live!', 'Hi {{user_name}},\n\nYour boost for {{item_name}} is now active for {{duration}} days.', 'email'),
+            ('subscription_expiry', 'Subscription Expiring Soon', 'Hi {{user_name}},\n\nYour subscription will expire in {{days}} days. Renew now to keep access.', 'email'),
+        ]
+        for key, subject, body, typ in default_templates:
+            c.execute("INSERT OR IGNORE INTO templates (key, subject, body, type) VALUES (?,?,?,?)", 
+                      (key, subject, body, typ))
 
-    # ---- Site content (for homepage banners, pages) ----
-    c.execute('''CREATE TABLE IF NOT EXISTS site_content (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        key TEXT UNIQUE NOT NULL,
-        value TEXT,
-        type TEXT DEFAULT 'html',
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
+        # ---- SUPPORT TICKETS ----
+        c.execute('''CREATE TABLE IF NOT EXISTS support_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            subject TEXT NOT NULL,
+            message TEXT NOT NULL,
+            status TEXT DEFAULT 'open',
+            priority TEXT DEFAULT 'medium',
+            assigned_to INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(assigned_to) REFERENCES users(id)
+        )''')
 
-    # ---- Add is_suspended column to users (if missing) ----
-    c.execute("PRAGMA table_info(users)")
-    existing_cols = [col[1] for col in c.fetchall()]
-    if 'is_suspended' not in existing_cols:
-        c.execute("ALTER TABLE users ADD COLUMN is_suspended INTEGER DEFAULT 0")
-        print("[MIGRATION] Added is_suspended to users")
+        c.execute('''CREATE TABLE IF NOT EXISTS ticket_replies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            message TEXT NOT NULL,
+            is_admin INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(ticket_id) REFERENCES support_tickets(id)
+        )''')
 
-    # ---- Add is_verified column to users (optional) ----
-    if 'is_verified' not in existing_cols:
-        c.execute("ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 1")
-        print("[MIGRATION] Added is_verified to users")
+        # ---- USER ACTIVITY LOG ----
+        c.execute('''CREATE TABLE IF NOT EXISTS user_activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            details TEXT,
+            ip_address TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
 
-    conn.commit()
-    conn.close()
-    print("[MIGRATION] Admin enhancements migrated.")
+        # ---- SITE CONTENT ----
+        c.execute('''CREATE TABLE IF NOT EXISTS site_content (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT,
+            type TEXT DEFAULT 'html',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
 
-
-    # ---- EXTEND BOOST_REQUESTS (safe) ----
-    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boost_requests'")
-    if c.fetchone():
-        c.execute("PRAGMA table_info(boost_requests)")
+        # ---- ADD is_suspended and is_verified to users ----
+        c.execute("PRAGMA table_info(users)")
         existing_cols = [col[1] for col in c.fetchall()]
-        for col in ['payment_method', 'raw_sms', 'amount', 'recipient', 'payment_date']:
-            if col not in existing_cols:
-                c.execute(f"ALTER TABLE boost_requests ADD COLUMN {col} TEXT")
-                print(f"[MIGRATION] Added column {col} to boost_requests")
-    else:
-        print("[MIGRATION] boost_requests table does not exist; skipping ALTER.")
+        if 'is_suspended' not in existing_cols:
+            c.execute("ALTER TABLE users ADD COLUMN is_suspended INTEGER DEFAULT 0")
+            print("[MIGRATION] Added is_suspended to users")
+        if 'is_verified' not in existing_cols:
+            c.execute("ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 1")
+            print("[MIGRATION] Added is_verified to users")
 
-    # ---- Insert default payment settings if empty ----
-    c.execute("SELECT COUNT(*) FROM payment_settings")
-    if c.fetchone()[0] == 0:
-        c.execute("""
-            INSERT INTO payment_settings (mtn_number, airtel_number, payment_name, active_payment_methods)
-            VALUES ('0785686404', '0751318876', 'RockabyTech', '["manual"]')
-        """)
-        print("[MIGRATION] Inserted default payment settings.")
-
-    # ---- Insert default boost packages if empty ----
-    c.execute("SELECT COUNT(*) FROM boost_packages")
-    if c.fetchone()[0] == 0:
-        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('7 Days', 7, 5000)")
-        c.execute("INSERT INTO boost_packages (name, duration_days, price) VALUES ('30 Days', 30, 15000)")
-        print("[MIGRATION] Inserted default boost packages.")
-
-    # ---- Insert default system settings if empty ----
-    defaults = [
-        ('free_registration_enabled', '1'),
-        ('free_registration_package_id', '1'),
-    ]
-    for key, val in defaults:
-        c.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES (?,?)", (key, val))
-    print("[MIGRATION] Inserted default system settings.")
-
-    conn.commit()
-    conn.close()
-    print("[MIGRATION] Database migration completed.")
+        conn.commit()
+        print("[MIGRATION] Database migration completed successfully.")
 
 def parse_mtn_sms(sms):
     tid = re.search(r'ID:\s*(\d+)', sms)
