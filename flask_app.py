@@ -1916,7 +1916,7 @@ def toggle_free_registration():
     # ---- Update the setting ----
     c.execute("UPDATE system_settings SET value=?, updated_at=CURRENT_TIMESTAMP WHERE key='free_registration_enabled'", (new_value,))
     
-    # ---- If disabling: expire all active free subscriptions AND remove featured status ----
+    # ---- If disabling: expire all active free subscriptions AND remove featured ----
     if new_value == '0':
         # Get the package ID(s) for free packages (price = 0)
         c.execute("SELECT id FROM subscription_packages WHERE price = 0")
@@ -1932,8 +1932,6 @@ def toggle_free_registration():
                 WHERE package_id IN ({placeholders})
                   AND status='active'
             """, free_package_ids)
-            expired_count = c.rowcount
-            print(f"[ADMIN] Expired {expired_count} free subscriptions.")
             
             # 2. Get all users whose free subscriptions expired
             c.execute(f"""
@@ -1953,7 +1951,6 @@ def toggle_free_registration():
                     SET featured=0, featured_expiry=NULL 
                     WHERE user_id IN ({user_placeholders})
                 """, expired_users)
-                providers_unfeatured = c.rowcount
                 
                 # 4. Remove featured status from vendors
                 c.execute(f"""
@@ -1961,17 +1958,13 @@ def toggle_free_registration():
                     SET featured=0, featured_expiry=NULL 
                     WHERE user_id IN ({user_placeholders})
                 """, expired_users)
-                vendors_unfeatured = c.rowcount
                 
-                # 5. Remove featured status from jobs (where employer is in expired users)
+                # 5. Remove featured status from jobs
                 c.execute(f"""
                     UPDATE jobs 
                     SET featured=0, featured_expiry=NULL 
                     WHERE employer_id IN ({user_placeholders})
                 """, expired_users)
-                jobs_unfeatured = c.rowcount
-                
-                print(f"[ADMIN] Unfeatured: {providers_unfeatured} providers, {vendors_unfeatured} vendors, {jobs_unfeatured} jobs.")
         
         db.commit()
         db.close()
@@ -2459,6 +2452,43 @@ def manual_backup():
     backup_uploads_to_github()
     
     return "Backup completed. <a href='/admin/dashboard'>Back to Dashboard</a>"
+
+@app.route('/admin/clear-all-featured')
+def admin_clear_all_featured():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Clear featured from all providers
+    c.execute("UPDATE providers SET featured=0, featured_expiry=NULL")
+    providers = c.rowcount
+    
+    # Clear featured from all vendors
+    c.execute("UPDATE vendors SET featured=0, featured_expiry=NULL")
+    vendors = c.rowcount
+    
+    # Clear featured from all jobs
+    c.execute("UPDATE jobs SET featured=0, featured_expiry=NULL")
+    jobs = c.rowcount
+    
+    conn.commit()
+    conn.close()
+    
+    return f"""
+    <div style="padding:40px; text-align:center;">
+        <h2>✅ Featured Status Cleared</h2>
+        <p>Removed featured status from:</p>
+        <ul style="list-style:none; padding:0;">
+            <li>👤 {providers} providers</li>
+            <li>🏪 {vendors} vendors</li>
+            <li>💼 {jobs} jobs</li>
+        </ul>
+        <br>
+        <a href="/admin/dashboard" class="btn">Back to Dashboard</a>
+    </div>
+    """
 
 # ============================================================
 # BASE TEMPLATE (UNCHANGED)
