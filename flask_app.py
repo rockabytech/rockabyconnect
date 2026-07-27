@@ -1651,8 +1651,8 @@ def process_referral(provider_id, amount):
         
         # ---- AWARD POINTS TO REFERRER ----
         referral_points = int(get_points_setting('referral_points') or 0)
-        if referral_points > 0:
-            add_points(referrer_id, referral_points, 'referral', ref_id, f'Referral of {phone}')
+    if referral_points > 0:
+        add_points(referrer_id, referral_points, 'referral', ref_id, f'Referral of {phone}')
     session.pop('referral_code', None)
     return True
     
