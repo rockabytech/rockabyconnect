@@ -2276,6 +2276,47 @@ def admin_payment_settings():
     '''
     return render_user_template(base_template, title="Payment Settings", active_page="dashboard", content=content)
 
+@app.route('/admin/content/add', methods=['GET', 'POST'])
+def admin_content_add():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    if request.method == 'POST':
+        key = request.form['key'].strip()
+        value = request.form['value']
+        content_type = request.form.get('type', 'html')
+        if not key or not value:
+            return "Key and value are required."
+        db = get_db()
+        c = db.cursor()
+        try:
+            c.execute("INSERT INTO site_content (key, value, type) VALUES (?,?,?)", (key, value, content_type))
+            db.commit()
+            db.close()
+            return redirect('/admin/content')
+        except sqlite3.IntegrityError:
+            db.close()
+            return "Key already exists."
+    content = """
+    <div class="card">
+        <div class="card-header">➕ Add Content</div>
+        <form method="POST">
+            <label>Key (unique identifier)</label>
+            <input type="text" name="key" required placeholder="e.g., homepage_banner">
+            <label>Type</label>
+            <select name="type">
+                <option value="html">HTML</option>
+                <option value="text">Text</option>
+                <option value="json">JSON</option>
+            </select>
+            <label>Value</label>
+            <textarea name="value" rows="8" required></textarea>
+            <button type="submit" class="btn" style="margin-top:20px;">Add</button>
+        </form>
+        <a href="/admin/content" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_admin_page("Add Content", content, "content")
+    
 @app.route('/admin/redemption-requests')
 def admin_redemption_requests():
     if not session.get('admin'):
@@ -2633,7 +2674,11 @@ def admin_clear_all_featured():
 # ---- Helper to render admin pages ----
 def render_admin_page(title, content, active_page):
     return render_template_string(
-        admin_base_template.replace("{title}", title).replace("{active_page}", active_page).replace("{content}", content)
+        admin_base_template.replace("{title}", title)
+                          .replace("{active_page}", active_page)
+                          .replace("{content}", content)
+                          .replace("{layout_class}", "admin-layout")
+                          .replace("{theme_style}", "")
     )
 
 # ============================================================
@@ -2648,60 +2693,54 @@ def admin_users():
     db = get_db()
     c = db.cursor()
     
-    # Get filters
+    # Filters
     search = request.args.get('search', '')
-    status_filter = request.args.get('status', 'all')  # all, active, suspended
-    subscription_filter = request.args.get('subscription', 'all')  # all, active, expired
+    status_filter = request.args.get('status', 'all')
+    subscription_filter = request.args.get('subscription', 'all')
     
-    # Build query
-    query = "SELECT u.id, u.name, u.phone, u.created_at, u.is_suspended, " \
+    query = "SELECT u.id, u.name, u.phone, u.created_at, u.is_suspended, u.is_verified, " \
             "(SELECT COUNT(*) FROM user_subscriptions WHERE user_id = u.id AND status='active' AND end_date >= date('now')) as has_active_subscription " \
             "FROM users u WHERE 1=1"
     params = []
-    
     if search:
         query += " AND (u.name LIKE ? OR u.phone LIKE ?)"
         params.extend([f'%{search}%', f'%{search}%'])
-    
     if status_filter == 'suspended':
         query += " AND u.is_suspended = 1"
     elif status_filter == 'active':
         query += " AND u.is_suspended = 0"
-    
     if subscription_filter == 'active':
         query += " AND EXISTS (SELECT 1 FROM user_subscriptions WHERE user_id = u.id AND status='active' AND end_date >= date('now'))"
     elif subscription_filter == 'expired':
         query += " AND NOT EXISTS (SELECT 1 FROM user_subscriptions WHERE user_id = u.id AND status='active' AND end_date >= date('now'))"
-    
     query += " ORDER BY u.id DESC"
-    
     users = c.execute(query, params).fetchall()
     db.close()
     
-    # Build table rows
     rows = ""
     for u in users:
-        sub_status = '<span class="badge" style="background:#28a745;color:#fff;">Active</span>' if u[5] else '<span class="badge" style="background:#dc3545;color:#fff;">None</span>'
-        suspended = '<span class="badge" style="background:#ffc107;color:#000;">Suspended</span>' if u[4] else '<span class="badge" style="background:#28a745;color:#fff;">Active</span>'
+        sub_status = '<span class="badge badge-success">Active</span>' if u[5] else '<span class="badge badge-danger">None</span>'
+        suspended = '<span class="badge badge-warning">Suspended</span>' if u[4] else '<span class="badge badge-success">Active</span>'
+        verified = '<span class="badge badge-success">✅</span>' if u[5] else '<span class="badge badge-danger">❌</span>'
         rows += f"""
         <tr>
             <td>{u[0]}</td>
             <td>{u[1]}</td>
             <td>{u[2]}</td>
             <td>{u[3][:16] if u[3] else '-'}</td>
+            <td>{verified}</td>
             <td>{suspended}</td>
             <td>{sub_status}</td>
             <td>
                 <a href="/admin/user/{u[0]}" class="btn btn-small">View</a>
                 <a href="/admin/user/{u[0]}/edit" class="btn btn-small btn-outline">Edit</a>
-                <a href="/admin/user/{u[0]}/subscription" class="btn btn-small" style="background:#17a2b8;color:#fff;">Subscription</a>
+                <a href="/admin/user/{u[0]}/subscription" class="btn btn-small" style="background:#17a2b8;color:#fff;">Sub</a>
                 <a href="/admin/user/{u[0]}/toggle-suspend" class="btn btn-small {'btn-danger' if not u[4] else 'btn-success'}" onclick="return confirm('Are you sure?')">{'Unsuspend' if u[4] else 'Suspend'}</a>
-                <a href="/admin/user/{u[0]}/delete" class="btn btn-small btn-danger" onclick="return confirm('Delete this user? This cannot be undone.')">Delete</a>
             </td>
         </tr>
         """
     if not rows:
-        rows = '<tr><td colspan="7">No users found.</td></tr>'
+        rows = '<tr><td colspan="8">No users found.</td></tr>'
     
     content = f"""
     <div class="card">
@@ -2722,27 +2761,17 @@ def admin_users():
                 <button type="submit" class="btn btn-small">Filter</button>
                 <a href="/admin/users" class="btn btn-small btn-outline">Clear</a>
             </form>
-            <a href="/admin/user/create" class="btn btn-success btn-small">+ Create User</a>
+            <a href="/admin/user/create" class="btn btn-success btn-small">+ Create</a>
         </div>
         <div class="table-responsive">
             <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Phone</th>
-                        <th>Joined</th>
-                        <th>Status</th>
-                        <th>Subscription</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Joined</th><th>Verified</th><th>Status</th><th>Subscription</th><th>Actions</th></tr></thead>
                 <tbody>{rows}</tbody>
             </table>
         </div>
     </div>
     """
-    return render_admin_page("User Management", content, "users")
+    return render_admin_page("Users", content, "users")
 
 
 @app.route('/admin/user/<int:user_id>')
@@ -3013,14 +3042,9 @@ def admin_user_create():
 def admin_skills():
     if not session.get('admin'):
         return redirect('/admin/login')
-    
     db = get_db()
     c = db.cursor()
-    
-    # Get all skills with counts
-    c.execute("""
-        SELECT skills FROM providers WHERE skills IS NOT NULL AND skills != ''
-    """)
+    c.execute("SELECT skills FROM providers WHERE skills IS NOT NULL AND skills != ''")
     rows = c.fetchall()
     skill_counter = {}
     for (skills_str,) in rows:
@@ -3028,57 +3052,40 @@ def admin_skills():
             skill = skill.strip().title()
             if skill:
                 skill_counter[skill] = skill_counter.get(skill, 0) + 1
-    
-    # Sort by count
     sorted_skills = sorted(skill_counter.items(), key=lambda x: x[1], reverse=True)
     total_skills = len(sorted_skills)
-    
-    # Pagination
     page = request.args.get('page', 1, type=int)
     per_page = 20
     total_pages = (total_skills + per_page - 1) // per_page
     start = (page - 1) * per_page
-    end = start + per_page
-    paged_skills = sorted_skills[start:end]
-    
-    # Build table
-    rows_html = ""
-    for skill, count in paged_skills:
-        rows_html += f"<tr><td>{skill}</td><td>{count}</td></tr>"
+    paged_skills = sorted_skills[start:start+per_page]
+    rows_html = "".join(f"<tr><td>{s[0]}</td><td>{s[1]}</td></tr>" for s in paged_skills)
     if not rows_html:
         rows_html = "<tr><td colspan='2'>No skills found.</td></tr>"
-    
-    # Pagination links
     pagination = ""
     if total_pages > 1:
         pagination = '<div style="display:flex; gap:10px; justify-content:center; margin-top:15px;">'
-        for p in range(1, total_pages + 1):
+        for p in range(1, total_pages+1):
             active = 'class="btn btn-small" style="background:var(--primary);color:#fff;"' if p == page else 'class="btn btn-small btn-outline"'
             pagination += f'<a href="?page={p}" {active}>{p}</a>'
         pagination += '</div>'
-    
-    # Chart data (top 20)
+    db.close()
     chart_labels = [s[0] for s in sorted_skills[:20]]
     chart_values = [s[1] for s in sorted_skills[:20]]
-    
     content = f"""
     <div class="card">
-        <div class="card-header">📊 Skill Analytics</div>
-        <p>Total unique skills: <strong>{total_skills}</strong></p>
+        <div class="card-header">📊 Skill Analytics <span style="font-size:0.9rem;font-weight:400;">Total: {total_skills}</span></div>
         <div style="display:flex; gap:20px; flex-wrap:wrap;">
             <div style="flex:2; min-width:300px;">
                 <div class="chart-container"><canvas id="skillChart"></canvas></div>
             </div>
             <div style="flex:1; min-width:250px;">
-                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
                     <input type="text" id="skillSearch" placeholder="Search skills..." onkeyup="filterSkills()" style="flex:1;">
-                    <a href="/admin/skills/export" class="btn btn-small btn-success">Export CSV</a>
+                    <a href="/admin/skills/export" class="btn btn-small btn-success">CSV</a>
                 </div>
                 <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
-                    <table>
-                        <thead><tr><th>Skill</th><th>Providers</th></tr></thead>
-                        <tbody id="skillTableBody">{rows_html}</tbody>
-                    </table>
+                    <table><thead><tr><th>Skill</th><th>Providers</th></tr></thead><tbody id="skillTableBody">{rows_html}</tbody></table>
                 </div>
                 {pagination}
             </div>
@@ -3098,14 +3105,7 @@ def admin_skills():
                     borderRadius: 8
                 }}]
             }},
-            options: {{
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {{ legend: {{ display: false }} }},
-                scales: {{
-                    y: {{ beginAtZero: true }}
-                }}
-            }}
+            options: {{ responsive: true, maintainAspectRatio: true, plugins: {{ legend: {{ display: false }} }}, scales: {{ y: {{ beginAtZero: true }} }} }}
         }});
         function filterSkills() {{
             const q = document.getElementById('skillSearch').value.toLowerCase();
@@ -3133,8 +3133,7 @@ def admin_skills_export():
             if skill:
                 skill_counter[skill] = skill_counter.get(skill, 0) + 1
     db.close()
-    import csv
-    import io
+    import csv, io
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['Skill', 'Provider Count'])
@@ -3153,17 +3152,80 @@ def admin_skills_export():
 def admin_payment_methods():
     if not session.get('admin'):
         return redirect('/admin/login')
+    settings = get_payment_settings()
+    active_methods = json.loads(settings['active_payment_methods'] or '[]')
     
-    # This reuses the existing payment-settings route but with a visual UI.
-    # We'll keep the same logic but present it in cards.
-    # For simplicity, we'll redirect to the existing route, but if you want a new UI, we'll implement it.
-    # However, to avoid duplication, we'll enhance the existing page with the card UI.
-    # Let's modify the existing admin_payment_settings to have a card layout.
-    # We'll just redirect for now – you can enhance later.
-    return redirect('/admin/payment-settings')
-
-# (The existing payment settings route can be enhanced with cards; I'll provide an updated version if needed.)
-
+    if request.method == 'POST':
+        # Toggle a method on/off
+        method = request.form.get('method')
+        action = request.form.get('action')
+        if method and action:
+            if action == 'enable' and method not in active_methods:
+                active_methods.append(method)
+            elif action == 'disable' and method in active_methods:
+                active_methods.remove(method)
+            # Save
+            db = get_db()
+            c = db.cursor()
+            c.execute("UPDATE payment_settings SET active_payment_methods=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (json.dumps(active_methods), settings['id']))
+            db.commit()
+            db.close()
+            return redirect('/admin/payment-methods')
+    
+    # Build payment cards
+    payment_methods = [
+        {'id': 'manual', 'label': 'Manual SMS Verification', 'icon': 'fa-sms', 'desc': 'MTN/Airtel manual verification', 'config': True},
+        {'id': 'yo', 'label': 'Yo! Payments', 'icon': 'fa-money-bill-wave', 'desc': 'Instant payments via Yo!', 'config': True},
+        {'id': 'iotec', 'label': 'IOTEC', 'icon': 'fa-link', 'desc': 'IOTEC payment gateway', 'config': True},
+        {'id': 'pawapay', 'label': 'PawaPay', 'icon': 'fa-university', 'desc': 'PawaPay mobile money', 'config': True},
+        {'id': 'pesapal', 'label': 'PesaPal', 'icon': 'fa-credit-card', 'desc': 'PesaPal card/bank payments', 'config': True},
+    ]
+    
+    cards = ""
+    for pm in payment_methods:
+        is_active = pm['id'] in active_methods
+        status_color = '#28a745' if is_active else '#dc3545'
+        status_text = 'Active' if is_active else 'Inactive'
+        toggle_btn = f"""
+        <form method="POST" style="display:inline;">
+            <input type="hidden" name="method" value="{pm['id']}">
+            <input type="hidden" name="action" value="{'disable' if is_active else 'enable'}">
+            <button type="submit" class="btn btn-small {'btn-success' if not is_active else 'btn-danger'}">
+                { 'Disable' if is_active else 'Enable' }
+            </button>
+        </form>
+        """
+        config_btn = f'<a href="/admin/payment-settings" class="btn btn-small btn-outline">Configure</a>' if pm['config'] else ''
+        cards += f"""
+        <div class="payment-card">
+            <div class="header">
+                <div>
+                    <i class="fas {pm['icon']} method-icon"></i>
+                    <strong>{pm['label']}</strong>
+                </div>
+                <span style="color:{status_color};font-weight:600;">● {status_text}</span>
+            </div>
+            <p style="color:var(--text-secondary);font-size:0.85rem;">{pm['desc']}</p>
+            <div class="flex">
+                {toggle_btn}
+                {config_btn}
+            </div>
+        </div>
+        """
+    
+    content = f"""
+    <div class="card">
+        <div class="card-header">💳 Payment Methods</div>
+        <div class="payment-grid">
+            {cards}
+        </div>
+        <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border);">
+            <a href="/admin/payment-settings" class="btn">⚙️ Advanced Settings</a>
+        </div>
+    </div>
+    """
+    return render_admin_page("Payment Methods", content, "payments")
+    
 # ============================================================
 # 4. EMAIL/SMS TEMPLATES
 # ============================================================
@@ -3491,24 +3553,15 @@ def admin_reports():
         return redirect('/admin/login')
     db = get_db()
     c = db.cursor()
-    
-    # Get revenue summary
     total_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved'").fetchone()[0]
     monthly_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved' AND date(created_at) >= date('now','start of month')").fetchone()[0]
-    # Package breakdown
     pkg_stats = c.execute("""
         SELECT p.name, COUNT(*) as cnt, COALESCE(SUM(p.price_ugx),0) as revenue 
-        FROM vouchers v 
-        JOIN plans p ON v.plan_id = p.id 
-        WHERE v.provider_id=1 
-        GROUP BY p.name
+        FROM vouchers v JOIN plans p ON v.plan_id = p.id 
+        WHERE v.provider_id=1 GROUP BY p.name
     """).fetchall()
-    pkg_rows = ""
-    for ps in pkg_stats:
-        pkg_rows += f"<tr><td>{ps[0]}</td><td>{ps[1]}</td><td>UGX {ps[2]:,}</td></tr>"
-    if not pkg_rows:
-        pkg_rows = "<tr><td colspan='3'>No data</td></tr>"
-    
+    pkg_rows = "".join(f"<tr><td>{ps[0]}</td><td>{ps[1]}</td><td>UGX {ps[2]:,}</td></tr>" for ps in pkg_stats) or "<tr><td colspan='3'>No data</td></tr>"
+    db.close()
     content = f"""
     <div class="card">
         <div class="card-header">📊 Reports</div>
@@ -3517,13 +3570,13 @@ def admin_reports():
             <div class="stat-card"><h3>UGX {monthly_revenue:,}</h3><small>This Month</small></div>
         </div>
         <h4>Package Performance</h4>
-        <table>
-            <thead><tr><th>Package</th><th>Sales</th><th>Revenue</th></tr></thead>
-            <tbody>{pkg_rows}</tbody>
-        </table>
-        <div style="margin-top:20px;">
+        <div class="table-responsive">
+            <table><thead><tr><th>Package</th><th>Sales</th><th>Revenue</th></tr></thead><tbody>{pkg_rows}</tbody></table>
+        </div>
+        <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
             <a href="/admin/reports/export/revenue" class="btn btn-success">Export Revenue CSV</a>
             <a href="/admin/reports/export/users" class="btn btn-success">Export Users CSV</a>
+            <a href="/admin/reports/export/boosts" class="btn btn-success">Export Boosts CSV</a>
         </div>
     </div>
     """
@@ -3534,8 +3587,7 @@ def admin_reports():
 def admin_export_report(report_type):
     if not session.get('admin'):
         return redirect('/admin/login')
-    import csv
-    import io
+    import csv, io
     output = io.StringIO()
     writer = csv.writer(output)
     db = get_db()
@@ -3552,6 +3604,12 @@ def admin_export_report(report_type):
         for row in rows:
             writer.writerow(row)
         filename = 'users_report.csv'
+    elif report_type == 'boosts':
+        rows = c.execute("SELECT id, user_id, plan, status, boost_type, request_date FROM boost_requests ORDER BY id DESC").fetchall()
+        writer.writerow(['ID', 'User ID', 'Plan', 'Status', 'Type', 'Request Date'])
+        for row in rows:
+            writer.writerow(row)
+        filename = 'boosts_report.csv'
     else:
         db.close()
         return "Invalid report type", 400
@@ -3628,6 +3686,74 @@ def admin_content_edit(key):
     </div>
     """
     return render_admin_page("Edit Content", content, "content")
+
+# ============================================================
+# 10. SUBSCRIPTION MANAGEMENT (List + Bulk Extend)
+# ============================================================
+
+@app.route('/admin/subscription-manager')
+def admin_subscription_manager():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    subs = c.execute("""
+        SELECT us.id, u.name, u.phone, p.name as package_name, us.start_date, us.end_date, us.status
+        FROM user_subscriptions us
+        JOIN users u ON us.user_id = u.id
+        JOIN subscription_packages p ON us.package_id = p.id
+        ORDER BY us.id DESC
+    """).fetchall()
+    rows = ""
+    for s in subs:
+        status_color = 'success' if s[6]=='active' else ('warning' if s[6]=='pending' else 'danger')
+        rows += f"""
+        <tr>
+            <td>{s[1]}</td>
+            <td>{s[2]}</td>
+            <td>{s[3]}</td>
+            <td>{s[4]}</td>
+            <td>{s[5]}</td>
+            <td><span class="badge badge-{status_color}">{s[6]}</span></td>
+        </tr>
+        """
+    if not rows:
+        rows = "<tr><td colspan='6'>No subscriptions found.</td></tr>"
+    content = f"""
+    <div class="card">
+        <div class="card-header">📦 Subscription Manager</div>
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>User</th><th>Phone</th><th>Package</th><th>Start</th><th>End</th><th>Status</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    </div>
+    """
+    return render_admin_page("Subscription Manager", content, "subscriptions")
+
+
+# ============================================================
+# 11. SYSTEM LOGS (Audit Log)
+# ============================================================
+
+@app.route('/admin/system-logs')
+def admin_system_logs():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    logs = c.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 100").fetchall()
+    rows = "".join(f"<tr><td>{l[0]}</td><td>{l[1]}</td><td>{l[2]}</td><td>{l[3][:16] if l[3] else ''}</td></tr>" for l in logs) or "<tr><td colspan='4'>No logs.</td></tr>"
+    content = f"""
+    <div class="card">
+        <div class="card-header">🕒 System Logs</div>
+        <div class="table-responsive">
+            <table><thead><tr><th>ID</th><th>Admin</th><th>Action</th><th>Time</th></tr></thead><tbody>{rows}</tbody></table>
+        </div>
+    </div>
+    """
+    return render_admin_page("System Logs", content, "logs")
 
 # ============================================================
 # 9. UPDATE SIDEBAR NAV
@@ -6216,241 +6342,379 @@ admin_base_template = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin – {title}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #1a73e8;
+            --primary-dark: #1557b0;
+            --accent: #f5af19;
+            --bg: #f0f4f8;
+            --card-bg: rgba(255,255,255,0.85);
+            --glass-border: rgba(255,255,255,0.3);
+            --text: #1a1a1a;
+            --text-secondary: #666;
+            --border: #e0e0e0;
+            --shadow: 0 8px 32px rgba(0,0,0,0.08);
+            --radius: 16px;
+            --sidebar-width: 260px;
+        }
+        .dark-mode {
+            --bg: #0f172a;
+            --card-bg: rgba(30,41,59,0.85);
+            --glass-border: rgba(255,255,255,0.08);
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+            --shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f0f4f8;
-            color: #1a1a1a;
-            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            min-height:100vh;
+            transition: all 0.3s;
         }
-        .admin-nav {
-            background: #1a1a2e;
-            color: white;
-            padding: 12px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 10px;
+        .admin-layout { display: flex; }
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid var(--glass-border);
+            height: 100vh;
+            position: fixed;
+            left:0;
+            top:0;
+            overflow-y:auto;
+            transition: transform 0.3s, background 0.3s;
+            z-index:1000;
+            box-shadow: var(--shadow);
+        }
+        .sidebar.collapsed { transform: translateX(-100%); }
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom:1px solid var(--glass-border);
+            display:flex;
+            align-items:center;
+            gap:12px;
+            background: linear-gradient(135deg, rgba(26,115,232,0.2), rgba(245,175,25,0.1));
+        }
+        .sidebar-header img { height:40px; width:40px; border-radius:10px; }
+        .sidebar-header h3 { font-size:1.2rem; font-weight:700; }
+        .sidebar-header h3 span:first-child { color: var(--primary); }
+        .sidebar-header h3 span:last-child { color: var(--accent); }
+        .sidebar-menu { padding:10px 0; }
+        .sidebar-menu a {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:12px 24px;
+            color:var(--text-secondary);
+            text-decoration:none;
+            transition:all 0.2s;
+            font-size:0.9rem;
+            border-left:3px solid transparent;
+        }
+        .sidebar-menu a:hover, .sidebar-menu a.active {
+            background:rgba(26,115,232,0.08);
+            color:var(--primary);
+            border-left-color: var(--primary);
+        }
+        .sidebar-menu .badge {
+            background: linear-gradient(135deg, var(--primary), #6366f1);
+            color:#fff;
+            padding:2px 10px;
+            border-radius:12px;
+            font-size:0.75rem;
+            margin-left:auto;
+        }
+        .sidebar-menu hr {
+            border-color:rgba(255,255,255,0.1);
+            margin:10px 0;
+        }
+        .main-content {
+            margin-left:var(--sidebar-width);
+            flex:1;
+            transition:margin-left 0.3s;
+        }
+        .main-content.expanded { margin-left:0; }
+        .topbar {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom:1px solid var(--glass-border);
+            padding:14px 24px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            transition: background 0.3s, border 0.3s;
             position: sticky;
-            top: 0;
-            z-index: 1000;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            top:0;
+            z-index:999;
         }
-        .admin-nav .brand {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #f5af19;
+        .hamburger { font-size:1.5rem; cursor:pointer; background:none; border:none; color:var(--text); display:block; }
+        .topbar-right {
+            display:flex;
+            align-items:center;
+            gap:18px;
         }
-        .admin-nav .brand span { color: white; }
-        .admin-nav a {
-            color: rgba(255,255,255,0.7);
-            text-decoration: none;
-            padding: 6px 14px;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            font-size: 0.9rem;
+        .theme-toggle {
+            background:rgba(26,115,232,0.1);
+            border:1px solid var(--glass-border);
+            border-radius:50%;
+            width:40px;
+            height:40px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            cursor:pointer;
+            font-size:1.2rem;
+            transition:all 0.2s;
+            color:var(--text);
         }
-        .admin-nav a:hover,
-        .admin-nav a.active {
-            background: rgba(245, 175, 25, 0.2);
-            color: #f5af19;
-        }
-        .admin-nav .nav-links {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        .admin-nav .logout-link {
-            color: #dc3545;
-        }
-        .admin-nav .logout-link:hover {
-            background: rgba(220, 53, 69, 0.2);
-            color: #dc3545;
-        }
+        .theme-toggle:hover { background:rgba(26,115,232,0.2); transform:scale(1.05); }
         .container {
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 0 16px;
+            max-width:1400px;
+            margin:24px auto;
+            padding:0 20px;
         }
         .card {
-            background: white;
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-            border: 1px solid #e0e0e0;
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius:var(--radius);
+            padding:28px;
+            margin-bottom:20px;
+            box-shadow:var(--shadow);
+            border:1px solid var(--glass-border);
+            transition: transform 0.2s, box-shadow 0.2s, background 0.3s, border 0.3s;
         }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.12); }
         .card-header {
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin-bottom: 14px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #f5af19;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
+            font-size:1.2rem;
+            font-weight:700;
+            margin-bottom:20px;
+            border-bottom:1px solid var(--border);
+            padding-bottom:14px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            flex-wrap:wrap;
+            gap:10px;
         }
         .stat-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 12px;
-            margin-bottom: 10px;
+            display:grid;
+            grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+            gap:18px;
+            margin-bottom:24px;
         }
         .stat-card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 16px 12px;
-            text-align: center;
-            border: 1px solid #e9ecef;
-            transition: all 0.3s ease;
+            background: linear-gradient(135deg, rgba(26,115,232,0.08), rgba(99,102,241,0.05));
+            border-radius:var(--radius);
+            padding:24px;
+            box-shadow:var(--shadow);
+            border:1px solid var(--glass-border);
+            text-align:center;
+            position:relative;
+            overflow:hidden;
         }
-        .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        .stat-card::before {
+            content:'';
+            position:absolute;
+            top:-30px;
+            right:-30px;
+            width:80px;
+            height:80px;
+            background: linear-gradient(135deg, var(--primary), #6366f1);
+            opacity:0.15;
+            border-radius:50%;
         }
-        .stat-card h3 {
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: #f5af19;
-            margin-bottom: 2px;
+        .stat-card h3 { font-size:2.2rem; font-weight:800; color:var(--primary); position:relative; }
+        .stat-card small { color:var(--text-secondary); font-size:0.85rem; position:relative; }
+        .stat-card .change {
+            font-size:0.75rem;
+            margin-top:4px;
+            display:block;
         }
-        .stat-card small {
-            color: #666;
-            font-size: 0.75rem;
-        }
+        .stat-card .change.up { color: #28a745; }
+        .stat-card .change.down { color: #dc3545; }
         .btn {
-            display: inline-block;
-            padding: 8px 16px;
-            background: #f5af19;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            font-size: 0.85rem;
-            transition: all 0.3s ease;
+            display:inline-block;
+            padding:10px 22px;
+            background: linear-gradient(135deg, var(--primary), #6366f1);
+            color:#fff;
+            border:none;
+            border-radius:8px;
+            font-weight:600;
+            cursor:pointer;
+            text-decoration:none;
+            font-size:0.9rem;
+            transition:all 0.2s;
+            box-shadow:0 4px 15px rgba(26,115,232,0.3);
         }
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(245, 175, 25, 0.3);
-        }
-        .btn-outline {
-            background: transparent;
-            border: 2px solid #f5af19;
-            color: #f5af19;
-        }
-        .btn-outline:hover {
-            background: rgba(245, 175, 25, 0.1);
-        }
-        .btn-small {
-            padding: 4px 10px;
-            font-size: 0.75rem;
-            border-radius: 6px;
-        }
-        .btn-danger {
-            background: #dc3545;
-        }
-        .btn-danger:hover {
-            background: #c82333;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-        }
-        th {
-            background: #f8f9fa;
-            text-align: left;
-            padding: 10px 12px;
-            font-weight: 600;
-            border-bottom: 2px solid #dee2e6;
-        }
-        td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #e9ecef;
-        }
-        tr:hover td {
-            background: #f8f9fa;
-        }
-        label {
-            display: block;
-            margin-top: 12px;
-            font-weight: 600;
-        }
-        input, select, textarea {
-            width: 100%;
-            padding: 10px 14px;
-            border-radius: 8px;
-            border: 1px solid #ced4da;
-            font-size: 0.95rem;
-            margin-top: 4px;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #f5af19;
-            box-shadow: 0 0 0 3px rgba(245, 175, 25, 0.2);
-        }
+        .btn:hover { transform: translateY(-1px); box-shadow:0 6px 20px rgba(26,115,232,0.4); }
+        .btn-outline { background:transparent; border:2px solid var(--primary); color:var(--primary); box-shadow:none; }
+        .btn-small { padding:6px 12px; font-size:0.8rem; }
+        .btn-danger { background: linear-gradient(135deg, #dc3545, #ff6b6b); }
+        .btn-success { background: linear-gradient(135deg, #28a745, #51cf66); }
+        .btn-warning { background: linear-gradient(135deg, #ffc107, #fd7e14); }
+        .chart-container { position:relative; width:100%; max-height:380px; margin:20px 0; }
+        .chart-row { display:flex; gap:18px; flex-wrap:wrap; }
+        .chart-row .card { flex:1; min-width:380px; }
+        table { width:100%; border-collapse:collapse; }
+        th, td { padding:10px 12px; text-align:left; border-bottom:1px solid var(--border); }
+        th { background:var(--bg); font-weight:600; }
         .badge {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: 600;
+            display:inline-block;
+            padding:2px 10px;
+            border-radius:12px;
+            font-size:0.7rem;
+            font-weight:600;
         }
-        .alert {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 12px;
+        .badge-success { background:#28a745; color:#fff; }
+        .badge-danger { background:#dc3545; color:#fff; }
+        .badge-warning { background:#ffc107; color:#000; }
+        .badge-info { background:#17a2b8; color:#fff; }
+        .badge-secondary { background:#6c757d; color:#fff; }
+        input, textarea, select {
+            width:100%;
+            padding:10px 12px;
+            margin-top:5px;
+            border-radius:8px;
+            border:1px solid var(--border);
+            font-size:0.95rem;
+            background:var(--card-bg);
+            color:var(--text);
         }
-        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .alert-warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-        @media (max-width: 768px) {
-            .admin-nav .nav-links {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 4px;
-            }
-            .admin-nav a {
-                font-size: 0.8rem;
-                padding: 4px 10px;
-            }
-            .stat-grid {
-                grid-template-columns: 1fr 1fr;
-                gap: 8px;
-            }
-            .stat-card h3 {
-                font-size: 1.4rem;
-            }
+        .alert { padding:12px 18px; border-radius:8px; margin-bottom:15px; }
+        .alert-success { background:rgba(40,167,69,0.15); color:#155724; border:1px solid rgba(40,167,69,0.3); }
+        .alert-error { background:rgba(220,53,69,0.15); color:#721c24; border:1px solid rgba(220,53,69,0.3); }
+        .table-responsive { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+        .flex { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        .mt-10 { margin-top:10px; }
+        .mb-10 { margin-bottom:10px; }
+        .text-center { text-align:center; }
+        /* Activity feed */
+        .activity-item {
+            display:flex;
+            align-items:center;
+            gap:12px;
+            padding:10px 0;
+            border-bottom:1px solid var(--border);
         }
+        .activity-item .icon {
+            width:36px;
+            height:36px;
+            border-radius:50%;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:1rem;
+            flex-shrink:0;
+        }
+        .activity-item .icon.blue { background:rgba(26,115,232,0.15); color:#1a73e8; }
+        .activity-item .icon.green { background:rgba(40,167,69,0.15); color:#28a745; }
+        .activity-item .icon.orange { background:rgba(255,193,7,0.15); color:#ffc107; }
+        .activity-item .icon.red { background:rgba(220,53,69,0.15); color:#dc3545; }
+        .activity-item .content { flex:1; }
+        .activity-item .content small { color:var(--text-secondary); font-size:0.75rem; }
+        /* Payment cards */
+        .payment-grid {
+            display:grid;
+            grid-template-columns:repeat(auto-fill, minmax(280px,1fr));
+            gap:20px;
+            margin-top:15px;
+        }
+        .payment-card {
+            background:var(--card-bg);
+            border:1px solid var(--glass-border);
+            border-radius:var(--radius);
+            padding:20px;
+            box-shadow:var(--shadow);
+            transition:all 0.3s;
+        }
+        .payment-card:hover { transform:translateY(-4px); box-shadow:0 12px 40px rgba(0,0,0,0.12); }
+        .payment-card .header {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:12px;
+        }
+        .payment-card .method-icon { font-size:2rem; }
+        .payment-card .toggle { cursor:pointer; }
+        .payment-card .toggle.active { color:#28a745; }
+        .payment-card .toggle.inactive { color:#dc3545; }
+        .payment-card .config { margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+        .payment-card .config .btn { margin-top:8px; }
+        @media (max-width:768px) {
+            .sidebar { width:280px; transform:translateX(-100%); }
+            .sidebar.open { transform:translateX(0); }
+            .main-content { margin-left:0; }
+            .stat-grid { grid-template-columns:1fr 1fr; }
+            .chart-row .card { min-width:100%; }
+            .container { padding:0 12px; }
+        }
+        {theme_style}
     </style>
 </head>
-<body>
-    <nav class="admin-nav">
-        <div class="brand">⚙️ ROCKABY<span>ADMIN</span></div>
-        <div class="nav-links">
-        <a href="/admin/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">📊 Dashboard</a>
-        <a href="/admin/points-settings" class="{{ 'active' if active_page == 'points' else '' }}">⭐ Points</a>
-        <a href="/admin/subscription-requests" class="{{ 'active' if active_page == 'subscriptions' else '' }}">📦 Requests</a>
-        <a href="/admin/subscriptions" class="{{ 'active' if active_page == 'packages' else '' }}">📦 Packages</a>
-        <a href="/admin/backups" class="{{ 'active' if active_page == 'backups' else '' }}">💾 Backups</a>
-        <a href="/admin/stats" class="{{ 'active' if active_page == 'stats' else '' }}">📊 Stats</a>
-        <a href="/admin/referral-settings" class="{{ 'active' if active_page == 'referrals' else '' }}">🎁 Referrals</a>
-        <a href="/admin/boost-packages" class="{{ 'active' if active_page == 'boost_packages' else '' }}">🚀 Boost Packages</a>
-        <a href="/admin/payment-settings" class="{{ 'active' if active_page == 'payments' else '' }}">💳 Payment Methods</a>
-        <a href="/admin/manual-backup" class="{{ 'active' if active_page == 'manual_backup' else '' }}">💾 Manual Backup</a>
-        <a href="/admin/logout" class="logout-link">🚪 Logout</a>
+<body class="{layout_class}">
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <img src="/static/icon-192.png" alt="RockabyTech">
+            <h3><span>ROCKABY</span><span>ADMIN</span></h3>
+        </div>
+        <div class="sidebar-menu">
+            <a href="/admin/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">📊 Dashboard</a>
+            <a href="/admin/users" class="{{ 'active' if active_page == 'users' else '' }}">👥 Users</a>
+            <a href="/admin/skills" class="{{ 'active' if active_page == 'skills' else '' }}">📊 Skills</a>
+            <a href="/admin/points-settings" class="{{ 'active' if active_page == 'points' else '' }}">⭐ Points</a>
+            <a href="/admin/subscription-requests" class="{{ 'active' if active_page == 'subscriptions' else '' }}">📦 Requests</a>
+            <a href="/admin/subscriptions" class="{{ 'active' if active_page == 'packages' else '' }}">📦 Packages</a>
+            <a href="/admin/payment-methods" class="{{ 'active' if active_page == 'payments' else '' }}">💳 Payments</a>
+            <a href="/admin/coupons" class="{{ 'active' if active_page == 'coupons' else '' }}">🎫 Coupons</a>
+            <a href="/admin/tickets" class="{{ 'active' if active_page == 'tickets' else '' }}">🎫 Tickets</a>
+            <a href="/admin/templates" class="{{ 'active' if active_page == 'templates' else '' }}">📨 Templates</a>
+            <a href="/admin/content" class="{{ 'active' if active_page == 'content' else '' }}">📝 Content</a>
+            <a href="/admin/reports" class="{{ 'active' if active_page == 'reports' else '' }}">📊 Reports</a>
+            <a href="/admin/backups" class="{{ 'active' if active_page == 'backups' else '' }}">💾 Backups</a>
+            <a href="/admin/referral-settings" class="{{ 'active' if active_page == 'referrals' else '' }}">🎁 Referrals</a>
+            <a href="/admin/boost-packages" class="{{ 'active' if active_page == 'boost_packages' else '' }}">🚀 Boost</a>
+            <hr>
+            <a href="/admin/logout" class="logout-link">🚪 Logout</a>
+        </div>
     </div>
-    </nav>
-    <div class="container">
-        {content}
+    <!-- Main Content -->
+    <div class="main-content" id="mainContent">
+        <div class="topbar">
+            <button class="hamburger" onclick="toggleSidebar()">☰</button>
+            <div class="topbar-right">
+                <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+                <span style="font-weight:600;color:var(--primary);">{{ session.get('admin_name', 'Admin') }}</span>
+            </div>
+        </div>
+        <div class="container">
+            {content}
+        </div>
+        <footer style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.8rem;border-top:1px solid var(--border);margin-top:20px;">
+            &copy; 2025 RockabyTech – Admin Panel
+        </footer>
     </div>
+    <script>
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('mainContent').classList.toggle('expanded');
+        }
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('admin-theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+        }
+        if (localStorage.getItem('admin-theme') === 'dark') {
+            document.body.classList.add('dark-mode');
+        }
+    </script>
 </body>
 </html>
 """
@@ -8646,199 +8910,141 @@ def admin_dashboard():
     if not session.get('admin'):
         return redirect('/admin/login')
     
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 30000;")
-    c = conn.cursor()
-
-    # ---- Stats ----
-    c.execute("SELECT COUNT(*) FROM users")
-    total_users = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM providers")
-    total_providers = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM vendors")
-    total_vendors = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM jobs")
-    total_jobs = c.fetchone()[0]
-    c.execute("SELECT status, COUNT(*) FROM jobs GROUP BY status")
-    job_stats = dict(c.fetchall())
-    c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'")
-    pending_boosts = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='approved'")
-    approved_boosts = c.fetchone()[0]
-    c.execute("SELECT plan FROM boost_requests WHERE status='approved'")
-    plans = c.fetchall()
-    total_revenue = 0
-    for (plan,) in plans:
-        if plan == '7':
-            total_revenue += 5000
-        elif plan == '30':
-            total_revenue += 15000
-        elif plan == '90':
-            total_revenue += 40000
-        else:
-            try:
-                days = int(plan)
-                if days == 7:
-                    total_revenue += 5000
-                elif days == 30:
-                    total_revenue += 15000
-                elif days == 90:
-                    total_revenue += 40000
-            except:
-                pass
-
-    c.execute("SELECT COUNT(*) FROM boost_requests WHERE boost_type='subscription' AND status='pending'")
-    pending_subs = c.fetchone()[0]
-
-    # ---- Pending boost requests ----
-    c.execute("""
-        SELECT br.id, u.phone, u.name, br.transaction_id, br.plan, br.boost_type, br.item_id, br.request_date
-        FROM boost_requests br JOIN users u ON br.user_id = u.id
-        WHERE br.status = 'pending' ORDER BY br.request_date DESC
-    """)
-    pending = c.fetchall()
-
-    # ---- Pending payment transactions ----
-    c.execute("""
-        SELECT pt.id, u.name, u.phone, pt.amount, pt.payment_method, pt.raw_sms, pt.created_at,
-               pt.description, pt.item_type, pt.item_id
-        FROM payment_transactions pt
-        JOIN users u ON pt.user_id = u.id
-        WHERE pt.status = 'pending'
-        ORDER BY pt.created_at DESC
-    """)
-    pending_payments = c.fetchall()
-
-    # ---- Free registration settings ----
-    free_enabled = get_system_setting('free_registration_enabled', '1') == '1'
-    free_package_id = get_system_setting('free_registration_package_id', '1')
-
-    # Get all active packages for dropdown
-    c.execute("SELECT id, name, price FROM subscription_packages WHERE is_active=1 ORDER BY price")
-    packages = c.fetchall()
-    package_options = ''.join(
-        f'<option value="{p[0]}" {"selected" if str(p[0]) == free_package_id else ""}>{p[1]} (UGX {p[2]:,})</option>'
-        for p in packages
-    )
-
-    conn.close()
-
-    # ---- Build HTML ----
-    rows = ""
-    for req in pending:
-        rid, phone, name, trans, plan, btype, item_id, rdate = req
-        rows += f"""
-        <tr>
-            <td>{name}<br><small>{phone}</small></td>
-            <td>{trans}</td>
-            <td>{plan} days</td>
-            <td><span class="badge" style="background:var(--primary); color:white; padding:2px 10px; border-radius:12px;">{btype}</span></td>
-            <td><small>{rdate[:16] if rdate else ''}</small></td>
-            <td>
-                <a href="/admin/approve-boost/{rid}" class="btn btn-small" style="background:#28a745;">Approve</a>
-                <a href="/admin/reject-boost/{rid}" class="btn btn-small btn-danger">Reject</a>
-            </td>
-        </tr>"""
-    if not rows:
-        rows = "<tr><td colspan='6' style='text-align:center;'>No pending boost requests.</td></tr>"
-
-    payment_rows = ""
-    for pp in pending_payments:
-        pid, name, phone, amount, method, raw_sms, created_at, desc, item_type, item_id = pp
-        payment_rows += f"""
-        <tr>
-            <td>{name}<br><small>{phone}</small></td>
-            <td>UGX {amount:,}</td>
-            <td>{method}</td>
-            <td>{desc}</td>
-            <td><small>{created_at[:16]}</small></td>
-            <td>
-                <a href="/admin/approve-payment/{pid}" class="btn btn-small btn-success">Approve</a>
-                <a href="/admin/reject-payment/{pid}" class="btn btn-small btn-danger">Reject</a>
-            </td>
-        </tr>
+    db = get_db()
+    c = db.cursor()
+    today = date.today().isoformat()
+    
+    # Stats
+    total_users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    total_providers = c.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
+    total_vendors = c.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
+    total_jobs = c.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+    
+    # Subscriptions
+    active_subs = c.execute("SELECT COUNT(*) FROM user_subscriptions WHERE status='active' AND end_date >= date('now')").fetchone()[0]
+    expired_subs = c.execute("SELECT COUNT(*) FROM user_subscriptions WHERE status='expired' OR end_date < date('now')").fetchone()[0]
+    
+    # Revenue
+    total_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved'").fetchone()[0]
+    revenue_this_month = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved' AND date(created_at) >= date('now','start of month')").fetchone()[0]
+    revenue_today = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved' AND date(created_at) = date('now')").fetchone()[0]
+    
+    # Pending items
+    pending_boosts = c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'").fetchone()[0]
+    pending_payments = c.execute("SELECT COUNT(*) FROM payment_transactions WHERE status='pending'").fetchone()[0]
+    pending_subs = c.execute("SELECT COUNT(*) FROM boost_requests WHERE boost_type='subscription' AND status='pending'").fetchone()[0]
+    pending_tickets = c.execute("SELECT COUNT(*) FROM support_tickets WHERE status='open' OR status='in_progress'").fetchone()[0]
+    
+    # Recent activity (last 10 actions)
+    activity = c.execute("""
+        SELECT action, details, created_at, user_id 
+        FROM user_activity_log 
+        ORDER BY created_at DESC LIMIT 10
+    """).fetchall()
+    
+    # Revenue chart data (last 12 months)
+    months = []
+    revenues = []
+    for i in range(11, -1, -1):
+        month_start = (date.today().replace(day=1) - timedelta(days=30*i)).replace(day=1)
+        month_end = (month_start + timedelta(days=30)).replace(day=1)
+        rev = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved' AND date(created_at) >= ? AND date(created_at) < ?",
+                        (month_start.isoformat(), month_end.isoformat())).fetchone()[0]
+        months.append(month_start.strftime('%b %Y'))
+        revenues.append(rev)
+    
+    db.close()
+    
+    # Build activity HTML
+    activity_html = ""
+    for act in activity:
+        icon_class = "blue"
+        if "user" in act[0] or "signup" in act[0]: icon_class = "green"
+        elif "boost" in act[0] or "payment" in act[0]: icon_class = "orange"
+        elif "delete" in act[0] or "suspend" in act[0]: icon_class = "red"
+        activity_html += f"""
+        <div class="activity-item">
+            <div class="icon {icon_class}"><i class="fas fa-circle"></i></div>
+            <div class="content">
+                <strong>{act[0]}</strong> {act[1] or ''}
+                <small>{act[2][:16] if act[2] else ''}</small>
+            </div>
+        </div>
         """
-    if not payment_rows:
-        payment_rows = "<tr><td colspan='6'>No pending payment transactions.</td></tr>"
-
-    toggle_label = "🔒 Disable Free Registration" if free_enabled else "🔓 Enable Free Registration"
-    toggle_action = "disable" if free_enabled else "enable"
-    action_effect = "expire all existing free subscriptions" if free_enabled else "allow new users to get free package (existing users unchanged)"
-
-    # ---- Build full content ----
-    content = f"""
-    <div class="card">
-        <div class="card-header">📊 Platform Statistics</div>
-        <div class="stat-grid">
-            <div class="stat-card"><h3>{total_users}</h3><small>Total Users</small></div>
-            <div class="stat-card"><h3>{total_providers}</h3><small>Freelancers</small></div>
-            <div class="stat-card"><h3>{total_vendors}</h3><small>Vendors</small></div>
-            <div class="stat-card"><h3>{total_jobs}</h3><small>Total Jobs</small></div>
-            <div class="stat-card"><h3>{job_stats.get('Open', 0)}</h3><small>Open Jobs</small></div>
-            <div class="stat-card"><h3>{pending_boosts}</h3><small>Pending Boosts</small></div>
-            <div class="stat-card"><h3>{approved_boosts}</h3><small>Approved Boosts</small></div>
-            <div class="stat-card"><h3>{pending_subs}</h3><small>Pending Subscriptions</small></div>
-            <div class="stat-card"><h3>UGX {total_revenue:,}</h3><small>Total Revenue</small></div>
-        </div>
-    </div>
+    if not activity_html:
+        activity_html = "<p style='color:var(--text-secondary);'>No recent activity.</p>"
     
-    <div class="card">
-        <div class="card-header">💳 Pending Payment Transactions</div>
-        <table>
-            <thead><tr><th>User</th><th>Amount</th><th>Method</th><th>Description</th><th>Date</th><th>Action</th></tr></thead>
-            <tbody>{payment_rows}</tbody>
-        </table>
-    </div>
-    
-    <!-- FREE REGISTRATION SETTINGS -->
-    <div class="card">
-        <div class="card-header">⚙️ Free Registration Settings</div>
-        <form method="POST" action="/admin/update-free-settings">
-            <label>
-                <input type="checkbox" name="free_enabled" value="1" {'checked' if free_enabled else ''}>
-                Enable Free Registration
-            </label>
-            <label style="margin-left:20px;">Free Package:</label>
-            <select name="free_package_id">
-                {package_options}
-            </select>
-            <button type="submit" class="btn btn-small" style="margin-left:10px; background:#fd7e14; color:white;">Update</button>
-        </form>
-        <small style="display:block; margin-top:5px; color:var(--text-secondary);">
-            If you disable free registration, all active free subscriptions will be expired immediately.
-        </small>
-    </div>
-    
-    <!-- ADMIN TOOLS -->
-        <div class="card">
-        <div class="card-header">⚙️ Admin Tools</div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <a href="/admin/points-settings" class="btn" style="background:#fd7e14; color:white;">⭐ Points Settings</a>
-            <a href="/admin/subscription-requests" class="btn" style="background:#17a2b8; color:white;">📦 Subscription Requests</a>
-            <a href="/admin/subscriptions" class="btn" style="background:#28a745; color:white;">📦 Manage Packages</a>
-            <a href="/admin/backups" class="btn" style="background:#6c757d; color:white;">💾 Backups</a>
-            <a href="/admin/broadcast" class="btn" style="background:#dc3545; color:white;">📢 Broadcast</a>
-            <a href="/admin/payment-settings" class="btn" style="background:#ffc107; color:#000;">💳 Payment Methods</a>
-            <a href="/admin/boost-packages" class="btn" style="background:#17a2b8; color:white;">🚀 Boost Packages</a>
-            <a href="/admin/manual-backup" class="btn" style="background:#28a745; color:white;">💾 Manual Backup</a>
-            <a href="/admin/restore" class="btn" style="background:#ffc107; color:#000;">📤 Restore</a>
-        </div>
-    </div>
-    
-    <!-- PENDING BOOST REQUESTS -->
-    <div class="card">
-        <div class="card-header">⏳ Pending Boost Requests</div>
-        <table>
-            <thead><tr><th>User</th><th>Transaction</th><th>Plan</th><th>Type</th><th>Date</th><th>Action</th></tr></thead>
-            <tbody>{rows}</tbody>
-        </table>
-        <div style="margin-top:20px;">
-            <a href="/admin/stats" class="btn btn-outline">📊 Detailed Statistics</a>
-            <a href="/admin/referral-settings" class="btn" style="background:#fd7e14; color:white;">🎁 Referral Settings</a>
-        </div>
+    # Quick actions
+    quick_actions = """
+    <div class="flex" style="margin-top:15px;">
+        <a href="/admin/user/create" class="btn btn-success btn-small">➕ Create User</a>
+        <a href="/admin/broadcast" class="btn btn-small">📢 Broadcast</a>
+        <a href="/admin/manual-backup" class="btn btn-small">💾 Backup</a>
+        <a href="/admin/backups" class="btn btn-small btn-outline">📂 Backups</a>
     </div>
     """
-    return render_template_string(admin_base_template.replace("{title}", "Dashboard").replace("{active_page}", "dashboard").replace("{content}", content))
+    
+    content = f"""
+    <!-- STATS -->
+    <div class="stat-grid">
+        <div class="stat-card"><h3>{total_users}</h3><small>Total Users</small></div>
+        <div class="stat-card"><h3>{total_providers}</h3><small>Freelancers</small></div>
+        <div class="stat-card"><h3>{total_vendors}</h3><small>Vendors</small></div>
+        <div class="stat-card"><h3>{total_jobs}</h3><small>Jobs</small></div>
+        <div class="stat-card"><h3>{active_subs}</h3><small>Active Subscriptions</small></div>
+        <div class="stat-card"><h3>{expired_subs}</h3><small>Expired</small></div>
+        <div class="stat-card"><h3>UGX {total_revenue:,}</h3><small>Total Revenue</small></div>
+        <div class="stat-card"><h3>UGX {revenue_this_month:,}</h3><small>This Month</small></div>
+        <div class="stat-card"><h3>UGX {revenue_today:,}</h3><small>Today</small></div>
+        <div class="stat-card"><h3>{pending_boosts}</h3><small>Pending Boosts</small></div>
+        <div class="stat-card"><h3>{pending_payments}</h3><small>Pending Payments</small></div>
+        <div class="stat-card"><h3>{pending_tickets}</h3><small>Open Tickets</small></div>
+    </div>
+
+    <!-- QUICK ACTIONS -->
+    <div class="card">
+        <div class="card-header">⚡ Quick Actions</div>
+        {quick_actions}
+    </div>
+
+    <!-- CHARTS ROW -->
+    <div class="chart-row">
+        <div class="card">
+            <div class="card-header">📈 Revenue (12 Months)</div>
+            <div class="chart-container"><canvas id="revenueChart"></canvas></div>
+        </div>
+        <div class="card">
+            <div class="card-header">🕒 Recent Activity</div>
+            {activity_html}
+        </div>
+    </div>
+
+    <script>
+        // Revenue Chart
+        new Chart(document.getElementById('revenueChart').getContext('2d'), {{
+            type: 'bar',
+            data: {{
+                labels: {json.dumps(months)},
+                datasets: [{{
+                    label: 'Revenue (UGX)',
+                    data: {json.dumps(revenues)},
+                    backgroundColor: 'rgba(26,115,232,0.7)',
+                    borderColor: '#1a73e8',
+                    borderWidth: 2,
+                    borderRadius: 8
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {{ legend: {{ display: false }} }},
+                scales: {{ y: {{ beginAtZero: true }} }}
+            }}
+        }});
+    </script>
+    """
+    return render_admin_page("Dashboard", content, "dashboard")
+
 
 @app.route('/admin/update-free-settings', methods=['POST'])
 def update_free_settings():
