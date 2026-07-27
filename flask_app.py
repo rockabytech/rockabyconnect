@@ -384,6 +384,23 @@ SKILL_SUGGESTIONS = [
 
 FREELANCER_STATUSES = ['Available', 'Occupied', 'On Leave']
 VENDOR_STATUSES = ['Open', 'Closed', 'Away']
+JOB_TYPES = [
+    'One-off Task',
+    'Short-term Contract',
+    'Long-term Contract',
+    'Part-time',
+    'Full-time',
+    'Freelance',
+    'Temporary',
+    'Internship',
+    'Other'
+]
+
+WORK_ARRANGEMENTS = [
+    'On-site',
+    'Remote',
+    'Hybrid'
+]
 
 # ============================================================
 # IMAGE RESIZING HELPER
