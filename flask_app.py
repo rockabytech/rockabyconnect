@@ -6757,9 +6757,12 @@ def list_providers():
         
         name_display = f'<span class="pill-title"><i class="fas fa-user"></i> {name}</span>'
         
-        if logged_in:
+        if logged_in and has_subscription:
             phone_display = f'<p style="margin-top:5px;">📞 {phone}</p>'
             wa_button = f'<a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">Chat on WhatsApp</a>' if phone else ''
+        elif logged_in:
+            phone_display = '<p style="margin-top:5px; color:var(--text-secondary);">📞 <a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to view contact</a></p>'
+            wa_button = ''
         else:
             phone_display = '<p style="margin-top:5px; color:var(--text-secondary);">📞 <a href="/login">Sign in to view contact</a></p>'
             wa_button = ''
@@ -6824,22 +6827,15 @@ def list_jobs():
         urgent_class = "job-urgent" if urgent else ""
         urgent_badge = '<span class="urgent-badge">⚡ URGENT</span>' if urgent else ''
         
-        if logged_in:
+        if logged_in and has_subscription:
             contact_display = f'<p>Contact: {contact}'
             if is_phone_number(contact):
                 contact_display += f' <a href="{whatsapp_link(contact)}" target="_blank" class="btn btn-whatsapp btn-small">Chat on WhatsApp</a>'
             contact_display += '</p>'
+        elif logged_in:
+            contact_display = '<p style="color:var(--text-secondary);">Contact: <a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to view contact</a></p>'
         else:
             contact_display = '<p style="color:var(--text-secondary);">Contact: <a href="/login">Sign in to view</a></p>'
-        active_featured = is_featured_now(featured, expiry)
-        feat_badge = '<span class="badge badge-available" style="background:var(--primary);">FEATURED</span>' if active_featured else ''
-        location_display = f"{loc}{', ' + village if village else ''}"
-        img_tag = f'<img src="/static/uploads/{image}" class="profile-pic" style="border-radius:8px;" alt="{title}">' if image else ''
-        
-        title_display = f'<span class="pill-title"><i class="fas fa-briefcase"></i> {title}</span>'
-        
-        applicants_link = ""
-        apply_link = ""
         # ---- Message button (to employer) with subscription check ----
         message_button = ""
         if logged_in:
@@ -6909,11 +6905,13 @@ def list_vendors():
         
         name_display = f'<span class="pill-title"><i class="fas fa-store"></i> {bname}</span>'
         
-        if logged_in:
+        if logged_in and has_subscription:
             contact = f'<p style="margin-top:5px;">📞 {phone} <a href="{whatsapp_link(phone)}" target="_blank" class="btn btn-whatsapp btn-small">WhatsApp</a></p>'
+        elif logged_in:
+            contact = '<p style="margin-top:5px; color:var(--text-secondary);">📞 <a href="/subscribe" class="btn btn-small" style="background:#6c757d; color:white;">🔒 Subscribe to view contact</a></p>'
         else:
             contact = '<p style="margin-top:5px; color:var(--text-secondary);">📞 <a href="/login">Sign in to view contact</a></p>'
-
+            
         # ---- Message button (subscription check) ----
         message_button = ""
         if logged_in and session['user_id'] != user_id:
