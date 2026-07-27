@@ -5292,7 +5292,7 @@ def home():
         LIMIT 6
     """, (today,)).fetchall()
 
-    # Combine
+    # Combine featured items
     all_featured = []
     for p in featured_providers:
         all_featured.append((p[0], p[1], p[2], p[3], 'provider'))
@@ -5301,8 +5301,11 @@ def home():
     for j in featured_jobs:
         all_featured.append((j[0], j[1], j[2], '', 'job'))
 
-    # Fallback to latest if not enough
-    if len(all_featured) < 3:
+    # ---- Check if free registration is enabled ----
+    free_enabled = get_system_setting('free_registration_enabled', '1') == '1'
+
+    # ---- Fallback to latest (only if free registration is enabled) ----
+    if len(all_featured) < 3 and free_enabled:
         latest_providers = c.execute("""
             SELECT p.id, u.name, p.profile_pic, p.skills, 'provider'
             FROM providers p JOIN users u ON p.user_id = u.id
@@ -5320,68 +5323,68 @@ def home():
         all_featured.extend(latest_vendors)
         all_featured.extend(latest_jobs)
 
-    sponsored_items = all_featured[:9]
+    # Determine if we should show featured sections
+    show_featured = bool(all_featured) and free_enabled
 
-    # Build carousel slides
+    # ---- Build carousel slides (only if show_featured) ----
     fallback_img = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23ddd'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' font-size='20' fill='%23666'%3ENo Image%3C/text%3E%3C/svg%3E"
 
     carousel_slides = ""
-    for item in all_featured[:10]:
-        item_id, name, img, detail, item_type = item
-        img_url = f"/static/uploads/{img}" if img else fallback_img
-        label = item_type.capitalize()
-        if item_type == 'provider':
-            link = f"/provider/{item_id}"
-            label = f"👤 {name}"
-        elif item_type == 'vendor':
-            link = f"/vendor/{item_id}"
-            label = f"🏪 {name}"
-        else:  # job
-            link = f"/job/{item_id}"
-            label = f"💼 {name}"
-        carousel_slides += f"""
-            <div class="carousel-slide">
-                <img src="{img_url}" alt="{name}" onerror="this.src='{fallback_img}'">
-                <div class="carousel-label">{label}</div>
-            </div>
-        """
+    sponsored_html = ""
+    if show_featured:
+        for item in all_featured[:10]:
+            item_id, name, img, detail, item_type = item
+            img_url = f"/static/uploads/{img}" if img else fallback_img
+            label = item_type.capitalize()
+            if item_type == 'provider':
+                link = f"/provider/{item_id}"
+                label = f"👤 {name}"
+            elif item_type == 'vendor':
+                link = f"/vendor/{item_id}"
+                label = f"🏪 {name}"
+            else:  # job
+                link = f"/job/{item_id}"
+                label = f"💼 {name}"
+            carousel_slides += f"""
+                <div class="carousel-slide">
+                    <img src="{img_url}" alt="{name}" onerror="this.src='{fallback_img}'">
+                    <div class="carousel-label">{label}</div>
+                </div>
+            """
 
-    if not carousel_slides:
+        # Sponsored grid (only first 9 items)
+        sponsored_items = all_featured[:9]
+        for item in sponsored_items:
+            item_id, name, img, detail, item_type = item
+            img_url = f"/static/uploads/{img}" if img else fallback_img
+            if item_type == 'provider':
+                link = f"/provider/{item_id}"
+                badge = "Freelancer"
+            elif item_type == 'vendor':
+                link = f"/vendor/{item_id}"
+                badge = "Vendor"
+            else:
+                link = f"/job/{item_id}"
+                badge = "Job"
+            sponsored_html += f"""
+                <a href="{link}" class="sponsored-card">
+                    <img src="{img_url}" alt="{name}" onerror="this.src='{fallback_img}'">
+                    <div class="sponsored-info">
+                        <h3>{name}</h3>
+                        <p>{detail if detail else badge}</p>
+                        <span class="sponsored-badge">⭐ Featured</span>
+                    </div>
+                </a>
+            """
+    else:
         carousel_slides = """
             <div class="carousel-slide">
-                <img src="{fallback_img}" alt="No featured items">
-                <div class="carousel-label">Coming Soon</div>
+                <div class="carousel-label">No featured items available</div>
             </div>
         """
+        sponsored_html = "<p>No sponsored items available.</p>"
 
-    # Sponsored grid
-    sponsored_html = ""
-    for item in sponsored_items:
-        item_id, name, img, detail, item_type = item
-        img_url = f"/static/uploads/{img}" if img else fallback_img
-        if item_type == 'provider':
-            link = f"/provider/{item_id}"
-            badge = "Freelancer"
-        elif item_type == 'vendor':
-            link = f"/vendor/{item_id}"
-            badge = "Vendor"
-        else:
-            link = f"/job/{item_id}"
-            badge = "Job"
-        sponsored_html += f"""
-            <a href="{link}" class="sponsored-card">
-                <img src="{img_url}" alt="{name}" onerror="this.src='{fallback_img}'">
-                <div class="sponsored-info">
-                    <h3>{name}</h3>
-                    <p>{detail if detail else badge}</p>
-                    <span class="sponsored-badge">⭐ Featured</span>
-                </div>
-            </a>
-        """
-    if not sponsored_html:
-        sponsored_html = "<p>No sponsored items yet.</p>"
-
-    # Testimonials
+    # ---- Testimonials ----
     reviews = c.execute("""
         SELECT r.rating, r.comment, u.name, r.created_at
         FROM reviews r
@@ -5429,6 +5432,7 @@ def home():
         </a>
     """
 
+    # ---- Build the final content (conditionally include featured sections) ----
     content = f"""
     <!-- FEATURED CAROUSEL (1) -->
     <div class="ad-carousel">
@@ -5506,7 +5510,6 @@ def home():
     </div>
     """
 
-    # ⭐ CORRECTED RENDER ⭐
     return render_user_template(base_template, title="Home", active_page="home", content=content)
 
 @app.route('/points-history')
