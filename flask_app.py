@@ -7227,7 +7227,7 @@ def login():
             return redirect(url_for('list_jobs'))
             
                 # Wrong password – stay on login page with error
-                return render_user_template(
+            return render_user_template(
                     login_page.replace(
                         "{content}",
                         f'''
