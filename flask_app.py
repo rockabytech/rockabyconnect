@@ -2790,7 +2790,7 @@ def admin_user_detail(user_id):
     
     db = get_db()
     c = db.cursor()
-    user = c.execute("SELECT id, name, phone, created_at, is_suspended FROM users WHERE id=?", (user_id,)).fetchone()
+    user = c.execute("SELECT id, name, phone, is_suspended FROM users WHERE id=?", (user_id,)).fetchone()
     if not user:
         db.close()
         return "User not found.", 404
@@ -2810,7 +2810,7 @@ def admin_user_detail(user_id):
     
     log_rows = ""
     for log in logs:
-        log_rows += f"<tr><td>{log[2][:16]}</td><td>{log[0]}</td><td>{log[1] or ''}</td></tr>"
+        log_rows += f"<tr><td>{log[2][:16] if log[2] else '-'}</td><td>{log[0]}</td><td>{log[1] or ''}</td></tr>"
     if not log_rows:
         log_rows = "<tr><td colspan='3'>No activity recorded.</td></tr>"
     
@@ -2819,13 +2819,12 @@ def admin_user_detail(user_id):
         <div class="card-header">👤 User: {user[1]}</div>
         <p><strong>ID:</strong> {user[0]}</p>
         <p><strong>Phone:</strong> {user[2]}</p>
-        <p><strong>Joined:</strong> {user[3][:16] if user[3] else '-'}</p>
-        <p><strong>Status:</strong> {'Suspended' if user[4] else 'Active'}</p>
+        <p><strong>Status:</strong> {'Suspended' if user[3] else 'Active'}</p>
         <p><strong>Active Subscription:</strong> {sub['package_name'] + ' until ' + sub['end_date'] if sub else 'None'}</p>
         <div style="margin-top:15px;">
             <a href="/admin/user/{user_id}/edit" class="btn">Edit Profile</a>
             <a href="/admin/user/{user_id}/subscription" class="btn" style="background:#17a2b8;">Manage Subscription</a>
-            <a href="/admin/user/{user_id}/toggle-suspend" class="btn {'btn-danger' if not user[4] else 'btn-success'}" onclick="return confirm('Are you sure?')">{'Unsuspend' if user[4] else 'Suspend'}</a>
+            <a href="/admin/user/{user_id}/toggle-suspend" class="btn {'btn-danger' if not user[3] else 'btn-success'}" onclick="return confirm('Are you sure?')">{'Unsuspend' if user[3] else 'Suspend'}</a>
             <a href="/admin/user/{user_id}/delete" class="btn btn-danger" onclick="return confirm('Delete this user?')">Delete</a>
             <a href="/admin/user/{user_id}/export" class="btn btn-outline">Export Data (GDPR)</a>
         </div>
@@ -7214,16 +7213,18 @@ def login():
         
         with get_db_connection() as conn:
             c = conn.cursor()
-            c.execute("SELECT id, name, password_hash FROM users WHERE phone=?", (phone,))
+            c.execute("SELECT id, name, password_hash, is_suspended FROM users WHERE phone=?", (phone,))
             user = c.fetchone()
         
-        if user:
-            # User exists – check password
-            if check_password_hash(user[2], password):
-                session['user_id'] = user[0]
-                session['user_name'] = user[1]
-                session['user_phone'] = phone
-                return redirect(url_for('list_jobs'))
+        if user and check_password_hash(user[2], password):
+            # Check if the user is suspended
+            if user[4] == 1:  # is_suspended column
+                return "Your account has been suspended. Please contact support."
+            # Login successful
+            session['user_id'] = user[0]
+            session['user_name'] = user[1]
+            session['user_phone'] = phone
+            return redirect(url_for('list_jobs'))
             else:
                 # Wrong password – stay on login page with error
                 return render_user_template(
