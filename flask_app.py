@@ -7225,7 +7225,7 @@ def login():
             session['user_name'] = user[1]
             session['user_phone'] = phone
             return redirect(url_for('list_jobs'))
-            else:
+            
                 # Wrong password – stay on login page with error
                 return render_user_template(
                     login_page.replace(
