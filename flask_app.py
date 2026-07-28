@@ -3851,6 +3851,49 @@ def admin_system_logs():
     """
     return render_admin_page("System Logs", content, "logs")
 
+@app.route('/admin/templates/add', methods=['GET', 'POST'])
+def admin_template_add():
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    if request.method == 'POST':
+        key = request.form['key'].strip()
+        subject = request.form['subject'].strip()
+        body = request.form['body'].strip()
+        typ = request.form.get('type', 'email')
+        if not key or not body:
+            return "Key and body are required."
+        db = get_db()
+        c = db.cursor()
+        try:
+            c.execute("INSERT INTO templates (key, subject, body, type) VALUES (?,?,?,?)", (key, subject, body, typ))
+            db.commit()
+            db.close()
+            return redirect('/admin/templates')
+        except sqlite3.IntegrityError:
+            db.close()
+            return "Template key already exists."
+    content = """
+    <div class="card">
+        <div class="card-header">➕ Add Template</div>
+        <form method="POST">
+            <label>Key (unique identifier)</label>
+            <input type="text" name="key" required placeholder="e.g., welcome">
+            <label>Subject (for emails)</label>
+            <input type="text" name="subject">
+            <label>Type</label>
+            <select name="type">
+                <option value="email">Email</option>
+                <option value="sms">SMS</option>
+            </select>
+            <label>Body *</label>
+            <textarea name="body" rows="8" required></textarea>
+            <button type="submit" class="btn" style="margin-top:20px;">Add</button>
+        </form>
+        <a href="/admin/templates" class="btn btn-outline" style="margin-top:10px;">Back</a>
+    </div>
+    """
+    return render_admin_page("Add Template", content, "templates")
+
 # ============================================================
 # 9. UPDATE SIDEBAR NAV
 # ============================================================
