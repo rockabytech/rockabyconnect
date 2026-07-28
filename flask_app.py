@@ -1189,6 +1189,10 @@ def migrate_default_packages():
         if row:
             c.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('free_registration_package_id', ?)", (str(row[0]),))
         
+        # ---- 4. Update referral points to 10 ----
+        c.execute("INSERT OR REPLACE INTO points_settings (key, value) VALUES ('referral_points', '10')")
+        print("[MIGRATION] Referral points set to 10")
+        
         conn.commit()
         print("[MIGRATION] Default packages updated.")
 
