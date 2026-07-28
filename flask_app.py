@@ -1155,38 +1155,42 @@ def migrate_db():
         print("[MIGRATION] Database migration completed successfully.")
 
 def migrate_default_packages():
-    """Set default boost packages and only free subscription packages."""
+    """Set default boost packages and subscription packages."""
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         
         # ---- 1. Boost packages ----
         boost_defaults = [
-            ('7 Days', 7, 1000),
-            ('30 Days', 30, 3000),
+            ('1 Week', 7, 1000),
+            ('1 Month', 30, 3000),
             ('Quarterly', 90, 7000),
         ]
+        # Delete existing boost packages
+        c.execute("DELETE FROM boost_packages")
         for name, days, price in boost_defaults:
-            c.execute("INSERT OR REPLACE INTO boost_packages (name, duration_days, price, is_active) VALUES (?,?,?,1)", (name, days, price))
+            c.execute("INSERT INTO boost_packages (name, duration_days, price, is_active) VALUES (?,?,?,1)", (name, days, price))
         
-        # ---- 2. Remove all paid subscription packages ----
-        c.execute("DELETE FROM subscription_packages WHERE price > 0")
-        
-        # ---- 3. Insert only free subscription packages ----
-        sub_free = [
+        # ---- 2. Subscription packages ----
+        sub_defaults = [
+            ('1 Week', 7, 1000),
+            ('1 Month', 30, 3000),
+            ('3 Months', 90, 7000),
             ('Free Trial', 730, 0),
             ('Free Week', 7, 0),
         ]
-        for name, days, price in sub_free:
-            c.execute("INSERT OR IGNORE INTO subscription_packages (name, duration_days, price, is_active) VALUES (?,?,?,1)", (name, days, price))
+        # Delete existing subscription packages
+        c.execute("DELETE FROM subscription_packages")
+        for name, days, price in sub_defaults:
+            c.execute("INSERT INTO subscription_packages (name, duration_days, price, is_active) VALUES (?,?,?,1)", (name, days, price))
         
-        # ---- 4. Set Free Trial as the default free registration package ----
+        # ---- 3. Set Free Trial as the default free registration package ----
         c.execute("SELECT id FROM subscription_packages WHERE name='Free Trial' LIMIT 1")
         row = c.fetchone()
         if row:
             c.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('free_registration_package_id', ?)", (str(row[0]),))
         
         conn.commit()
-        print("[MIGRATION] Default packages updated: boost packages set, paid subscriptions removed, free subscriptions added.")
+        print("[MIGRATION] Default packages updated.")
 
 def parse_mtn_sms(sms):
     tid = re.search(r'ID:\s*(\d+)', sms)
