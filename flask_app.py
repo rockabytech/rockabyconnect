@@ -1480,6 +1480,15 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if 'user_id' not in session:
             return redirect(url_for('login'))
+        # Check if user is suspended
+        db = get_db()
+        c = db.cursor()
+        c.execute("SELECT is_suspended FROM users WHERE id=?", (session['user_id'],))
+        row = c.fetchone()
+        db.close()
+        if row and row[0] == 1:
+            session.clear()
+            return "Your account has been suspended. Please contact support.", 403
         return f(*args, **kwargs)
     return decorated
 
@@ -2926,7 +2935,7 @@ def admin_user_subscription(user_id):
         db.close()
         return "User not found.", 404
     
-    packages = c.execute("SELECT id, name, duration_days, price FROM subscription_packages WHERE is_active=1").fetchall()
+    packages = c.execute("SELECT id, name, duration_days, price FROM subscription_packages WHERE is_active=1 ORDER BY price").fetchall()
     package_options = ''.join(f'<option value="{p[0]}">{p[1]} ({p[2]} days) – UGX {p[3]:,}</option>' for p in packages)
     
     if request.method == 'POST':
@@ -6802,17 +6811,18 @@ def home():
     today = date.today().isoformat()
 
     # ---- STATS ----
-    total_users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    total_providers = c.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
-    total_vendors = c.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
-    open_jobs = c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'").fetchone()[0]
+    total_users = c.execute("SELECT COUNT(*) FROM users WHERE is_suspended=0").fetchone()[0]  # only active users
+    total_providers = c.execute("SELECT COUNT(*) FROM providers p JOIN users u ON p.user_id = u.id WHERE u.is_suspended=0").fetchone()[0]
+    total_vendors = c.execute("SELECT COUNT(*) FROM vendors v JOIN users u ON v.user_id = u.id WHERE u.is_suspended=0").fetchone()[0]
+    open_jobs = c.execute("SELECT COUNT(*) FROM jobs j JOIN users u ON j.employer_id = u.id WHERE j.status='Open' AND u.is_suspended=0").fetchone()[0]
 
-    # ---- FEATURED ITEMS ----
+    # ---- FEATURED ITEMS (only from active, non-suspended users) ----
     featured_providers = c.execute("""
         SELECT p.id, u.name, p.profile_pic, p.skills, 'provider' as type
         FROM providers p
         JOIN users u ON p.user_id = u.id
         WHERE p.featured=1 AND (p.featured_expiry IS NULL OR p.featured_expiry >= ?)
+          AND u.is_suspended=0
         ORDER BY p.id DESC
         LIMIT 6
     """, (today,)).fetchall()
@@ -6820,7 +6830,9 @@ def home():
     featured_vendors = c.execute("""
         SELECT v.id, v.business_name as name, v.vendor_image as profile_pic, 'vendor' as type
         FROM vendors v
+        JOIN users u ON v.user_id = u.id
         WHERE v.featured=1 AND (v.featured_expiry IS NULL OR v.featured_expiry >= ?)
+          AND u.is_suspended=0
         ORDER BY v.id DESC
         LIMIT 6
     """, (today,)).fetchall()
@@ -6828,12 +6840,15 @@ def home():
     featured_jobs = c.execute("""
         SELECT j.id, j.title as name, j.job_image as profile_pic, 'job' as type
         FROM jobs j
-        WHERE j.featured=1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?) AND j.status='Open'
+        JOIN users u ON j.employer_id = u.id
+        WHERE j.featured=1 AND (j.featured_expiry IS NULL OR j.featured_expiry >= ?)
+          AND j.status='Open'
+          AND u.is_suspended=0
         ORDER BY j.id DESC
         LIMIT 6
     """, (today,)).fetchall()
 
-    # Combine featured items
+    # Combine featured
     all_featured = []
     for p in featured_providers:
         all_featured.append((p[0], p[1], p[2], p[3], 'provider'))
@@ -6847,18 +6862,31 @@ def home():
 
     # ---- Fallback to latest (only if free registration is enabled) ----
     if len(all_featured) < 3 and free_enabled:
+        # Only include users with active subscription (non-suspended)
         latest_providers = c.execute("""
             SELECT p.id, u.name, p.profile_pic, p.skills, 'provider'
-            FROM providers p JOIN users u ON p.user_id = u.id
+            FROM providers p
+            JOIN users u ON p.user_id = u.id
+            WHERE u.is_suspended=0
+              AND EXISTS (SELECT 1 FROM user_subscriptions us WHERE us.user_id = u.id AND us.status='active' AND (us.end_date >= date('now') OR us.end_date IS NULL))
             ORDER BY p.id DESC LIMIT 3
         """).fetchall()
         latest_vendors = c.execute("""
             SELECT v.id, v.business_name, v.vendor_image, '', 'vendor'
-            FROM vendors v ORDER BY v.id DESC LIMIT 3
+            FROM vendors v
+            JOIN users u ON v.user_id = u.id
+            WHERE u.is_suspended=0
+              AND EXISTS (SELECT 1 FROM user_subscriptions us WHERE us.user_id = u.id AND us.status='active' AND (us.end_date >= date('now') OR us.end_date IS NULL))
+            ORDER BY v.id DESC LIMIT 3
         """).fetchall()
         latest_jobs = c.execute("""
             SELECT j.id, j.title, j.job_image, '', 'job'
-            FROM jobs j WHERE j.status='Open' ORDER BY j.id DESC LIMIT 3
+            FROM jobs j
+            JOIN users u ON j.employer_id = u.id
+            WHERE j.status='Open'
+              AND u.is_suspended=0
+              AND EXISTS (SELECT 1 FROM user_subscriptions us WHERE us.user_id = u.id AND us.status='active' AND (us.end_date >= date('now') OR us.end_date IS NULL))
+            ORDER BY j.id DESC LIMIT 3
         """).fetchall()
         all_featured.extend(latest_providers)
         all_featured.extend(latest_vendors)
@@ -6867,7 +6895,7 @@ def home():
     # Determine if we should show featured sections
     show_featured = bool(all_featured) and free_enabled
 
-    # ---- Build carousel slides (only if show_featured) ----
+    # ---- Build carousel slides ----
     fallback_img = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23ddd'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' font-size='20' fill='%23666'%3ENo Image%3C/text%3E%3C/svg%3E"
 
     carousel_slides = ""
@@ -6893,7 +6921,7 @@ def home():
                 </div>
             """
 
-        # Sponsored grid (only first 9 items)
+        # Sponsored grid
         sponsored_items = all_featured[:9]
         for item in sponsored_items:
             item_id, name, img, detail, item_type = item
@@ -6925,11 +6953,12 @@ def home():
         """
         sponsored_html = "<p>No sponsored items available.</p>"
 
-    # ---- Testimonials ----
+    # ---- Testimonials (only from non-suspended users) ----
     reviews = c.execute("""
         SELECT r.rating, r.comment, u.name, r.created_at
         FROM reviews r
         JOIN users u ON r.reviewer_id = u.id
+        WHERE u.is_suspended=0
         ORDER BY r.created_at DESC
         LIMIT 4
     """).fetchall()
@@ -6973,7 +7002,6 @@ def home():
         </a>
     """
 
-    # ---- Build the final content (conditionally include featured sections) ----
     content = f"""
     <!-- FEATURED CAROUSEL (1) -->
     <div class="ad-carousel">
