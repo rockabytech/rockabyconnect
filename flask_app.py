@@ -7250,24 +7250,20 @@ def login():
             c.execute("SELECT id, name, password_hash, is_suspended FROM users WHERE phone=?", (phone,))
             user = c.fetchone()
         
-        if user and check_password_hash(user[2], password):
-            # Check if suspended
-            if user[3] == 1:
+        if user:
+            # User exists – check password
+            if check_password_hash(user[2], password):
+                # Check if suspended
+                if user[3] == 1:
+                    return "Your account has been suspended. Please contact support."
+                # Login success
+                session['user_id'] = user[0]
+                session['user_name'] = user[1]
+                session['user_phone'] = phone
+                return redirect(url_for('list_jobs'))
+            else:
+                # Wrong password – stay on login with error
                 return render_user_template(
-                    login_page.replace("{content}", 
-                    '<div class="card"><div class="alert alert-error">Your account has been suspended. Please contact support.</div><a href="/login" class="btn">Try again</a></div>'),
-                    title="Suspended",
-                    active_page="login"
-                )
-            # Login successful
-            session['user_id'] = user[0]
-            session['user_name'] = user[1]
-            session['user_phone'] = phone
-            return redirect(url_for('list_jobs'))
-        else:
-            
-                # Wrong password – stay on login page with error
-            return render_user_template(
                     login_page.replace(
                         "{content}",
                         f'''
@@ -7292,7 +7288,7 @@ def login():
                     active_page="login"
                 )
         else:
-            # Phone number not registered – redirect to signup with phone pre-filled
+            # Phone number not registered – redirect to signup
             return redirect(url_for('signup', phone=phone, reason='not_registered'))
     
     # GET request – show login page
