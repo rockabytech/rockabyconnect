@@ -876,6 +876,16 @@ def init_db():
     for key, val in defaults:
         c.execute("INSERT OR IGNORE INTO points_settings (key, value) VALUES (?,?)", (key, val))
 
+    # ---- Add created_at to users if missing ----
+    c.execute("PRAGMA table_info(users)")
+    existing_cols = [col[1] for col in c.fetchall()]
+    if 'created_at' not in existing_cols:
+        c.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        print("[MIGRATION] Added created_at to users")
+        # Set a default for existing rows
+        c.execute("UPDATE users SET created_at = datetime('now', '-1 day') WHERE created_at IS NULL")
+        print("[MIGRATION] Set default created_at for existing users")
+        
     # ---- INSERT DEFAULT PACKAGES ----
     c.execute("SELECT COUNT(*) FROM subscription_packages")
     if c.fetchone()[0] == 0:
@@ -2693,12 +2703,12 @@ def admin_users():
     db = get_db()
     c = db.cursor()
     
-    # Filters
     search = request.args.get('search', '')
     status_filter = request.args.get('status', 'all')
     subscription_filter = request.args.get('subscription', 'all')
     
-    query = "SELECT u.id, u.name, u.phone, u.created_at, u.is_suspended, u.is_verified, " \
+    # Query without created_at
+    query = "SELECT u.id, u.name, u.phone, u.is_suspended, u.is_verified, " \
             "(SELECT COUNT(*) FROM user_subscriptions WHERE user_id = u.id AND status='active' AND end_date >= date('now')) as has_active_subscription " \
             "FROM users u WHERE 1=1"
     params = []
@@ -2719,15 +2729,14 @@ def admin_users():
     
     rows = ""
     for u in users:
-        sub_status = '<span class="badge badge-success">Active</span>' if u[5] else '<span class="badge badge-danger">None</span>'
-        suspended = '<span class="badge badge-warning">Suspended</span>' if u[4] else '<span class="badge badge-success">Active</span>'
-        verified = '<span class="badge badge-success">✅</span>' if u[5] else '<span class="badge badge-danger">❌</span>'
+        sub_status = '<span class="badge badge-success">Active</span>' if u[4] else '<span class="badge badge-danger">None</span>'
+        suspended = '<span class="badge badge-warning">Suspended</span>' if u[3] else '<span class="badge badge-success">Active</span>'
+        verified = '<span class="badge badge-success">✅</span>' if u[4] else '<span class="badge badge-danger">❌</span>'
         rows += f"""
         <tr>
             <td>{u[0]}</td>
             <td>{u[1]}</td>
             <td>{u[2]}</td>
-            <td>{u[3][:16] if u[3] else '-'}</td>
             <td>{verified}</td>
             <td>{suspended}</td>
             <td>{sub_status}</td>
@@ -2735,12 +2744,12 @@ def admin_users():
                 <a href="/admin/user/{u[0]}" class="btn btn-small">View</a>
                 <a href="/admin/user/{u[0]}/edit" class="btn btn-small btn-outline">Edit</a>
                 <a href="/admin/user/{u[0]}/subscription" class="btn btn-small" style="background:#17a2b8;color:#fff;">Sub</a>
-                <a href="/admin/user/{u[0]}/toggle-suspend" class="btn btn-small {'btn-danger' if not u[4] else 'btn-success'}" onclick="return confirm('Are you sure?')">{'Unsuspend' if u[4] else 'Suspend'}</a>
+                <a href="/admin/user/{u[0]}/toggle-suspend" class="btn btn-small {'btn-danger' if not u[3] else 'btn-success'}" onclick="return confirm('Are you sure?')">{'Unsuspend' if u[3] else 'Suspend'}</a>
             </td>
         </tr>
         """
     if not rows:
-        rows = '<tr><td colspan="8">No users found.</td></tr>'
+        rows = '<tr><td colspan="7">No users found.</td></tr>'
     
     content = f"""
     <div class="card">
@@ -2765,7 +2774,7 @@ def admin_users():
         </div>
         <div class="table-responsive">
             <table>
-                <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Joined</th><th>Verified</th><th>Status</th><th>Subscription</th><th>Actions</th></tr></thead>
+                <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Verified</th><th>Status</th><th>Subscription</th><th>Actions</th></tr></thead>
                 <tbody>{rows}</tbody>
             </table>
         </div>
@@ -3553,14 +3562,26 @@ def admin_reports():
         return redirect('/admin/login')
     db = get_db()
     c = db.cursor()
-    total_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved'").fetchone()[0]
-    monthly_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved' AND date(created_at) >= date('now','start of month')").fetchone()[0]
+    
+    # Revenue from boost_requests and payment_transactions
+    boost_revenue = c.execute("SELECT COALESCE(SUM(CASE WHEN plan='7' THEN 5000 WHEN plan='30' THEN 15000 WHEN plan='90' THEN 40000 ELSE 0 END),0) FROM boost_requests WHERE status='approved'").fetchone()[0]
+    payment_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM payment_transactions WHERE status='completed'").fetchone()[0]
+    total_revenue = boost_revenue + payment_revenue
+    
+    monthly_boost = c.execute("SELECT COALESCE(SUM(CASE WHEN plan='7' THEN 5000 WHEN plan='30' THEN 15000 WHEN plan='90' THEN 40000 ELSE 0 END),0) FROM boost_requests WHERE status='approved' AND date(request_date) >= date('now','start of month')").fetchone()[0]
+    monthly_payment = c.execute("SELECT COALESCE(SUM(amount),0) FROM payment_transactions WHERE status='completed' AND date(created_at) >= date('now','start of month')").fetchone()[0]
+    monthly_revenue = monthly_boost + monthly_payment
+    
+    # Package performance from boost_requests
     pkg_stats = c.execute("""
-        SELECT p.name, COUNT(*) as cnt, COALESCE(SUM(p.price_ugx),0) as revenue 
-        FROM vouchers v JOIN plans p ON v.plan_id = p.id 
-        WHERE v.provider_id=1 GROUP BY p.name
+        SELECT plan, COUNT(*) as cnt, 
+               SUM(CASE WHEN plan='7' THEN 5000 WHEN plan='30' THEN 15000 WHEN plan='90' THEN 40000 ELSE 0 END) as revenue 
+        FROM boost_requests 
+        WHERE status='approved' 
+        GROUP BY plan
     """).fetchall()
-    pkg_rows = "".join(f"<tr><td>{ps[0]}</td><td>{ps[1]}</td><td>UGX {ps[2]:,}</td></tr>" for ps in pkg_stats) or "<tr><td colspan='3'>No data</td></tr>"
+    pkg_rows = "".join(f"<tr><td>{ps[0]} days</td><td>{ps[1]}</td><td>UGX {ps[2]:,}</td></tr>" for ps in pkg_stats) or "<tr><td colspan='3'>No data</td></tr>"
+    
     db.close()
     content = f"""
     <div class="card">
@@ -3592,27 +3613,39 @@ def admin_export_report(report_type):
     writer = csv.writer(output)
     db = get_db()
     c = db.cursor()
+    
     if report_type == 'revenue':
-        rows = c.execute("SELECT amount, created_at, status FROM voucher_requests WHERE status='approved' ORDER BY created_at DESC").fetchall()
-        writer.writerow(['Amount', 'Date', 'Status'])
+        # Revenue from boost_requests (approved) and payment_transactions (completed)
+        rows = c.execute("""
+            SELECT request_date, plan, status, transaction_id 
+            FROM boost_requests 
+            WHERE status='approved' 
+            ORDER BY request_date DESC
+        """).fetchall()
+        writer.writerow(['Date', 'Plan (days)', 'Status', 'Transaction ID'])
         for row in rows:
-            writer.writerow([row[0], row[1], row[2]])
+            writer.writerow([row[0], row[1], row[2], row[3]])
         filename = 'revenue_report.csv'
+        
     elif report_type == 'users':
-        rows = c.execute("SELECT id, name, phone, created_at FROM users ORDER BY id DESC").fetchall()
-        writer.writerow(['ID', 'Name', 'Phone', 'Joined'])
+        # Users (without created_at if missing)
+        rows = c.execute("SELECT id, name, phone FROM users ORDER BY id DESC").fetchall()
+        writer.writerow(['ID', 'Name', 'Phone'])
         for row in rows:
             writer.writerow(row)
         filename = 'users_report.csv'
+        
     elif report_type == 'boosts':
         rows = c.execute("SELECT id, user_id, plan, status, boost_type, request_date FROM boost_requests ORDER BY id DESC").fetchall()
         writer.writerow(['ID', 'User ID', 'Plan', 'Status', 'Type', 'Request Date'])
         for row in rows:
             writer.writerow(row)
         filename = 'boosts_report.csv'
+        
     else:
         db.close()
         return "Invalid report type", 400
+    
     db.close()
     response = make_response(output.getvalue())
     response.headers['Content-Disposition'] = f'attachment; filename={filename}'
@@ -8914,7 +8947,7 @@ def admin_dashboard():
     c = db.cursor()
     today = date.today().isoformat()
     
-    # Stats
+    # Stats using existing tables
     total_users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     total_providers = c.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
     total_vendors = c.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
@@ -8924,32 +8957,43 @@ def admin_dashboard():
     active_subs = c.execute("SELECT COUNT(*) FROM user_subscriptions WHERE status='active' AND end_date >= date('now')").fetchone()[0]
     expired_subs = c.execute("SELECT COUNT(*) FROM user_subscriptions WHERE status='expired' OR end_date < date('now')").fetchone()[0]
     
-    # Revenue
-    total_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved'").fetchone()[0]
-    revenue_this_month = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved' AND date(created_at) >= date('now','start of month')").fetchone()[0]
-    revenue_today = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved' AND date(created_at) = date('now')").fetchone()[0]
+    # Revenue – from boost_requests (approved) and payment_transactions (completed)
+    boost_revenue = c.execute("SELECT COALESCE(SUM(CASE WHEN plan='7' THEN 5000 WHEN plan='30' THEN 15000 WHEN plan='90' THEN 40000 ELSE 0 END),0) FROM boost_requests WHERE status='approved'").fetchone()[0]
+    # Also add revenue from payment_transactions if any
+    payment_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM payment_transactions WHERE status='completed'").fetchone()[0]
+    total_revenue = boost_revenue + payment_revenue
+    
+    # Revenue this month
+    month_start = date.today().replace(day=1).isoformat()
+    boost_this_month = c.execute("SELECT COALESCE(SUM(CASE WHEN plan='7' THEN 5000 WHEN plan='30' THEN 15000 WHEN plan='90' THEN 40000 ELSE 0 END),0) FROM boost_requests WHERE status='approved' AND date(request_date) >= ?", (month_start,)).fetchone()[0]
+    payment_this_month = c.execute("SELECT COALESCE(SUM(amount),0) FROM payment_transactions WHERE status='completed' AND date(created_at) >= ?", (month_start,)).fetchone()[0]
+    revenue_this_month = boost_this_month + payment_this_month
+    
+    # Revenue today
+    boost_today = c.execute("SELECT COALESCE(SUM(CASE WHEN plan='7' THEN 5000 WHEN plan='30' THEN 15000 WHEN plan='90' THEN 40000 ELSE 0 END),0) FROM boost_requests WHERE status='approved' AND date(request_date) = date('now')").fetchone()[0]
+    payment_today = c.execute("SELECT COALESCE(SUM(amount),0) FROM payment_transactions WHERE status='completed' AND date(created_at) = date('now')").fetchone()[0]
+    revenue_today = boost_today + payment_today
     
     # Pending items
     pending_boosts = c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'").fetchone()[0]
     pending_payments = c.execute("SELECT COUNT(*) FROM payment_transactions WHERE status='pending'").fetchone()[0]
     pending_subs = c.execute("SELECT COUNT(*) FROM boost_requests WHERE boost_type='subscription' AND status='pending'").fetchone()[0]
+    # Support tickets table exists now
     pending_tickets = c.execute("SELECT COUNT(*) FROM support_tickets WHERE status='open' OR status='in_progress'").fetchone()[0]
     
-    # Recent activity (last 10 actions)
-    activity = c.execute("""
-        SELECT action, details, created_at, user_id 
-        FROM user_activity_log 
-        ORDER BY created_at DESC LIMIT 10
-    """).fetchall()
+    # Recent activity (from user_activity_log)
+    activity = c.execute("SELECT action, details, created_at, user_id FROM user_activity_log ORDER BY created_at DESC LIMIT 10").fetchall()
     
-    # Revenue chart data (last 12 months)
+    # Revenue chart (last 12 months)
     months = []
     revenues = []
     for i in range(11, -1, -1):
         month_start = (date.today().replace(day=1) - timedelta(days=30*i)).replace(day=1)
         month_end = (month_start + timedelta(days=30)).replace(day=1)
-        rev = c.execute("SELECT COALESCE(SUM(amount),0) FROM voucher_requests WHERE status='approved' AND date(created_at) >= ? AND date(created_at) < ?",
-                        (month_start.isoformat(), month_end.isoformat())).fetchone()[0]
+        # Boost revenue for that month
+        b_rev = c.execute("SELECT COALESCE(SUM(CASE WHEN plan='7' THEN 5000 WHEN plan='30' THEN 15000 WHEN plan='90' THEN 40000 ELSE 0 END),0) FROM boost_requests WHERE status='approved' AND date(request_date) >= ? AND date(request_date) < ?", (month_start.isoformat(), month_end.isoformat())).fetchone()[0]
+        p_rev = c.execute("SELECT COALESCE(SUM(amount),0) FROM payment_transactions WHERE status='completed' AND date(created_at) >= ? AND date(created_at) < ?", (month_start.isoformat(), month_end.isoformat())).fetchone()[0]
+        rev = b_rev + p_rev
         months.append(month_start.strftime('%b %Y'))
         revenues.append(rev)
     
@@ -8974,7 +9018,6 @@ def admin_dashboard():
     if not activity_html:
         activity_html = "<p style='color:var(--text-secondary);'>No recent activity.</p>"
     
-    # Quick actions
     quick_actions = """
     <div class="flex" style="margin-top:15px;">
         <a href="/admin/user/create" class="btn btn-success btn-small">➕ Create User</a>
@@ -9020,7 +9063,6 @@ def admin_dashboard():
     </div>
 
     <script>
-        // Revenue Chart
         new Chart(document.getElementById('revenueChart').getContext('2d'), {{
             type: 'bar',
             data: {{
