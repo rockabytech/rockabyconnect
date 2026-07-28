@@ -2870,6 +2870,7 @@ def admin_user_detail(user_id):
             <a href="/admin/user/{user_id}/toggle-suspend" class="btn {'btn-danger' if not user[3] else 'btn-success'}" onclick="return confirm('Are you sure?')">{'Unsuspend' if user[3] else 'Suspend'}</a>
             <a href="/admin/user/{user_id}/delete" class="btn btn-danger" onclick="return confirm('Delete this user?')">Delete</a>
             <a href="/admin/user/{user_id}/export" class="btn btn-outline">Export Data (GDPR)</a>
+            <a href="/admin/user/{user_id}/remove-subscription" class="btn btn-danger btn-small" onclick="return confirm('Remove active subscription?')">Remove Subscription</a>
         </div>
         <hr>
         <h4>Recent Activity</h4>
@@ -2987,6 +2988,18 @@ def admin_user_subscription(user_id):
     </div>
     """
     return render_admin_page("Manage Subscription", content, "users")
+
+@app.route('/admin/user/<int:user_id>/remove-subscription')
+def admin_remove_subscription(user_id):
+    if not session.get('admin'):
+        return redirect('/admin/login')
+    db = get_db()
+    c = db.cursor()
+    # Expire the active subscription (if any)
+    c.execute("UPDATE user_subscriptions SET status='expired', end_date=date('now') WHERE user_id=? AND status='active'", (user_id,))
+    db.commit()
+    db.close()
+    return redirect(f'/admin/user/{user_id}')
 
 
 @app.route('/admin/user/<int:user_id>/toggle-suspend')
