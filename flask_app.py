@@ -9856,7 +9856,7 @@ def admin_points_settings():
             rating_points = {'1':5, '2':10, '3':15, '4':20, '5':25}
     else:
         rating_points = {'1':5, '2':10, '3':15, '4':20, '5':25}
-    referral_points = int(get_points_setting('referral_points') or 50)
+    referral_points = int(get_points_setting('referral_points') or 10)
     
     conn.close()
     
