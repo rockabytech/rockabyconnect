@@ -8948,7 +8948,7 @@ def admin_dashboard():
     c = db.cursor()
     today = date.today().isoformat()
     
-    # Stats using existing tables
+    # ---- Stats using existing tables ----
     total_users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     total_providers = c.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
     total_vendors = c.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
@@ -8960,7 +8960,6 @@ def admin_dashboard():
     
     # Revenue – from boost_requests (approved) and payment_transactions (completed)
     boost_revenue = c.execute("SELECT COALESCE(SUM(CASE WHEN plan='7' THEN 5000 WHEN plan='30' THEN 15000 WHEN plan='90' THEN 40000 ELSE 0 END),0) FROM boost_requests WHERE status='approved'").fetchone()[0]
-    # Also add revenue from payment_transactions if any
     payment_revenue = c.execute("SELECT COALESCE(SUM(amount),0) FROM payment_transactions WHERE status='completed'").fetchone()[0]
     total_revenue = boost_revenue + payment_revenue
     
@@ -8979,7 +8978,6 @@ def admin_dashboard():
     pending_boosts = c.execute("SELECT COUNT(*) FROM boost_requests WHERE status='pending'").fetchone()[0]
     pending_payments = c.execute("SELECT COUNT(*) FROM payment_transactions WHERE status='pending'").fetchone()[0]
     pending_subs = c.execute("SELECT COUNT(*) FROM boost_requests WHERE boost_type='subscription' AND status='pending'").fetchone()[0]
-    # Support tickets table exists now
     pending_tickets = c.execute("SELECT COUNT(*) FROM support_tickets WHERE status='open' OR status='in_progress'").fetchone()[0]
     
     # Recent activity (from user_activity_log)
@@ -8991,16 +8989,23 @@ def admin_dashboard():
     for i in range(11, -1, -1):
         month_start = (date.today().replace(day=1) - timedelta(days=30*i)).replace(day=1)
         month_end = (month_start + timedelta(days=30)).replace(day=1)
-        # Boost revenue for that month
         b_rev = c.execute("SELECT COALESCE(SUM(CASE WHEN plan='7' THEN 5000 WHEN plan='30' THEN 15000 WHEN plan='90' THEN 40000 ELSE 0 END),0) FROM boost_requests WHERE status='approved' AND date(request_date) >= ? AND date(request_date) < ?", (month_start.isoformat(), month_end.isoformat())).fetchone()[0]
         p_rev = c.execute("SELECT COALESCE(SUM(amount),0) FROM payment_transactions WHERE status='completed' AND date(created_at) >= ? AND date(created_at) < ?", (month_start.isoformat(), month_end.isoformat())).fetchone()[0]
         rev = b_rev + p_rev
         months.append(month_start.strftime('%b %Y'))
         revenues.append(rev)
     
+    # ---- Fetch free registration settings ----
+    free_enabled = get_system_setting('free_registration_enabled', '1') == '1'
+    free_package_id = get_system_setting('free_registration_package_id', '1')
+    
+    # Fetch active packages for dropdown
+    packages = c.execute("SELECT id, name, price FROM subscription_packages WHERE is_active=1 ORDER BY price").fetchall()
+    package_options = ''.join(f'<option value="{p[0]}" {"selected" if str(p[0]) == free_package_id else ""}>{p[1]} (UGX {p[2]:,})</option>' for p in packages)
+    
     db.close()
     
-    # Build activity HTML
+    # ---- Build activity HTML ----
     activity_html = ""
     for act in activity:
         icon_class = "blue"
@@ -9028,6 +9033,27 @@ def admin_dashboard():
     </div>
     """
     
+    # ---- Free Registration Settings Card ----
+    free_settings_card = f"""
+    <div class="card">
+        <div class="card-header">⚙️ Free Registration Settings</div>
+        <form method="POST" action="/admin/update-free-settings">
+            <label>
+                <input type="checkbox" name="free_enabled" value="1" {'checked' if free_enabled else ''}>
+                Enable Free Registration
+            </label>
+            <label style="margin-left:20px;">Free Package:</label>
+            <select name="free_package_id">
+                {package_options}
+            </select>
+            <button type="submit" class="btn btn-small" style="margin-left:10px;">Update</button>
+        </form>
+        <small style="display:block; margin-top:10px; color:var(--text-secondary);">
+            When enabled, new users will get the selected package. Disabling will expire all active free subscriptions.
+        </small>
+    </div>
+    """
+    
     content = f"""
     <!-- STATS -->
     <div class="stat-grid">
@@ -9044,6 +9070,9 @@ def admin_dashboard():
         <div class="stat-card"><h3>{pending_payments}</h3><small>Pending Payments</small></div>
         <div class="stat-card"><h3>{pending_tickets}</h3><small>Open Tickets</small></div>
     </div>
+
+    <!-- FREE REGISTRATION SETTINGS -->
+    {free_settings_card}
 
     <!-- QUICK ACTIONS -->
     <div class="card">
@@ -9094,27 +9123,29 @@ def update_free_settings():
     if not session.get('admin'):
         return redirect('/admin/login')
     
-    # Read form data
     free_enabled = '1' if request.form.get('free_enabled') else '0'
     free_package_id = request.form.get('free_package_id', '1')
     
-    # Save settings
     set_system_setting('free_registration_enabled', free_enabled)
     set_system_setting('free_registration_package_id', free_package_id)
     
-    # ---- If disabling, expire all active subscriptions with the chosen free package ----
+    # ---- If disabling, expire all active free subscriptions ----
     if free_enabled == '0':
         db = get_db()
         c = db.cursor()
-        # Expire all active subscriptions with that package
-        c.execute("""
-            UPDATE user_subscriptions
-            SET status='expired', end_date=date('now')
-            WHERE package_id = ? AND status='active'
-        """, (free_package_id,))
+        c.execute("SELECT id FROM subscription_packages WHERE price = 0")
+        free_package_ids = [row[0] for row in c.fetchall()]
+        if free_package_ids:
+            placeholders = ','.join('?' for _ in free_package_ids)
+            c.execute(f"""
+                UPDATE user_subscriptions
+                SET status='expired', end_date=date('now')
+                WHERE package_id IN ({placeholders}) AND status='active'
+            """, free_package_ids)
         db.commit()
         db.close()
-        print(f"[ADMIN] Expired free subscriptions for package {free_package_id}")
+    
+    return redirect('/admin/dashboard')
     
     return redirect('/admin/dashboard')
 
