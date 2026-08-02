@@ -9966,6 +9966,8 @@ def fix_db():
 
 @app.route('/debug')
 def debug_info():
+    if not session.get('admin'):
+        return "Unauthorized", 401
     import traceback
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -9988,6 +9990,8 @@ def debug_info():
 
 @app.route('/debug-config')
 def debug_config():
+    if not session.get('admin'):
+        return "Unauthorized", 401
     max_size = app.config.get('MAX_CONTENT_LENGTH')
     return f"MAX_CONTENT_LENGTH = {max_size} bytes ({max_size // (1024*1024)} MB)"
 
