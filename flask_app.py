@@ -7439,7 +7439,7 @@ def dashboard():
     c.execute("SELECT * FROM providers WHERE user_id=?", (user_id,))
     provider = c.fetchone()
 
-    # ---- Vendor Profile Section ----
+     # ---- Vendor Profile Section ----
     c.execute("SELECT * FROM vendors WHERE user_id=?", (user_id,))
     vendor = c.fetchone()
     vendor_section = ""
@@ -7449,7 +7449,6 @@ def dashboard():
         
         # ---- SAFELY CONVERT vstatus ----
         if isinstance(vstatus, int):
-            # Map 0 -> 'Open', 1 -> 'Closed' (or adjust if you have other mappings)
             vstatus = 'Open' if vstatus == 0 else 'Closed'
         elif vstatus is None:
             vstatus = 'Open'
