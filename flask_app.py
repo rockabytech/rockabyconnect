@@ -1196,6 +1196,20 @@ def migrate_default_packages():
         conn.commit()
         print("[MIGRATION] Default packages updated.")
 
+def fix_vendor_statuses():
+    """Fix existing vendor statuses: convert integers to strings."""
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        # Convert integer statuses to text
+        c.execute("UPDATE vendors SET status = 'Open' WHERE status = '0' OR status = 0")
+        c.execute("UPDATE vendors SET status = 'Closed' WHERE status = '1' OR status = 1")
+        # Also handle NULL
+        c.execute("UPDATE vendors SET status = 'Open' WHERE status IS NULL")
+        # If any other weird values exist, set to 'Open'
+        c.execute("UPDATE vendors SET status = 'Open' WHERE status NOT IN ('Open', 'Closed', 'Away')")
+        conn.commit()
+        print("[FIX] Vendor statuses updated to text values.")
+    
 def parse_mtn_sms(sms):
     tid = re.search(r'ID:\s*(\d+)', sms)
     amount = re.search(r'UGX\s*([\d,]+)', sms)
@@ -7436,11 +7450,14 @@ def dashboard():
         # Unpack all 16 columns
         vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
         
-        # Safely handle vstatus
-        if vstatus is None:
+        # ---- SAFELY CONVERT vstatus ----
+        # If it's an integer, map it; if it's a string, keep it.
+        if isinstance(vstatus, int):
+            # Map 0->'Open', 1->'Closed' (or any other mapping)
+            vstatus = 'Open' if vstatus == 0 else 'Closed'
+        elif vstatus is None:
             vstatus = 'Open'
-        elif isinstance(vstatus, int):
-            vstatus = str(vstatus)
+        # Now vstatus is a string, safe to call .lower()
         vstatus_class = vstatus.lower()
         
         location = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
@@ -8630,6 +8647,10 @@ def list_vendors():
     cards = ""
     for v in vendors:
         vid, bname, district, village, landmark, bio, img, status, featured, expiry, phone, user_id = v
+        if isinstance(status, int):
+            status = 'Open' if status == 0 else 'Closed'
+        elif status is None:
+            status = 'Open'
         status_class = status.lower()
         img_tag = f'<img src="/static/uploads/{img}" class="vendor-img" alt="{bname}">' if img else '<div class="vendor-img" style="background:#ddd; height:100px; display:flex; align-items:center; justify-content:center;">No Image</div>'
         active_feat = is_featured_now(featured, expiry)
@@ -8807,6 +8828,11 @@ def vendor_detail(vendor_id):
         return "Vendor not found.", 404
     
     vid, user_id, bname, district, village, landmark, bio, img, img2, img3, img4, img5, status, featured, expiry, phone = v
+        # Safely convert status
+    if isinstance(status, int):
+        status = 'Open' if status == 0 else 'Closed'
+    elif status is None:
+        status = 'Open'
     status_class = status.lower()
     img_url = f"/static/uploads/{img}" if img else "/static/placeholder.png"
     active_feat = is_featured_now(featured, expiry)
@@ -11139,6 +11165,7 @@ migrate_db()
 
 # ---- UPDATE DEFAULT PACKAGES ----
 migrate_default_packages()
+fix_vendor_statuses()
 
 # ---- VERIFY UPLOADS INTEGRITY ----
 verify_uploads_integrity()
