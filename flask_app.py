@@ -1197,15 +1197,12 @@ def migrate_default_packages():
         print("[MIGRATION] Default packages updated.")
 
 def fix_vendor_statuses():
-    """Fix existing vendor statuses: convert integers to strings."""
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        # Convert integer statuses to text
         c.execute("UPDATE vendors SET status = 'Open' WHERE status = '0' OR status = 0")
         c.execute("UPDATE vendors SET status = 'Closed' WHERE status = '1' OR status = 1")
-        # Also handle NULL
         c.execute("UPDATE vendors SET status = 'Open' WHERE status IS NULL")
-        # If any other weird values exist, set to 'Open'
+        # Set any other invalid values to 'Open'
         c.execute("UPDATE vendors SET status = 'Open' WHERE status NOT IN ('Open', 'Closed', 'Away')")
         conn.commit()
         print("[FIX] Vendor statuses updated to text values.")
@@ -7451,9 +7448,8 @@ def dashboard():
         vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
         
         # ---- SAFELY CONVERT vstatus ----
-        # If it's an integer, map it; if it's a string, keep it.
         if isinstance(vstatus, int):
-            # Map 0->'Open', 1->'Closed' (or any other mapping)
+            # Map 0 -> 'Open', 1 -> 'Closed' (or adjust if you have other mappings)
             vstatus = 'Open' if vstatus == 0 else 'Closed'
         elif vstatus is None:
             vstatus = 'Open'
@@ -11165,6 +11161,7 @@ migrate_db()
 
 # ---- UPDATE DEFAULT PACKAGES ----
 migrate_default_packages()
+
 fix_vendor_statuses()
 
 # ---- VERIFY UPLOADS INTEGRITY ----
