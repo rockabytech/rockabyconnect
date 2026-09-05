@@ -7453,7 +7453,7 @@ def dashboard():
         elif vstatus is None:
             vstatus = 'Open'
         # Now vstatus is a string, safe to call .lower()
-        vstatus_class = vstatus.lower()
+        vstatus_class = str(vstatus).lower()
         
         location = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
         vendor_section = f"""
@@ -7545,7 +7545,7 @@ def dashboard():
         # Handle possible None status
         if vstatus is None:
             vstatus = 'Open'
-        vstatus_class = vstatus.lower()
+        vstatus_class = str(vstatus).lower()
         location = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
         vendor_section = f"""
             <div class="card">
