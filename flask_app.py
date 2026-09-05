@@ -7428,44 +7428,44 @@ def dashboard():
     c.execute("SELECT * FROM providers WHERE user_id=?", (user_id,))
     provider = c.fetchone()
 
-        # ---- Vendor Profile Section ----
-        c.execute("SELECT * FROM vendors WHERE user_id=?", (user_id,))
-        vendor = c.fetchone()
-        vendor_section = ""
-        if vendor:
-            # Unpack all 16 columns (including vendor_image4 and vendor_image5)
-            vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
-            
-            # ---- Safely handle vstatus ----
-            if vstatus is None:
-                vstatus = 'Open'
-            elif isinstance(vstatus, int):
-                vstatus = str(vstatus)
-            vstatus_class = vstatus.lower()
-            
-            location = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
-            vendor_section = f"""
-                <div class="card">
-                    <div class="card-header">My Vendor Profile</div>
-                    <p><strong>Business:</strong> {bname}</p>
-                    <p><strong>Location:</strong> {location}</p>
-                    <p><strong>Status:</strong> <span class="badge badge-{vstatus_class}">{vstatus}</span></p>
-                    <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
-                        <a href="/edit-vendor-profile" class="btn btn-small">Edit Vendor Profile</a>
-                        <a href="/boost-vendor" class="btn btn-small" style="background:var(--primary-dark);">Boost Vendor</a>
-                        <form method="POST" action="/delete-vendor-profile" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete your vendor profile? This cannot be undone.');">
-                            <button type="submit" class="btn btn-small btn-danger">Delete Vendor</button>
-                        </form>
-                    </div>
+    # ---- Vendor Profile Section ----
+    c.execute("SELECT * FROM vendors WHERE user_id=?", (user_id,))
+    vendor = c.fetchone()
+    vendor_section = ""
+    if vendor:
+        # Unpack all 16 columns
+        vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
+        
+        # Safely handle vstatus
+        if vstatus is None:
+            vstatus = 'Open'
+        elif isinstance(vstatus, int):
+            vstatus = str(vstatus)
+        vstatus_class = vstatus.lower()
+        
+        location = f"{district}{', ' + village if village else ''}{', ' + landmark if landmark else ''}"
+        vendor_section = f"""
+            <div class="card">
+                <div class="card-header">My Vendor Profile</div>
+                <p><strong>Business:</strong> {bname}</p>
+                <p><strong>Location:</strong> {location}</p>
+                <p><strong>Status:</strong> <span class="badge badge-{vstatus_class}">{vstatus}</span></p>
+                <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
+                    <a href="/edit-vendor-profile" class="btn btn-small">Edit Vendor Profile</a>
+                    <a href="/boost-vendor" class="btn btn-small" style="background:var(--primary-dark);">Boost Vendor</a>
+                    <form method="POST" action="/delete-vendor-profile" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete your vendor profile? This cannot be undone.');">
+                        <button type="submit" class="btn btn-small btn-danger">Delete Vendor</button>
+                    </form>
                 </div>
-            """
-        else:
-            vendor_section = """
-                <div class="card">
-                    <p>You haven't created a vendor profile yet.</p>
-                    <a href="/create-vendor-profile" class="btn">Create Vendor Profile</a>
-                </div>
-            """
+            </div>
+        """
+    else:
+        vendor_section = """
+            <div class="card">
+                <p>You haven't created a vendor profile yet.</p>
+                <a href="/create-vendor-profile" class="btn">Create Vendor Profile</a>
+            </div>
+        """
 
     # ---- Jobs ----
     c.execute("SELECT id, title, status FROM jobs WHERE employer_id=? ORDER BY id DESC", (user_id,))
