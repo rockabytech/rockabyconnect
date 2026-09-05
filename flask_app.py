@@ -7447,7 +7447,7 @@ def dashboard():
         # Unpack all 16 columns
         vid, _, bname, district, village, landmark, bio, vimg, vimg2, vimg3, vimg4, vimg5, vvideo, vstatus, vfeatured, vexpiry = vendor
         
-        # ---- SAFELY CONVERT vstatus ----
+         # ---- SAFELY CONVERT vstatus ----
         if isinstance(vstatus, int):
             vstatus = 'Open' if vstatus == 0 else 'Closed'
         elif vstatus is None:
