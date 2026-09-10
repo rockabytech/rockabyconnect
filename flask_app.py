@@ -1819,55 +1819,67 @@ def get_referral_stats(user_id):
         'total_rewards': total_rewards
     }
 
-def process_referral(provider_id, amount):
+def process_referral(user_id, phone):
+    """Process referral when a new user signs up. Award points to referrer."""
     if 'referral_code' not in session:
         return False
     ref_code = session['referral_code']
-    db = get_db()
-    c = db.cursor()
+    
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 30000;")
+    c = conn.cursor()
+    
+    # Find referrer
     c.execute("SELECT user_id FROM referral_codes WHERE code = ?", (ref_code,))
     referrer = c.fetchone()
     if not referrer:
-        db.close()
+        conn.close()
+        session.pop('referral_code', None)
         return False
     referrer_id = referrer[0]
-    if referrer_id == provider_id:
-        db.close()
+    
+    # Prevent self-referral
+    if referrer_id == user_id:
+        conn.close()
+        session.pop('referral_code', None)
         return False
-    # Check existing
-    c.execute("SELECT id FROM referrals WHERE referrer_id = ? AND referred_provider_id = ?", (referrer_id, provider_id))
+    
+    # Check if already referred
+    c.execute("""
+        SELECT id FROM referrals 
+        WHERE referrer_id = ? AND referred_user_id = ?
+    """, (referrer_id, user_id))
     if c.fetchone():
-        db.close()
+        conn.close()
+        session.pop('referral_code', None)
         return False
-    # Get settings (without max_referrals)
+    
+    # Get referral reward settings
     c.execute("SELECT reward_percentage, reward_type FROM referral_settings WHERE is_active=1 LIMIT 1")
     settings = c.fetchone()
     if not settings:
         reward_percentage, reward_type = 10, 'discount'
     else:
         reward_percentage, reward_type = settings
-    # Insert pending referral
+    
+    # Insert referral record (using referred_user_id — correct column name)
     c.execute("""
-        INSERT INTO referrals (referrer_id, referred_provider_id, status, reward_amount, reward_type)
-        VALUES (?, ?, 'pending', 0, ?)
-    """, (referrer_id, provider_id, reward_type))
-    db.commit()
-    db.close()
-    session.pop('referral_code', None)
-    return True
-        
-        # ---- AWARD POINTS TO REFERRER ----
+        INSERT INTO referrals (referrer_id, referred_user_id, referred_phone, status, reward_amount, reward_type)
+        VALUES (?, ?, ?, 'pending', 0, ?)
+    """, (referrer_id, user_id, phone, reward_type))
+    referral_id = c.lastrowid
+    conn.commit()
+    
+    # ---- AWARD REFERRAL POINTS ----
     referral_points = int(get_points_setting('referral_points') or 0)
     if referral_points > 0:
-        add_points(referrer_id, referral_points, 'referral', ref_id, f'Referral of {phone}')
-    session.pop('referral_code', None)
-    return True
+        add_points(referrer_id, referral_points, 'referral', referral_id, f'Referral bonus for {phone}')
     
-    # Clear the session
+    conn.close()
     session.pop('referral_code', None)
     return True
 
-   # ============================================================
+# ============================================================
 # NOTIFICATION HELPERS
 # ============================================================
 
