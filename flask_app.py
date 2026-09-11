@@ -3939,7 +3939,7 @@ base_template = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>RockabyConnect – {title}</title>
+    <title>FundiHub – {title}</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#f5af19">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -5352,8 +5352,8 @@ base_template = """
         <a href="/" class="logo">
             <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
             <div>
-                <div class="logo-text">ROCKABY<span style="color:#FF0000;">CONNECT</span></div>
-                <div class="logo-sub">Connecting Skills, Building Uganda</div>
+                <div class="logo-text">FUNDI<span style="color:#FF0000;">HUB</span></div>
+                <div class="logo-sub">Skilled Workers. Real Jobs. One Hub.</div>
             </div>
         </a>
         <div class="navbar-right">
@@ -5418,9 +5418,9 @@ base_template = """
     </div>
 
     <footer style="text-align:center; padding:16px; color:var(--text-secondary); font-size:0.7rem; border-top:1px solid var(--border); margin-top:20px;">
-        &copy; 2025 RockabyTech – Connecting Skills, Building Uganda 🇺🇬
+        &copy; 2025 FundiHub – Skilled Workers. Real Jobs. One Hub. 🇺🇬
     </footer>
-    <a href="https://wa.me/256785686404?text=Hi%20RockabyConnect%20Support" target="_blank" class="whatsapp-float">💬</a>
+    <a href="https://wa.me/256785686404?text=Hi%20FundiHub%20Support" target="_blank" class="whatsapp-float">💬</a>
 
         <script>
         // ============================================================
@@ -6501,7 +6501,7 @@ admin_base_template = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin – {title}</title>
+    <title>FundiHub Admin – {title}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
@@ -6824,7 +6824,7 @@ admin_base_template = """
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <img src="/static/icon-192.png" alt="RockabyTech">
-            <h3><span>ROCKABY</span><span>ADMIN</span></h3>
+            <h3><span>FUNDI</span><span>HUB</span></h3>
         </div>
         <div class="sidebar-menu">
             <a href="/admin/dashboard" class="{{ 'active' if active_page == 'dashboard' else '' }}">📊 Dashboard</a>
@@ -7141,8 +7141,8 @@ def home():
 
     <!-- HERO (5) -->
     <div class="hero-full">
-        <h1>Get Work Done – <span>or Get Paid</span></h1>
-        <p>Uganda's premier freelance marketplace. Connect with trusted skilled workers, find jobs, or grow your business.</p>
+        <h1>Skilled Workers. Real Jobs. <span>One Hub.</span></h1>
+        <p>FundiHub connects Uganda's trusted skilled workers with real opportunities — find work, hire talent, or grow your business.</p>
         <div class="hero-buttons">
             <a href="/offer-skill" class="btn-hero-primary">Offer Your Skill</a>
             <a href="/post-job" class="btn-hero-secondary">Post a Job</a>
@@ -7157,7 +7157,7 @@ def home():
     <!-- CTA SECTION (7) -->
     <div class="cta-section">
         <h2>Ready to Get Started?</h2>
-        <p>Join thousands of users in Uganda's growing freelance community.</p>
+        <p>Skilled Workers. Real Jobs. One Hub. Join FundiHub today.</p>
         <div class="cta-buttons">
             <a href="/signup" class="btn-cta-primary">Sign Up Free</a>
             <a href="/list" class="btn-cta-secondary">Browse Skills</a>
