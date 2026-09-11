@@ -36,7 +36,7 @@ VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 # ============================================================
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB
-app.secret_key = 'rockabytech-secret-key-change-in-production-2025'
+app.secret_key = 'fundihub-secret-key-change-in-production-2025'
 app.permanent_session_lifetime = timedelta(days=30)
 
 ADMIN_PASSWORD = 'Trythorous2909@1707#!'
@@ -353,7 +353,7 @@ def schedule_github_backup():
 # ============================================================
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB
-app.secret_key = 'rockabytech-secret-key-change-in-production-2025'
+app.secret_key = 'fundihub-secret-key-change-in-production-2025'
 app.permanent_session_lifetime = timedelta(days=30)
 
 ADMIN_PASSWORD = 'Trythorous2909@1707#!'
