@@ -38,7 +38,12 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB
 app.secret_key = 'fundihub-secret-key-change-in-production-2025'
 app.permanent_session_lifetime = timedelta(days=30)
-
+# ---- Session cookie security ----
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# Secure=True only when NOT in development (Render uses HTTPS)
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') != 'development'
+app.config['SESSION_COOKIE_PERMANENT'] = True
 ADMIN_PASSWORD = 'Trythorous2909@1707#!'
 
 # ============================================================
@@ -355,7 +360,12 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB
 app.secret_key = 'fundihub-secret-key-change-in-production-2025'
 app.permanent_session_lifetime = timedelta(days=30)
-
+# ---- Session cookie security ----
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# Secure=True only when NOT in development (Render uses HTTPS)
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') != 'development'
+app.config['SESSION_COOKIE_PERMANENT'] = True
 ADMIN_PASSWORD = 'Trythorous2909@1707#!'
 
 # Dynamic paths for Render
@@ -6030,6 +6040,10 @@ login_page = base_template.replace("{title}", "Login").replace("{active_page}", 
             <input type="tel" name="phone" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
             <label style="display:block; margin-top:12px; font-weight:600;">Password</label>
             <input type="password" name="password" required style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <label style="display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:500; cursor:pointer;">
+                <input type="checkbox" name="remember" value="1" checked style="width:auto; margin:0;">
+                Remember me for 30 days
+            </label>
             <button type="submit" class="btn" style="margin-top:20px; width:100%;">Login</button>
         </form>
         <p style="margin-top:15px; text-align:center;">No account? <a href="/signup" style="color:var(--primary);">Sign Up</a></p>
@@ -7324,7 +7338,7 @@ def signup():
             session['user_id'] = user_id
             session['user_name'] = name
             session['user_phone'] = phone
-            
+            session.permanent = True
             return redirect(url_for('list_jobs'))
             
         except sqlite3.IntegrityError:
@@ -7377,6 +7391,13 @@ def login():
                 session['user_id'] = user[0]
                 session['user_name'] = user[1]
                 session['user_phone'] = phone
+                
+                # ---- Remember me? ----
+                if request.form.get('remember'):
+                    session.permanent = True    # 30 days
+                else:
+                    session.permanent = False   # session-only cookie
+                
                 return redirect(url_for('list_jobs'))
             else:
                 # Wrong password – stay on login with error
