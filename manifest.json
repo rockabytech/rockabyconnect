@@ -1,7 +1,7 @@
 {
-  "name": "RockabyConnect",
-  "short_name": "RockabyConnect",
-  "description": "Uganda's freelance marketplace connecting skilled workers with local jobs",
+  "name": "FundiHub",
+  "short_name": "FundiHub",
+  "description": "Skilled Workers. Real Jobs. One Hub.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5af19",
