@@ -5363,7 +5363,7 @@ base_template = """
     <!-- ===== TOP NAVBAR ===== -->
     <nav class="navbar">
         <a href="/" class="logo">
-            <img src="/static/pngwing.com.png" alt="RockabyConnect Logo">
+            <img src="/static/logo.png" alt="FundiHub Logo">
             <div>
                 <div class="logo-text">FUNDI<span style="color:#FF0000;">HUB</span></div>
                 <div class="logo-sub">Skilled Workers. Real Jobs. One Hub.</div>
@@ -6840,7 +6840,7 @@ admin_base_template = """
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <img src="/static/icon-192.png" alt="RockabyTech">
+            <img src="/static/admin-logo.png" alt="FundiHub Admin">
             <h3><span>FUNDI</span><span>HUB</span></h3>
         </div>
         <div class="sidebar-menu">
