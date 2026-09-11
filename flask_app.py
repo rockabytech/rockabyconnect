@@ -4569,39 +4569,41 @@ base_template = """
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1rem;
-            padding: 4px;
+            font-size: 1.35rem;
+            padding: 8px;
             border-radius: 50%;
             transition: var(--transition);
-            width: 30px;
-            height: 30px;
+            width: 42px;
+            height: 42px;
         }
-        .nav-icon:hover { background: rgba(245, 175, 25, 0.1); color: var(--primary); }
+        .nav-icon:hover { background: rgba(245, 175, 25, 0.12); color: var(--primary); transform: scale(1.05); }
         .nav-icon .badge {
             position: absolute;
-            top: -2px;
-            right: -2px;
+            top: 0px;
+            right: 0px;
             background: #dc3545;
             color: white;
-            font-size: 0.5rem;
-            padding: 1px 5px;
-            border-radius: 10px;
-            min-width: 14px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 12px;
+            min-width: 18px;
             text-align: center;
             display: none;
+            box-shadow: 0 2px 6px rgba(220, 53, 69, 0.4);
         }
 
         .theme-toggle {
             background: rgba(245, 175, 25, 0.1);
             border: 1px solid var(--glass-border);
             border-radius: 50%;
-            width: 30px;
-            height: 30px;
+            width: 42px;
+            height: 42px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 0.85rem;
+            font-size: 1.2rem;
             transition: var(--transition);
             color: var(--text);
             flex-shrink: 0;
@@ -4611,39 +4613,40 @@ base_template = """
         .menu-toggle {
             background: none;
             border: none;
-            font-size: 1.2rem;
+            font-size: 1.5rem;
             cursor: pointer;
             color: var(--text);
             display: block;
-            padding: 4px;
+            padding: 6px 8px;
             flex-shrink: 0;
         }
 
         @media (max-width: 768px) {
-            .navbar { padding: 6px 8px; gap: 2px; }
-            .logo img { height: 24px; width: 24px; }
-            .logo-text { font-size: 0.75rem; }
-            .logo-sub { font-size: 0.35rem; }
-            .search-form input[type="text"] { width: 60px; font-size: 0.65rem; padding: 3px 6px; }
+            .navbar { padding: 6px 8px; gap: 4px; }
+            .logo img { height: 26px; width: 26px; }
+            .logo-text { font-size: 0.8rem; }
+            .logo-sub { font-size: 0.4rem; }
+            .search-form input[type="text"] { width: 60px; font-size: 0.7rem; padding: 4px 8px; }
             .search-form input[type="text"]:focus { width: 90px; }
-            .search-form button { font-size: 0.75rem; }
-            .nav-icon { width: 26px; height: 26px; font-size: 0.85rem; }
-            .nav-icon .badge { font-size: 0.4rem; min-width: 12px; padding: 1px 4px; }
-            .theme-toggle { width: 26px; height: 26px; font-size: 0.75rem; }
-            .menu-toggle { font-size: 1rem; }
+            .search-form button { font-size: 0.9rem; }
+            .nav-icon { width: 38px; height: 38px; font-size: 1.2rem; padding: 6px; }
+            .nav-icon .badge { font-size: 0.6rem; min-width: 16px; padding: 1px 5px; top: 0px; right: 0px; }
+            .theme-toggle { width: 38px; height: 38px; font-size: 1.05rem; }
+            .menu-toggle { font-size: 1.4rem; padding: 6px; }
         }
 
         @media (max-width: 480px) {
-            .navbar { padding: 4px 6px; gap: 2px; }
-            .logo img { height: 20px; width: 20px; }
-            .logo-text { font-size: 0.65rem; }
+            .navbar { padding: 4px 6px; gap: 3px; }
+            .logo img { height: 22px; width: 22px; }
+            .logo-text { font-size: 0.7rem; }
             .logo-sub { display: none; }
-            .search-form input[type="text"] { width: 50px; font-size: 0.6rem; padding: 2px 4px; }
-            .search-form input[type="text"]:focus { width: 70px; }
-            .nav-icon { width: 22px; height: 22px; font-size: 0.75rem; }
-            .nav-icon .badge { font-size: 0.35rem; min-width: 10px; padding: 1px 3px; top: -4px; right: -4px; }
-            .theme-toggle { width: 22px; height: 22px; font-size: 0.65rem; }
-            .menu-toggle { font-size: 0.9rem; }
+            .search-form input[type="text"] { width: 55px; font-size: 0.65rem; padding: 4px 8px; }
+            .search-form input[type="text"]:focus { width: 80px; }
+            .search-form button { font-size: 0.85rem; }
+            .nav-icon { width: 36px; height: 36px; font-size: 1.1rem; padding: 6px; }
+            .nav-icon .badge { font-size: 0.55rem; min-width: 15px; padding: 1px 4px; top: -2px; right: -2px; }
+            .theme-toggle { width: 36px; height: 36px; font-size: 1rem; }
+            .menu-toggle { font-size: 1.3rem; padding: 4px; }
         }
 
         /* ================================================
