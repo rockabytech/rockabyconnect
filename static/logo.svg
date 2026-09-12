@@ -1,20 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#f7b733"/>
       <stop offset="100%" stop-color="#e09e15"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="115" fill="url(#g1)"/>
+  <rect width="512" height="512" rx="115" fill="url(#g2)"/>
   
-  <!-- Hammer + wrench -->
-  <g transform="translate(256, 145)">
-    <rect x="-60" y="-20" width="70" height="30" rx="10" fill="#ffffff"/>
-    <rect x="-33" y="8" width="16" height="70" rx="6" fill="#ffffff"/>
-    <circle cx="48" cy="-8" r="22" fill="none" stroke="#ffffff" stroke-width="11"/>
-    <rect x="40" y="12" width="16" height="66" rx="6" fill="#ffffff"/>
+  <!-- Subtle background tools (faded) -->
+  <g opacity="0.15" transform="translate(256, 256) scale(1.6)">
+    <rect x="-60" y="-20" width="70" height="30" rx="10" fill="#1a1a2e"/>
+    <rect x="-33" y="8" width="16" height="70" rx="6" fill="#1a1a2e"/>
+    <circle cx="48" cy="-8" r="22" fill="none" stroke="#1a1a2e" stroke-width="11"/>
+    <rect x="40" y="12" width="16" height="66" rx="6" fill="#1a1a2e"/>
   </g>
   
-  <text x="256" y="330" text-anchor="middle" font-family="Poppins, Inter, sans-serif" font-size="90" font-weight="900" fill="#1a1a2e">FUNDI</text>
-  <text x="256" y="420" text-anchor="middle" font-family="Poppins, Inter, sans-serif" font-size="90" font-weight="900" fill="#ffffff" letter-spacing="4">HUB</text>
+  <text x="256" y="230" text-anchor="middle" font-family="Poppins, Inter, sans-serif" font-size="110" font-weight="900" fill="#1a1a2e" letter-spacing="-3">FUNDI</text>
+  <text x="256" y="345" text-anchor="middle" font-family="Poppins, Inter, sans-serif" font-size="110" font-weight="900" fill="#ffffff" letter-spacing="5">HUB</text>
+  
+  <path d="M 130 380 Q 256 415 382 380" stroke="#ffffff" stroke-width="12" fill="none" stroke-linecap="round" opacity="0.85"/>
 </svg>
