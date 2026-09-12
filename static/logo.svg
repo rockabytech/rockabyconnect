@@ -1,17 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="g4" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="g5" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#f7b733"/>
       <stop offset="100%" stop-color="#e09e15"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="115" fill="url(#g4)"/>
+  <rect width="512" height="512" rx="115" fill="url(#g5)"/>
   
-  <!-- Big F -->
-  <text x="256" y="270" text-anchor="middle" font-family="Poppins, Inter, sans-serif" font-size="240" font-weight="900" fill="#1a1a2e">F</text>
+  <!-- FUNDI (top) -->
+  <text x="256" y="180" text-anchor="middle" font-family="Poppins, Inter, sans-serif" font-size="95" font-weight="900" fill="#1a1a2e" letter-spacing="-2">FUNDI</text>
   
-  <!-- Small "H" as dot on F -->
-  <text x="256" y="360" text-anchor="middle" font-family="Poppins, Inter, sans-serif" font-size="60" font-weight="900" fill="#ffffff">FUNDI HUB</text>
+  <!-- Tool divider line -->
+  <line x1="80" y1="220" x2="432" y2="220" stroke="#1a1a2e" stroke-width="3" opacity="0.3"/>
   
-  <path d="M 145 395 Q 256 420 367 395" stroke="#ffffff" stroke-width="10" fill="none" stroke-linecap="round" opacity="0.85"/>
+  <!-- Hammer + wrench in middle -->
+  <g transform="translate(256, 285) scale(1.1)">
+    <rect x="-60" y="-15" width="60" height="26" rx="9" fill="#ffffff"/>
+    <rect x="-33" y="8" width="14" height="60" rx="5" fill="#ffffff"/>
+    <circle cx="45" cy="-5" r="19" fill="none" stroke="#ffffff" stroke-width="9"/>
+    <rect x="38" y="12" width="14" height="58" rx="5" fill="#ffffff"/>
+  </g>
+  
+  <line x1="80" y1="360" x2="432" y2="360" stroke="#1a1a2e" stroke-width="3" opacity="0.3"/>
+  
+  <!-- HUB (bottom) -->
+  <text x="256" y="450" text-anchor="middle" font-family="Poppins, Inter, sans-serif" font-size="95" font-weight="900" fill="#ffffff" letter-spacing="5">HUB</text>
 </svg>
