@@ -5363,7 +5363,7 @@ base_template = """
     <!-- ===== TOP NAVBAR ===== -->
     <nav class="navbar">
         <a href="/" class="logo">
-            <img src="/static/logo.png" alt="FundiHub Logo">
+            <img src="/static/logo.svg" alt="FundiHub Logo" style="height: 45px;">
             <div>
                 <div class="logo-text">FUNDI<span style="color:#FF0000;">HUB</span></div>
                 <div class="logo-sub">Skilled Workers. Real Jobs. One Hub.</div>
