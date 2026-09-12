@@ -1,48 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#f7b733"/>
-      <stop offset="50%" stop-color="#f5af19"/>
       <stop offset="100%" stop-color="#e09e15"/>
     </linearGradient>
   </defs>
+  <rect width="512" height="512" rx="115" fill="url(#g1)"/>
   
-  <!-- Full-bleed orange square -->
-  <rect width="512" height="512" rx="115" fill="url(#g)"/>
-
-  <!-- Hammer + wrench at top -->
-  <g transform="translate(256, 150) scale(1.4) translate(-256, -150)">
-    <!-- Hammer -->
-    <rect x="200" y="130" width="70" height="32" rx="10" fill="#ffffff"/>
-    <rect x="228" y="156" width="16" height="75" rx="6" fill="#ffffff"/>
-    <!-- Wrench -->
-    <circle cx="312" cy="145" r="22" fill="none" stroke="#ffffff" stroke-width="11"/>
-    <rect x="304" y="162" width="16" height="70" rx="6" fill="#ffffff"/>
+  <!-- Hammer + wrench -->
+  <g transform="translate(256, 145)">
+    <rect x="-60" y="-20" width="70" height="30" rx="10" fill="#ffffff"/>
+    <rect x="-33" y="8" width="16" height="70" rx="6" fill="#ffffff"/>
+    <circle cx="48" cy="-8" r="22" fill="none" stroke="#ffffff" stroke-width="11"/>
+    <rect x="40" y="12" width="16" height="66" rx="6" fill="#ffffff"/>
   </g>
-
-  <!-- "FUNDI" -->
-  <text x="256" y="330"
-        text-anchor="middle"
-        font-family="Poppins, Inter, Montserrat, Arial, sans-serif"
-        font-size="86"
-        font-weight="900"
-        fill="#1a1a2e"
-        letter-spacing="-2">FUNDI</text>
-
-  <!-- "HUB" -->
-  <text x="256" y="415"
-        text-anchor="middle"
-        font-family="Poppins, Inter, Montserrat, Arial, sans-serif"
-        font-size="86"
-        font-weight="900"
-        fill="#ffffff"
-        letter-spacing="3">HUB</text>
-
-  <!-- Smile curve -->
-  <path d="M 130 440 Q 256 480 382 440" 
-        stroke="#ffffff" 
-        stroke-width="14" 
-        fill="none" 
-        stroke-linecap="round"
-        opacity="0.9"/>
+  
+  <text x="256" y="330" text-anchor="middle" font-family="Poppins, Inter, sans-serif" font-size="90" font-weight="900" fill="#1a1a2e">FUNDI</text>
+  <text x="256" y="420" text-anchor="middle" font-family="Poppins, Inter, sans-serif" font-size="90" font-weight="900" fill="#ffffff" letter-spacing="4">HUB</text>
 </svg>
