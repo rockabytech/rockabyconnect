@@ -1,13 +1,14 @@
-const CACHE_VERSION = 'v11';
-const CACHE_NAME = 'rockabyconnect-' + CACHE_VERSION;
+const CACHE_VERSION = 'v12';
+const CACHE_NAME = 'fundihub-' + CACHE_VERSION;
 const urlsToCache = [
     '/',
-    '/static/pngwing.com.png',
+    '/static/logo.svg',
     '/static/icon-72.png',
     '/static/icon-96.png',
     '/static/icon-128.png',
     '/static/icon-144.png',
     '/static/icon-152.png',
+    '/static/icon-180.png',
     '/static/icon-192.png',
     '/static/icon-384.png',
     '/static/icon-512.png'
@@ -68,7 +69,7 @@ self.addEventListener('push', function(event) {
     console.log('[SW] 🚀 Push event received');
 
     let data = {
-        title: 'RockabyConnect',
+        title: 'FundiHub',
         body: 'You have a new notification',
         icon: '/static/icon-192.png',
         badge: '/static/icon-192.png',
