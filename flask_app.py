@@ -3952,6 +3952,19 @@ base_template = """
     <title>FundiHub – {title}</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#f5af19">
+    
+    <!-- iOS PWA Support -->
+    <link rel="apple-touch-icon" href="/static/icon-180.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/icon-152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/icon-180.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="FundiHub">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         /* ================================================
