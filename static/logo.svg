@@ -15,20 +15,25 @@
     <rect x="40" y="12" width="16" height="66" rx="6" fill="#1a1a2e"/>
   </g>
   
-  <!-- FUNDI in dark charcoal -->
-  <text x="256" y="230" text-anchor="middle"
+  <!-- FUNDI -->
+  <text x="256" y="215" text-anchor="middle"
         font-family="Poppins, Inter, sans-serif"
-        font-size="110" font-weight="900"
+        font-size="105" font-weight="900"
         fill="#1a1a2e" letter-spacing="-3">FUNDI</text>
   
-  <!-- HUB in white -->
-  <text x="256" y="345" text-anchor="middle"
+  <!-- HUB -->
+  <text x="256" y="320" text-anchor="middle"
         font-family="Poppins, Inter, sans-serif"
-        font-size="110" font-weight="900"
+        font-size="105" font-weight="900"
         fill="#ffffff" letter-spacing="5">HUB</text>
   
-  <!-- Uganda Red smile curve -->
-  <path d="M 130 380 Q 256 415 382 380"
-        stroke="#E30D0D" stroke-width="14"
-        fill="none" stroke-linecap="round"/>
+  <!-- Uganda Red underline -->
+  <rect x="165" y="335" width="182" height="10" rx="5" fill="#E30D0D"/>
+  
+  <!-- Uganda Red UG badge -->
+  <rect x="365" y="365" width="125" height="125" rx="28" fill="#E30D0D"/>
+  <text x="427" y="450" text-anchor="middle"
+        font-family="Poppins, Inter, sans-serif"
+        font-size="56" font-weight="900"
+        fill="#ffffff" letter-spacing="1">UG</text>
 </svg>
