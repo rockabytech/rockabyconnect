@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="ugRed" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="ugRed2" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#E30D0D"/>
       <stop offset="100%" stop-color="#B80000"/>
     </linearGradient>
   </defs>
 
-  <rect width="512" height="512" rx="115" fill="url(#ugRed)"/>
+  <rect width="512" height="512" rx="115" fill="url(#ugRed2)"/>
 
   <!-- Faded tools -->
   <g opacity="0.12" transform="translate(256, 256) scale(1.6)">
@@ -16,26 +16,20 @@
     <rect x="40" y="12" width="16" height="66" rx="6" fill="#000000"/>
   </g>
 
-  <!-- Text -->
-  <text x="230" y="230" text-anchor="middle"
+  <!-- FUNDI in Uganda Yellow -->
+  <text x="256" y="230" text-anchor="middle"
         font-family="Poppins, Inter, sans-serif"
-        font-size="100" font-weight="900"
+        font-size="110" font-weight="900"
         fill="#FCDC04" letter-spacing="-3">FUNDI</text>
 
-  <text x="230" y="340" text-anchor="middle"
+  <!-- HUB in White (contrast) -->
+  <text x="256" y="345" text-anchor="middle"
         font-family="Poppins, Inter, sans-serif"
-        font-size="100" font-weight="900"
-        fill="#FCDC04" letter-spacing="5">HUB</text>
+        font-size="110" font-weight="900"
+        fill="#FFFFFF" letter-spacing="5">HUB</text>
 
-  <!-- Smile curve -->
-  <path d="M 115 375 Q 230 405 345 375"
-        stroke="#000000" stroke-width="10"
-        fill="none" stroke-linecap="round" opacity="0.9"/>
-
-  <!-- UG badge in bottom-right -->
-  <rect x="360" y="360" width="130" height="130" rx="30" fill="#000000"/>
-  <text x="425" y="448" text-anchor="middle"
-        font-family="Poppins, Inter, sans-serif"
-        font-size="58" font-weight="900"
-        fill="#FCDC04" letter-spacing="1">UG</text>
+  <!-- Smile in Yellow -->
+  <path d="M 130 380 Q 256 415 382 380"
+        stroke="#FCDC04" stroke-width="12"
+        fill="none" stroke-linecap="round"/>
 </svg>
